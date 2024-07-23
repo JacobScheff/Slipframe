@@ -1,0 +1,498 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		3A9B45272C503B710080BBBE /* RealityKitContent in Frameworks */ = {isa = PBXBuildFile; productRef = 3A9B45262C503B710080BBBE /* RealityKitContent */; };
+		3A9B45292C503B710080BBBE /* Endless_RunnerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A9B45282C503B710080BBBE /* Endless_RunnerApp.swift */; };
+		3A9B452B2C503B710080BBBE /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A9B452A2C503B710080BBBE /* ContentView.swift */; };
+		3A9B452D2C503B710080BBBE /* ImmersiveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A9B452C2C503B710080BBBE /* ImmersiveView.swift */; };
+		3A9B452F2C503B7D0080BBBE /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 3A9B452E2C503B7D0080BBBE /* Assets.xcassets */; };
+		3A9B45322C503B7D0080BBBE /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 3A9B45312C503B7D0080BBBE /* Preview Assets.xcassets */; };
+		3A9B453D2C503B7D0080BBBE /* Endless_RunnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A9B453C2C503B7D0080BBBE /* Endless_RunnerTests.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		3A9B45392C503B7D0080BBBE /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3A9B45192C503B710080BBBE /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 3A9B45202C503B710080BBBE;
+			remoteInfo = "Endless Runner";
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		3A9B45212C503B710080BBBE /* Endless Runner.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Endless Runner.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		3A9B45252C503B710080BBBE /* RealityKitContent */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = RealityKitContent; sourceTree = "<group>"; };
+		3A9B45282C503B710080BBBE /* Endless_RunnerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Endless_RunnerApp.swift; sourceTree = "<group>"; };
+		3A9B452A2C503B710080BBBE /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		3A9B452C2C503B710080BBBE /* ImmersiveView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImmersiveView.swift; sourceTree = "<group>"; };
+		3A9B452E2C503B7D0080BBBE /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		3A9B45312C503B7D0080BBBE /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
+		3A9B45332C503B7D0080BBBE /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		3A9B45382C503B7D0080BBBE /* Endless RunnerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Endless RunnerTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		3A9B453C2C503B7D0080BBBE /* Endless_RunnerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Endless_RunnerTests.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		3A9B451E2C503B710080BBBE /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3A9B45272C503B710080BBBE /* RealityKitContent in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		3A9B45352C503B7D0080BBBE /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		3A9B45182C503B710080BBBE = {
+			isa = PBXGroup;
+			children = (
+				3A9B45232C503B710080BBBE /* Endless Runner */,
+				3A9B45242C503B710080BBBE /* Packages */,
+				3A9B453B2C503B7D0080BBBE /* Endless RunnerTests */,
+				3A9B45222C503B710080BBBE /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		3A9B45222C503B710080BBBE /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				3A9B45212C503B710080BBBE /* Endless Runner.app */,
+				3A9B45382C503B7D0080BBBE /* Endless RunnerTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		3A9B45232C503B710080BBBE /* Endless Runner */ = {
+			isa = PBXGroup;
+			children = (
+				3A9B45282C503B710080BBBE /* Endless_RunnerApp.swift */,
+				3A9B452A2C503B710080BBBE /* ContentView.swift */,
+				3A9B452C2C503B710080BBBE /* ImmersiveView.swift */,
+				3A9B452E2C503B7D0080BBBE /* Assets.xcassets */,
+				3A9B45332C503B7D0080BBBE /* Info.plist */,
+				3A9B45302C503B7D0080BBBE /* Preview Content */,
+			);
+			path = "Endless Runner";
+			sourceTree = "<group>";
+		};
+		3A9B45242C503B710080BBBE /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				3A9B45252C503B710080BBBE /* RealityKitContent */,
+			);
+			path = Packages;
+			sourceTree = "<group>";
+		};
+		3A9B45302C503B7D0080BBBE /* Preview Content */ = {
+			isa = PBXGroup;
+			children = (
+				3A9B45312C503B7D0080BBBE /* Preview Assets.xcassets */,
+			);
+			path = "Preview Content";
+			sourceTree = "<group>";
+		};
+		3A9B453B2C503B7D0080BBBE /* Endless RunnerTests */ = {
+			isa = PBXGroup;
+			children = (
+				3A9B453C2C503B7D0080BBBE /* Endless_RunnerTests.swift */,
+			);
+			path = "Endless RunnerTests";
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		3A9B45202C503B710080BBBE /* Endless Runner */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 3A9B45402C503B7D0080BBBE /* Build configuration list for PBXNativeTarget "Endless Runner" */;
+			buildPhases = (
+				3A9B451D2C503B710080BBBE /* Sources */,
+				3A9B451E2C503B710080BBBE /* Frameworks */,
+				3A9B451F2C503B710080BBBE /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "Endless Runner";
+			packageProductDependencies = (
+				3A9B45262C503B710080BBBE /* RealityKitContent */,
+			);
+			productName = "Endless Runner";
+			productReference = 3A9B45212C503B710080BBBE /* Endless Runner.app */;
+			productType = "com.apple.product-type.application";
+		};
+		3A9B45372C503B7D0080BBBE /* Endless RunnerTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 3A9B45432C503B7D0080BBBE /* Build configuration list for PBXNativeTarget "Endless RunnerTests" */;
+			buildPhases = (
+				3A9B45342C503B7D0080BBBE /* Sources */,
+				3A9B45352C503B7D0080BBBE /* Frameworks */,
+				3A9B45362C503B7D0080BBBE /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				3A9B453A2C503B7D0080BBBE /* PBXTargetDependency */,
+			);
+			name = "Endless RunnerTests";
+			productName = "Endless RunnerTests";
+			productReference = 3A9B45382C503B7D0080BBBE /* Endless RunnerTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		3A9B45192C503B710080BBBE /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1530;
+				LastUpgradeCheck = 1530;
+				TargetAttributes = {
+					3A9B45202C503B710080BBBE = {
+						CreatedOnToolsVersion = 15.3;
+					};
+					3A9B45372C503B7D0080BBBE = {
+						CreatedOnToolsVersion = 15.3;
+						TestTargetID = 3A9B45202C503B710080BBBE;
+					};
+				};
+			};
+			buildConfigurationList = 3A9B451C2C503B710080BBBE /* Build configuration list for PBXProject "Endless Runner" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 3A9B45182C503B710080BBBE;
+			productRefGroup = 3A9B45222C503B710080BBBE /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				3A9B45202C503B710080BBBE /* Endless Runner */,
+				3A9B45372C503B7D0080BBBE /* Endless RunnerTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		3A9B451F2C503B710080BBBE /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3A9B45322C503B7D0080BBBE /* Preview Assets.xcassets in Resources */,
+				3A9B452F2C503B7D0080BBBE /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		3A9B45362C503B7D0080BBBE /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		3A9B451D2C503B710080BBBE /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3A9B452B2C503B710080BBBE /* ContentView.swift in Sources */,
+				3A9B45292C503B710080BBBE /* Endless_RunnerApp.swift in Sources */,
+				3A9B452D2C503B710080BBBE /* ImmersiveView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		3A9B45342C503B7D0080BBBE /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3A9B453D2C503B7D0080BBBE /* Endless_RunnerTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		3A9B453A2C503B7D0080BBBE /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 3A9B45202C503B710080BBBE /* Endless Runner */;
+			targetProxy = 3A9B45392C503B7D0080BBBE /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		3A9B453E2C503B7D0080BBBE /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = xros;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				XROS_DEPLOYMENT_TARGET = 1.1;
+			};
+			name = Debug;
+		};
+		3A9B453F2C503B7D0080BBBE /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = xros;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+				XROS_DEPLOYMENT_TARGET = 1.1;
+			};
+			name = Release;
+		};
+		3A9B45412C503B7D0080BBBE /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "\"Endless Runner/Preview Content\"";
+				DEVELOPMENT_TEAM = YXK432W64A;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "$(TARGET_NAME)/Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "Jacob-Scheff.Endless-Runner";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "xros xrsimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+			};
+			name = Debug;
+		};
+		3A9B45422C503B7D0080BBBE /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "\"Endless Runner/Preview Content\"";
+				DEVELOPMENT_TEAM = YXK432W64A;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "$(TARGET_NAME)/Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "Jacob-Scheff.Endless-Runner";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "xros xrsimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+			};
+			name = Release;
+		};
+		3A9B45442C503B7D0080BBBE /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = YXK432W64A;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "Jacob-Scheff.Endless-RunnerTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "xros xrsimulator";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Endless Runner.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Endless Runner";
+				XROS_DEPLOYMENT_TARGET = 1.1;
+			};
+			name = Debug;
+		};
+		3A9B45452C503B7D0080BBBE /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = YXK432W64A;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "Jacob-Scheff.Endless-RunnerTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "xros xrsimulator";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Endless Runner.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Endless Runner";
+				XROS_DEPLOYMENT_TARGET = 1.1;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		3A9B451C2C503B710080BBBE /* Build configuration list for PBXProject "Endless Runner" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				3A9B453E2C503B7D0080BBBE /* Debug */,
+				3A9B453F2C503B7D0080BBBE /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		3A9B45402C503B7D0080BBBE /* Build configuration list for PBXNativeTarget "Endless Runner" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				3A9B45412C503B7D0080BBBE /* Debug */,
+				3A9B45422C503B7D0080BBBE /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		3A9B45432C503B7D0080BBBE /* Build configuration list for PBXNativeTarget "Endless RunnerTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				3A9B45442C503B7D0080BBBE /* Debug */,
+				3A9B45452C503B7D0080BBBE /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		3A9B45262C503B710080BBBE /* RealityKitContent */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RealityKitContent;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 3A9B45192C503B710080BBBE /* Project object */;
+}
