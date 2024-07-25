@@ -23,10 +23,14 @@ struct Walls: View {
                                         
             Task {
                 let session = ARKitSession()
-                await session.requestAuthorization(for: [.worldSensing])
+                let authorizationResult = await session.requestAuthorization(for: [.worldSensing])
                 let planeData = PlaneDetectionProvider(alignments: [.horizontal])
+                
+                for (authorizationType, authorizationStatus) in authorizationResult {
+                    print("Authorization status for \(authorizationType): \(authorizationStatus)")
+                }
 
-                try await session.run([planeData])
+//                try await session.run([planeData])
                                     
 //                for await update in planeData.anchorUpdates {
 //                    
