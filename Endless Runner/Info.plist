@@ -12,6 +12,8 @@
 		<true/>
 		<key>UISceneConfigurations</key>
 		<dict/>
+		<key>NSWorldSensingUsageDescription</key>
+		<string>Sense The World Around You</string>
 	</dict>
 </dict>
 </plist>

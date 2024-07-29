@@ -7,8 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		3A12D8DC2C584F590071C291 /* Wall.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A12D8DB2C584F590071C291 /* Wall.swift */; };
 		3A1F40DD2C52E7010079C79F /* Walls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A1F40DC2C52E7010079C79F /* Walls.swift */; };
-		3A7EC77A2C51B283009580B2 /* ImmersiveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A7EC7792C51B283009580B2 /* ImmersiveView.swift */; };
 		3A9B45272C503B710080BBBE /* RealityKitContent in Frameworks */ = {isa = PBXBuildFile; productRef = 3A9B45262C503B710080BBBE /* RealityKitContent */; };
 		3A9B45292C503B710080BBBE /* Endless_RunnerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A9B45282C503B710080BBBE /* Endless_RunnerApp.swift */; };
 		3A9B452B2C503B710080BBBE /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A9B452A2C503B710080BBBE /* ContentView.swift */; };
@@ -29,8 +29,8 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		3A12D8DB2C584F590071C291 /* Wall.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Wall.swift; sourceTree = "<group>"; };
 		3A1F40DC2C52E7010079C79F /* Walls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Walls.swift; sourceTree = "<group>"; };
-		3A7EC7792C51B283009580B2 /* ImmersiveView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = ImmersiveView.swift; path = "../../../../Library/Mobile Documents/.Trash/Mind The Gap/Mind The Gap/ImmersiveView.swift"; sourceTree = "<group>"; };
 		3A9B45212C503B710080BBBE /* Endless Runner.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Endless Runner.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		3A9B45252C503B710080BBBE /* RealityKitContent */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = RealityKitContent; sourceTree = "<group>"; };
 		3A9B45282C503B710080BBBE /* Endless_RunnerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Endless_RunnerApp.swift; sourceTree = "<group>"; };
@@ -87,12 +87,12 @@
 			isa = PBXGroup;
 			children = (
 				3A9B45282C503B710080BBBE /* Endless_RunnerApp.swift */,
-				3A7EC7792C51B283009580B2 /* ImmersiveView.swift */,
 				3A9B452A2C503B710080BBBE /* ContentView.swift */,
 				3A1F40DC2C52E7010079C79F /* Walls.swift */,
 				3A9B452E2C503B7D0080BBBE /* Assets.xcassets */,
 				3A9B45332C503B7D0080BBBE /* Info.plist */,
 				3A9B45302C503B7D0080BBBE /* Preview Content */,
+				3A12D8DB2C584F590071C291 /* Wall.swift */,
 			);
 			path = "Endless Runner";
 			sourceTree = "<group>";
@@ -234,8 +234,8 @@
 			files = (
 				3A9B452B2C503B710080BBBE /* ContentView.swift in Sources */,
 				3A1F40DD2C52E7010079C79F /* Walls.swift in Sources */,
+				3A12D8DC2C584F590071C291 /* Wall.swift in Sources */,
 				3A9B45292C503B710080BBBE /* Endless_RunnerApp.swift in Sources */,
-				3A7EC77A2C51B283009580B2 /* ImmersiveView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
