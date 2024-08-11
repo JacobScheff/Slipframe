@@ -4,6 +4,8 @@
 <dict>
 	<key>NSWorldSensingUsageDescription</key>
 	<string>Sense The World Around You</string>
+	<key>NSHandsTrackingUsageDescription</key>
+	<string>Detects Coin Collection</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationPreferredDefaultSceneSessionRole</key>
@@ -12,8 +14,6 @@
 		<true/>
 		<key>UISceneConfigurations</key>
 		<dict/>
-		<key>NSWorldSensingUsageDescription</key>
-		<string>Sense The World Around You</string>
 	</dict>
 </dict>
 </plist>

@@ -22,21 +22,31 @@ struct Walls: View {
         }).onAppear {
                                         
             Task {
-//                let session = ARKitSession()
-//                let authorizationResult = await session.requestAuthorization(for: [.worldSensing])
-//                let planeData = PlaneDetectionProvider(alignments: [.horizontal])
-//                
-//                for (authorizationType, authorizationStatus) in authorizationResult {
-//                    print("Authorization status for \(authorizationType): \(authorizationStatus)")
-//                }
+                let session = ARKitSession()
+                let authorizationResult = await session.requestAuthorization(for: [.worldSensing])
+                let planeData = PlaneDetectionProvider(alignments: [.horizontal])
+                
+                for (authorizationType, authorizationStatus) in authorizationResult {
+                    print("Authorization status for \(authorizationType): \(authorizationStatus)")
+                }
+                
+                print("b")
 
-//                try await session.run([planeData])
+                try await session.run([planeData])
+                
+                print("a")
                                     
-//                for await update in planeData.anchorUpdates {
-//                    
-//                    print(update.anchor.classification, " ", update.description, " ", update.anchor.originFromAnchorTransform)
-//                    
-//                }
+                var iterationCount = 0
+                for await update in planeData.anchorUpdates {
+                    print(update.anchor.classification, " ", update.description, " ", update.anchor.originFromAnchorTransform)
+                    // Process the plane update
+                    iterationCount += 1
+                    if iterationCount >= 5 { // Process only the first 5 updates
+                        break
+                    }
+                }
+                
+                print("c")
             }
         }
     }
