@@ -1,0 +1,127 @@
+# Endless Runner — Game Design Plan
+
+VisionOS / RealityKit immersive game using hand tracking and body position. Simple core loop, clear feedback, room to grow.
+
+---
+
+## Core Loop
+
+**Fantasy:** You’re flying/running forward through a lane. Red walls come at you — dodge with your body. Gold coins float nearby — grab them with your hands.
+
+**Controls**
+
+- **Dodge:** Your head/body position maps to left–right (and optionally slight up/down). Stand in place; lean or step side to side.
+- **Collect:** Hands are the collectors. Reach into a coin’s volume to pick it up (no buttons).
+- **No jump button** — keep it to 2 actions: move + reach.
+
+**Why this works on Vision Pro:** Body dodge feels physical; hand grabs feel like magic. Two verbs, clear feedback.
+
+---
+
+## Playfield Layout
+
+Think **3 lanes** (left / center / right), not a free 2D plane — easier to read and balance.
+
+```
+← left lane | center | right lane →
+         YOU (head = lane position)
+              ↓ world scrolls toward you
+     [coin]     [red wall]     [coin]
+```
+
+- **Red walls:** Semi-transparent, full-height slabs that block 1–2 lanes. Collision = head (or torso proxy) enters wall volume → hit.
+- **Coins:** Small glowing spheres slightly off the main path so you must *reach*, not just walk into them.
+- **Scroll:** World moves toward the player along −Z (or player “runs” forward). Spawn ahead, despawn behind.
+
+---
+
+## Rules
+
+| Rule | Suggestion |
+|------|------------|
+| Hit wall | Lose 1 life (3 lives) **or** instant run over |
+| Miss coin | Nothing — optional, not punishing |
+| Coin collect | +10 score, soft chime + particle pop |
+| Survive | Score ticks up with distance |
+| Speed | Starts calm; ramps every ~20–30s |
+| Patterns | Wall → gap → coin stretch → double walls → speed bump |
+
+**Win condition:** None — high score / personal best.
+
+**Session length:** 30–90 seconds for a good first run is ideal.
+
+---
+
+## Obstacle & Coin Design
+
+### Walls (danger)
+
+- Transparent red (`opacity ~0.35–0.5`), soft emissive edge so they read in mixed reality.
+- Variants: single-lane block, double-lane block, “gate” with a hole (optional later).
+- Telegraph: spawn far enough ahead (~4–6 m) that you can react.
+
+### Coins (reward)
+
+- Float at hand height (~chest to shoulder).
+- Place **beside** the safe lane so collecting means a deliberate reach without walking into a wall.
+- Occasional “stretch coin” farther out for skill players.
+
+### Fairness rule
+
+Never put a required coin *inside* a wall’s kill volume. Coins always sit in a safe pocket.
+
+---
+
+## Feel & Feedback
+
+- **Hit:** Brief red flash / haptic pulse / wall shatter + freeze-frame, then restart or life lost.
+- **Coin:** Snap to hand → dissolve; score float-up.
+- **Speed:** Subtle wind/whoosh that rises with difficulty.
+- **UI:** Score + lives as a small world-anchored panel or follow-head HUD — don’t clutter the first view.
+
+---
+
+## Difficulty Curve
+
+1. **Warm-up:** Only center/side single walls, coins near body.
+2. **Mix:** Alternating left/right walls; coins opposite the safe lane.
+3. **Pressure:** Faster scroll, tighter gaps, occasional double-threat (wall + far coin).
+4. **Breathing room:** Every N obstacles, a short empty stretch so players recover.
+
+---
+
+## MVP Scope
+
+Build this first:
+
+1. Mixed immersive space, world scrolling toward player
+2. Head X → lane position
+3. Red wall spawn + head collision → game over
+4. Hand joint collision with coins → score
+5. Score + restart button
+
+Skip for v1: jumps, enemies, power-ups, multiplayer, fancy menus.
+
+---
+
+## Other Game Ideas
+
+Same stack: hands + immersion.
+
+1. **Orb Catcher** — Orbs fall from above; catch with either hand. Miss too many → lose. Combo for same-hand streaks.
+2. **Lane Weaver** — Same runner, but walls have glowing **portals** you must *touch* with a hand to pass (dodge + tap-to-open).
+3. **Bubble Pop Arena** — Bubbles drift in a room; pop with finger tips. Timed waves, rare golden bubbles.
+4. **Rhythm Gates** — Gates approach on the beat; open the correct side by raising left/right hand. More music game than runner.
+5. **Ghost Light** — A light spirit follows your hands; guide it through dark tunnels while your head avoids hanging obstacles.
+6. **Coin Rain Survival** — Stand still; coins and hazards rain in. Hands = collect, body lean = dodge falling red blocks.
+7. **Portal Punch** — Rings fly at you; punch through with fists (hand velocity), dodge red panels with body. Arcade score-attack.
+
+**Closest cousins to the main idea:** Lane Weaver (#2) and Coin Rain Survival (#6) — same verbs, different staging.
+
+---
+
+## Recommendation
+
+Ship the **3-lane dodge + hand-collect coins** MVP. It’s readable in mixed reality, teaches in one run, and leaves room for portals, rhythm gates, or stretch-coins later without rewriting the core.
+
+**Next step:** Turn this into a concrete entity/component plan in the existing `Endless_RunnerApp` / RealityKit setup (spawn system, collision layers, score state).
