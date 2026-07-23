@@ -104,6 +104,51 @@ Skip for v1: jumps, enemies, power-ups, multiplayer, fancy menus.
 
 ---
 
+## Post-Base Implementation
+
+Features to build **after** the MVP loop is solid (scroll, walls, coins, score, restart). Do not block the base game on these.
+
+### Near-miss reward
+
+- When a wall passes the player without a hit, and the player’s head was within ~20 cm of the wall’s kill volume, award a small score bonus.
+- Feedback: quick spark / soft “whoa” chime / brief score float (distinct from coin pickup).
+- Goal: reward tight, skilled dodges so surviving close calls feels intentional, not lucky.
+
+### Momentum coins
+
+- Occasionally spawn a short arc/chain of coins that crosses lanes (e.g. 3–5 coins in sequence).
+- Collecting them in a continuous streak builds a combo multiplier; breaking the chain resets it.
+- Feedback: rising pitch on each grab in the chain; multiplier badge on the score HUD.
+- Goal: break the “one coin at a time” rhythm and create short skill bursts.
+
+### Environmental beats
+
+About every **45 seconds**, the run switches to a different environment. The next environment is **chosen at random** (avoid immediately repeating the same one when possible).
+
+Each environment has:
+
+- Its own **color / ambience** (lighting, fog, accent tint on walls/coins)
+- Its own **music** track (crossfade on switch, ~1–2s)
+- One **special gameplay twist** so the switch is more than a reskin
+
+#### Example environments
+
+| Environment | Look / feel | Music mood | Special twist |
+|-------------|-------------|------------|---------------|
+| Fog Hollow | Darker, dense fog, muted colors | Low, tense drone | **Worse visibility** — walls appear later / harder to read at distance |
+| Low Crawl | Cool blue, tight vertical space | Sparse, close percussion | **Low ceiling obstacles** — duck (lower head) to clear hanging barriers |
+| Ghost Glass | Pale wash, soft light | Thin, eerie pad | **Harder-to-notice walls** — a few obstacles are much more transparent |
+| Ember Run | Warm amber / orange glow | Driving, brighter beat | Baseline difficulty; clearer walls, standard visibility (breather biome) |
+
+#### Switch rules
+
+- Timer: ~45s per environment, then pick another at random.
+- On switch: crossfade music, lerp ambience/fog/tint, keep player score/speed continuity (don’t reset the run).
+- Telegraph briefly (e.g. 1s color wash or audio sting) so the change doesn’t feel like a glitch.
+- Spawn rules for the new twist apply to newly spawned obstacles; don’t unfairly rewrite what’s already on top of the player.
+
+---
+
 ## Other Game Ideas
 
 Same stack: hands + immersion.
