@@ -131,20 +131,59 @@ Each environment has:
 - Its own **music** track (crossfade on switch, ~1–2s)
 - One **special gameplay twist** so the switch is more than a reskin
 
-#### Environments
+#### Environments (roster)
 
-| Environment | Look / feel | Music mood | Special twist |
-|-------------|-------------|------------|---------------|
-| Fog Hollow | Darker, dense fog, muted colors | Low, tense drone | **Worse visibility** — walls appear later / harder to read at distance |
-| Low Crawl | Cool blue, tight vertical space | Sparse, close percussion | **Low ceiling obstacles** — duck (lower head) to clear hanging barriers |
-| Ghost Glass | Pale wash, soft light | Thin, eerie pad | **Harder-to-notice walls** — a few obstacles are much more transparent |
-| Ember Run | Warm amber / orange glow | Driving, brighter beat | Baseline difficulty; clearer walls, standard visibility (breather biome) |
-| Storm Pass | Cold steel blue, rain streaks | Rolling thunder rhythm | **Wind shove** — occasional lateral drift that nudges the player off-lane |
-| Crystal Cave | Soft violet refracted light | Chimey, crystalline | **Half-crystal combine** — grab halves with fists, merge different types for a big payout (see below) |
+The six biomes in the random pool:
 
-##### Crystal Cave — half-crystal combine
+1. Fog Hollow
+2. Low Crawl
+3. Ghost Glass
+4. Ember Run
+5. Storm Pass
+6. Crystal Cave
 
-During Crystal Cave, normal touch-coins are replaced by **half-crystals**.
+##### Fog Hollow
+
+- **Look / feel:** Darker, dense fog, muted greys and desaturated reds. Depth cues soften; distant geometry reads as silhouettes.
+- **Music mood:** Low, tense drone — almost motionless, anxious underground atmosphere.
+- **Special twist — worse visibility:** Walls appear later / are harder to read at distance. Telegraph distance is shorter than normal so players must react closer-in.
+- **Gameplay notes:** Keep lane patterns fair (avoid surprise double-blocks that spawn too late). Coins stay at normal readability so rewards still pop through the fog.
+
+##### Low Crawl
+
+- **Look / feel:** Cool blue lighting, tight vertical space — the corridor feels lower and more enclosed.
+- **Music mood:** Sparse, close percussion — intimate, cautious, body-aware.
+- **Special twist — low ceiling obstacles:** Hanging barriers / low slabs require **ducking** (lowering the head) to clear, in addition to normal left/right lane dodges.
+- **Gameplay notes:** Duck obstacles should be clearly silhouetted above the lane. Don’t stack duck-hazards with unfair side-walls in the same beat during early Low Crawl visits; mix in simple duck-only gates so the verb teaches cleanly.
+
+##### Ghost Glass
+
+- **Look / feel:** Pale wash, soft diffuse light, slightly ethereal. Surfaces feel thin and glassy.
+- **Music mood:** Thin, eerie pad — fragile, haunted, spacious.
+- **Special twist — harder-to-notice walls:** A subset of obstacles spawn much more transparent than normal red walls, so they are easier to miss visually.
+- **Gameplay notes:** Not every wall should be ghosted — mix solid-readable walls with ghost walls so players stay alert. Ghost walls still use the same collision rules; only opacity/readability changes. Optional faint edge shimmer so skillful players can still learn to spot them.
+
+##### Ember Run
+
+- **Look / feel:** Warm amber / orange glow, clearer air, comfortable contrast. The “home” / breather biome.
+- **Music mood:** Driving, brighter beat — confident runner energy.
+- **Special twist — baseline clarity:** Standard visibility, clearer walls, no extra hazard verbs. Acts as a recovery biome between harsher twists.
+- **Gameplay notes:** Ideal run opener. Use normal wall opacity and full telegraph distance. Good place for denser standard coins / momentum coin chains without competing biome gimmicks.
+
+##### Storm Pass
+
+- **Look / feel:** Cold steel blue, rain-streak atmosphere, unsettled sky/corridor energy.
+- **Music mood:** Rolling thunder rhythm — pressure, gusts, weather you can feel.
+- **Special twist — wind shove:** Occasional lateral drift nudges the player off-lane (a brief force on head/lane position), so players must correct mid-approach.
+- **Gameplay notes:** Telegraph wind shoves with a short audio whoosh + visual gust. Limit shove frequency so it doesn’t feel random-punishy; never shove directly into an unavoidable wall. Shoves should be correctable with a step/lean.
+
+##### Crystal Cave
+
+- **Look / feel:** Soft violet refracted light, mineral shimmer, magical cavern mood.
+- **Music mood:** Chimey, crystalline — pretty, precise, slightly puzzle-like.
+- **Special twist — half-crystal combine:** Normal touch-coins are replaced by **half-crystals** that must be fist-grabbed and merged across hands for a big payout.
+
+**Half-crystal rules**
 
 - Each spawned half is a **random type** (e.g. blue or red), each type with its own color.
 - **Grab:** make a **fist** while the hand is on that half. Touching without a fist does nothing.
