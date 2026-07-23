@@ -131,7 +131,7 @@ Each environment has:
 - Its own **music** track (crossfade on switch, ~1–2s)
 - One **special gameplay twist** so the switch is more than a reskin
 
-#### Example environments
+#### Environments
 
 | Environment | Look / feel | Music mood | Special twist |
 |-------------|-------------|------------|---------------|
@@ -139,6 +139,24 @@ Each environment has:
 | Low Crawl | Cool blue, tight vertical space | Sparse, close percussion | **Low ceiling obstacles** — duck (lower head) to clear hanging barriers |
 | Ghost Glass | Pale wash, soft light | Thin, eerie pad | **Harder-to-notice walls** — a few obstacles are much more transparent |
 | Ember Run | Warm amber / orange glow | Driving, brighter beat | Baseline difficulty; clearer walls, standard visibility (breather biome) |
+| Storm Pass | Cold steel blue, rain streaks | Rolling thunder rhythm | **Wind shove** — occasional lateral drift that nudges the player off-lane |
+| Crystal Cave | Soft violet refracted light | Chimey, crystalline | **Half-crystal combine** — grab halves with fists, merge different types for a big payout (see below) |
+
+##### Crystal Cave — half-crystal combine
+
+During Crystal Cave, normal touch-coins are replaced by **half-crystals**.
+
+- Each spawned half is a **random type** (e.g. blue or red), each type with its own color.
+- **Grab:** make a **fist** while the hand is on that half. Touching without a fist does nothing.
+- **Drop:** release the fist — the held half disappears (nothing left on the floor).
+- Each hand can hold **one** half at a time.
+- When left and right hold **different** types, bring hands together to **combine** them into one crystal coin.
+- A combined crystal is worth **~5× a normal coin**, plays a short combine animation, then goes away.
+- Same-type in both hands: no merge (optional soft reject feedback).
+
+**Rare charged half:** occasionally a half spawns as a **charged** variant (distinct glow/pulse). Merging a pair that includes a charged half (or two) pays **~10×** a normal coin instead of 5×.
+
+**Fairness notes for this biome:** prefer simpler / fewer walls while halves are in play so fist + combine remains readable mid-dodge. Combine distance should be generous (~15–20 cm between hands).
 
 #### Switch rules
 
@@ -146,3 +164,4 @@ Each environment has:
 - On switch: crossfade music, lerp ambience/fog/tint, keep player score/speed continuity (don’t reset the run).
 - Telegraph briefly (e.g. 1s color wash or audio sting) so the change doesn’t feel like a glitch.
 - Spawn rules for the new twist apply to newly spawned obstacles; don’t unfairly rewrite what’s already on top of the player.
+- Drop any held Crystal Cave halves on environment exit (they vanish; no carry into the next biome).
