@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		3A1F40DD2C52E7010079C79F /* Walls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A1F40DC2C52E7010079C79F /* Walls.swift */; };
 		3A9B45272C503B710080BBBE /* RealityKitContent in Frameworks */ = {isa = PBXBuildFile; productRef = 3A9B45262C503B710080BBBE /* RealityKitContent */; };
 		3A9B45292C503B710080BBBE /* Endless_RunnerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A9B45282C503B710080BBBE /* Endless_RunnerApp.swift */; };
 		3A9B452B2C503B710080BBBE /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A9B452A2C503B710080BBBE /* ContentView.swift */; };
@@ -15,6 +14,9 @@
 		3A9B45322C503B7D0080BBBE /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 3A9B45312C503B7D0080BBBE /* Preview Assets.xcassets */; };
 		3A9B453D2C503B7D0080BBBE /* Endless_RunnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A9B453C2C503B7D0080BBBE /* Endless_RunnerTests.swift */; };
 		3AFD51F82C52E2EE0022AE11 /* ARKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3AFD51F72C52E2ED0022AE11 /* ARKit.framework */; };
+		B01A10012C72000100A00002 /* ImmersiveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A10002C72000100A00001 /* ImmersiveView.swift */; };
+		B01A10032C72000100A00004 /* GameModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A10022C72000100A00003 /* GameModel.swift */; };
+		B01A10052C72000100A00006 /* GameWorld.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A10042C72000100A00005 /* GameWorld.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -28,7 +30,6 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		3A1F40DC2C52E7010079C79F /* Walls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Walls.swift; sourceTree = "<group>"; };
 		3A9B45212C503B710080BBBE /* Endless Runner.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Endless Runner.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		3A9B45252C503B710080BBBE /* RealityKitContent */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = RealityKitContent; sourceTree = "<group>"; };
 		3A9B45282C503B710080BBBE /* Endless_RunnerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Endless_RunnerApp.swift; sourceTree = "<group>"; };
@@ -39,6 +40,9 @@
 		3A9B45382C503B7D0080BBBE /* Endless RunnerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Endless RunnerTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		3A9B453C2C503B7D0080BBBE /* Endless_RunnerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Endless_RunnerTests.swift; sourceTree = "<group>"; };
 		3AFD51F72C52E2ED0022AE11 /* ARKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ARKit.framework; path = System/Library/Frameworks/ARKit.framework; sourceTree = SDKROOT; };
+		B01A10002C72000100A00001 /* ImmersiveView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImmersiveView.swift; sourceTree = "<group>"; };
+		B01A10022C72000100A00003 /* GameModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameModel.swift; sourceTree = "<group>"; };
+		B01A10042C72000100A00005 /* GameWorld.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameWorld.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -86,7 +90,9 @@
 			children = (
 				3A9B45282C503B710080BBBE /* Endless_RunnerApp.swift */,
 				3A9B452A2C503B710080BBBE /* ContentView.swift */,
-				3A1F40DC2C52E7010079C79F /* Walls.swift */,
+				B01A10002C72000100A00001 /* ImmersiveView.swift */,
+				B01A10022C72000100A00003 /* GameModel.swift */,
+				B01A10042C72000100A00005 /* GameWorld.swift */,
 				3A9B452E2C503B7D0080BBBE /* Assets.xcassets */,
 				3A9B45332C503B7D0080BBBE /* Info.plist */,
 				3A9B45302C503B7D0080BBBE /* Preview Content */,
@@ -230,7 +236,9 @@
 			buildActionMask = 2147483647;
 			files = (
 				3A9B452B2C503B710080BBBE /* ContentView.swift in Sources */,
-				3A1F40DD2C52E7010079C79F /* Walls.swift in Sources */,
+				B01A10012C72000100A00002 /* ImmersiveView.swift in Sources */,
+				B01A10032C72000100A00004 /* GameModel.swift in Sources */,
+				B01A10052C72000100A00006 /* GameWorld.swift in Sources */,
 				3A9B45292C503B710080BBBE /* Endless_RunnerApp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

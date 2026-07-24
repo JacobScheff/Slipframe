@@ -2,24 +2,34 @@
 //  ImmersiveView.swift
 //  Endless Runner
 //
-//  Created by Jacob Scheff on 7/23/24.
+//  Mixed immersive play space for the base runner loop.
 //
 
 import SwiftUI
 import RealityKit
-import RealityKitContent
 
 struct ImmersiveView: View {
+    @EnvironmentObject private var gameModel: GameModel
+    @State private var gameWorld = GameWorld()
+
     var body: some View {
         RealityView { content in
-            // Add the initial RealityKit content
-            if let scene = try? await Entity(named: "Immersive", in: realityKitContentBundle) {
-                content.add(scene)
-            }
+            gameWorld.attach(to: content, gameModel: gameModel)
+        } update: { _ in
+            gameWorld.syncRun(with: gameModel)
+        }
+        .onAppear {
+            gameModel.immersiveSpaceOpen = true
+        }
+        .onDisappear {
+            gameModel.immersiveSpaceOpen = false
+            gameModel.isPlaying = false
+            gameWorld.teardown()
         }
     }
 }
 
 #Preview(immersionStyle: .mixed) {
     ImmersiveView()
+        .environmentObject(GameModel())
 }
