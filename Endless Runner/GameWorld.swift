@@ -3,6 +3,8 @@
 //  Endless Runner
 //
 //  Minimal single-environment endless runner:
+//  - Playfield sits on the real floor and locks pose when a run starts
+//  - Tiled track ribbon recycles for an endless corridor
 //  - World scrolls toward the player
 //  - Red walls block 1–2 lanes (head + hand collision)
 //  - Gold coins collected by hand proximity
@@ -72,12 +74,22 @@ final class GameWorld {
     private static let trackRecycleZ: Float = 2.2
     /// First segment sits slightly behind the stand line so the ribbon covers your feet.
     private static let trackFirstCenterZ: Float = trackSegmentLength * 0.2
+    /// Used only when a floor plane has not been found yet.
+    private static let fallbackEyeHeight: Float = 1.55
 
     /// Simple glowing placeholder until real wall art is dropped in.
     private static let wallBodyMaterial: any RealityKit.Material = makeWallBodyMaterial()
 
+    /// Playfield origin: floor at y=0, stand line at z=0, track extends along −Z.
     let root = Entity()
     private let headAnchor = AnchorEntity(.head)
+    private let floorAnchor = AnchorEntity(
+        .plane(
+            .horizontal,
+            classification: .floor,
+            minimumBounds: SIMD2<Float>(0.5, 0.5)
+        )
+    )
     private let hudAnchor = Entity()
     private let trackRoot = Entity()
 
@@ -91,6 +103,8 @@ final class GameWorld {
     private var patternIndex = 0
     private var updateSubscription: EventSubscription?
     private var activeRunID: Int = -1
+    /// After Start, playfield pose no longer follows the player.
+    private var isPlayfieldLocked = false
 
     private let arSession = ARKitSession()
     private let handTracking = HandTrackingProvider()
@@ -103,6 +117,8 @@ final class GameWorld {
         self.gameModel = gameModel
         content.add(root)
         content.add(headAnchor)
+        content.add(floorAnchor)
+        isPlayfieldLocked = false
 
         if updateSubscription == nil {
             updateSubscription = content.subscribe(to: SceneEvents.Update.self) { [weak self] event in
@@ -113,6 +129,7 @@ final class GameWorld {
         buildStaticEnvironment()
         ensureHUDAnchor()
         startHandTracking()
+        snapPlayfieldToPlayer()
     }
 
     /// Parents the SwiftUI play/score attachment so it stays fixed with the track.
@@ -137,6 +154,7 @@ final class GameWorld {
         handTask?.cancel()
         handTask = nil
         updateSubscription = nil
+        isPlayfieldLocked = false
         clearDynamicContent()
         trackSegments.removeAll()
         for child in hudAnchor.children {
@@ -253,12 +271,45 @@ final class GameWorld {
 
     private func beginRun(runID: Int) {
         activeRunID = runID
+        // Final snap to feet / facing / real floor, then freeze world pose for the run.
+        snapPlayfieldToPlayer()
+        isPlayfieldLocked = true
         clearDynamicContent()
         resetTrackLayout()
         speed = GameWorld.baseSpeed
         distanceUntilSpawn = 1.0
         distanceAccumulator = 0
         patternIndex = 0
+    }
+
+    // MARK: - Playfield pose
+
+    /// Places the playfield on the real floor under the player, facing their look direction.
+    private func snapPlayfieldToPlayer() {
+        let headWorld = headAnchor.position(relativeTo: nil)
+        let headRotation = headAnchor.orientation(relativeTo: nil)
+
+        let floorY: Float
+        if floorAnchor.isAnchored {
+            floorY = floorAnchor.position(relativeTo: nil).y
+        } else {
+            floorY = headWorld.y - GameWorld.fallbackEyeHeight
+        }
+
+        // Flatten head forward onto the floor plane (track runs along local −Z).
+        let forwardWorld = headRotation.act(SIMD3<Float>(0, 0, -1))
+        var flatForward = SIMD3<Float>(forwardWorld.x, 0, forwardWorld.z)
+        let forwardLength = length(flatForward)
+        if forwardLength < 0.05 {
+            flatForward = SIMD3(0, 0, -1)
+        } else {
+            flatForward /= forwardLength
+        }
+
+        let yaw = atan2(-flatForward.x, -flatForward.z)
+        let position = SIMD3<Float>(headWorld.x, floorY, headWorld.z)
+        root.setPosition(position, relativeTo: nil)
+        root.setOrientation(simd_quatf(angle: yaw, axis: SIMD3(0, 1, 0)), relativeTo: nil)
     }
 
     private func resetTrackLayout() {
@@ -323,6 +374,12 @@ final class GameWorld {
     // MARK: - Loop
 
     private func tick(deltaTime: Float) {
+        // Before Start, keep the stand line under the player. After Start, pose is frozen
+        // so walking forward/back does not drag the track.
+        if !isPlayfieldLocked {
+            snapPlayfieldToPlayer()
+        }
+
         guard let gameModel, gameModel.isPlaying, !gameModel.isGameOver else { return }
         guard deltaTime > 0, deltaTime < 0.25 else { return }
 
@@ -450,27 +507,28 @@ final class GameWorld {
 
     private func resolveCollisions(gameModel: GameModel) {
         let head = headAnchor.position(relativeTo: root)
-        // Root stays at world origin; ARKit hand anchors are also world-space.
-        let hands = [leftHandPosition, rightHandPosition].compactMap { $0 }
+        // Hands are tracked in world space — convert into the locked playfield.
+        let handsWorld = [leftHandPosition, rightHandPosition].compactMap { $0 }
+        let handsInRoot: [SIMD3<Float>] = handsWorld.map { root.convert(position: $0, from: nil) }
 
         for index in walls.indices {
             guard !walls[index].hasResolvedHit else { continue }
             let z = walls[index].entity.position.z
             guard abs(z) <= GameWorld.hitZWindow else { continue }
 
-            if bodyHitsWall(head: head, hands: hands, blockedLanes: walls[index].blockedLanes) {
+            if bodyHitsWall(head: head, handsInRoot: handsInRoot, blockedLanes: walls[index].blockedLanes) {
                 walls[index].hasResolvedHit = true
                 gameModel.endRun()
                 return
             }
         }
 
-        guard !hands.isEmpty else { return }
+        guard !handsWorld.isEmpty else { return }
 
         for index in coins.indices {
             guard !coins[index].collected else { continue }
             let coinPos = coins[index].entity.position(relativeTo: nil)
-            for hand in hands {
+            for hand in handsWorld {
                 if distance(hand, coinPos) <= GameWorld.collectDistance {
                     coins[index].collected = true
                     coins[index].entity.removeFromParent()
@@ -484,15 +542,15 @@ final class GameWorld {
     /// Head or either hand in a blocked lane (within wall height) counts as a hit.
     private func bodyHitsWall(
         head: SIMD3<Float>,
-        hands: [SIMD3<Float>],
+        handsInRoot: [SIMD3<Float>],
         blockedLanes: Set<Int>
     ) -> Bool {
         if blockedLanes.contains(lane(for: head.x)) {
             return true
         }
 
-        for hand in hands {
-            // Ignore hands clearly above / below the wall slab.
+        for hand in handsInRoot {
+            // Ignore hands clearly above / below the wall slab (playfield-local Y).
             guard hand.y >= 0, hand.y <= GameWorld.wallHeight else { continue }
             if blockedLanes.contains(lane(for: hand.x)) {
                 return true
