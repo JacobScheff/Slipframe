@@ -63,8 +63,8 @@ final class GameWorld {
     private static let hudPosition = SIMD3<Float>(0, 2.35, -2.2)
 
     /// Cached hazard look so every wall shares one stripe texture.
-    private static let wallBodyMaterial: any Material = makeWallBodyMaterial()
-    private static let wallStripeMaterial: any Material = makeWallStripeMaterial()
+    private static let wallBodyMaterial: any RealityKit.Material = makeWallBodyMaterial()
+    private static let wallStripeMaterial: any RealityKit.Material = makeWallStripeMaterial()
 
     let root = Entity()
     private let headAnchor = AnchorEntity(.head)
@@ -342,7 +342,7 @@ final class GameWorld {
         return slab
     }
 
-    private static func makeWallBodyMaterial() -> any Material {
+    private static func makeWallBodyMaterial() -> any RealityKit.Material {
         var material = PhysicallyBasedMaterial()
         material.baseColor = .init(tint: UIColor(red: 0.95, green: 0.12, blue: 0.1, alpha: 0.42))
         material.roughness = .init(floatLiteral: 0.35)
@@ -363,7 +363,7 @@ final class GameWorld {
         return material
     }
 
-    private static func makeWallStripeMaterial() -> any Material {
+    private static func makeWallStripeMaterial() -> any RealityKit.Material {
         UnlitMaterial(color: UIColor(red: 1.0, green: 0.72, blue: 0.28, alpha: 0.95))
     }
 
