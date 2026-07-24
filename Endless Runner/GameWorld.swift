@@ -53,16 +53,16 @@ final class GameWorld {
     private static let spawnZ: Float = -8
     private static let despawnZ: Float = 1.5
     /// Extra depth pad beyond the wall box when testing Z overlap.
-    private static let hitZPad: Float = 0.06
+    private static let hitZPad: Float = 0.02
     /// Shrink the wall's X kill box so grazing a lane edge is not a hit.
-    private static let hitXInset: Float = 0.1
+    private static let hitXInset: Float = 0.18
     private static let collectDistance: Float = 0.24
     private static let baseSpeed: Float = 2.2
     private static let maxSpeed: Float = 5.5
     private static let speedRampPerSecond: Float = 0.04
     /// Distance traveled between obstacle / coin patterns.
-    private static let spawnGapMin: Float = 4.5
-    private static let spawnGapMax: Float = 6.5
+    private static let spawnGapMin: Float = 3.6
+    private static let spawnGapMax: Float = 5.2
     private static let coinPoints = 10
     /// HUD sits above the corridor, further down the track, clear of the play volume.
     private static let hudPosition = SIMD3<Float>(0, 2.45, -4.0)
@@ -510,22 +510,15 @@ final class GameWorld {
 
     private func resolveCollisions(gameModel: GameModel) {
         let head = headAnchor.position(relativeTo: root)
-        // Hands are tracked in world space — convert into the locked playfield.
         let handsWorld = [leftHandPosition, rightHandPosition].compactMap { $0 }
-        let handsInRoot: [SIMD3<Float>] = handsWorld.map { root.convert(position: $0, from: nil) }
 
         for index in walls.indices {
             guard !walls[index].hasResolvedHit else { continue }
             let wallZ = walls[index].entity.position.z
 
-            // Test against the player's current depth, not only the stand line —
-            // and require real overlap with the wall box (not the whole lane).
-            if overlapsWall(
-                wallZ: wallZ,
-                blockedLanes: walls[index].blockedLanes,
-                head: head,
-                handsInRoot: handsInRoot
-            ) {
+            // Head-only wall hits. Hand tracking is too noisy at the sides and was
+            // ending runs while the body was clearly in a gap.
+            if headHitsWall(wallZ: wallZ, blockedLanes: walls[index].blockedLanes, head: head) {
                 walls[index].hasResolvedHit = true
                 gameModel.endRun()
                 return
@@ -554,33 +547,22 @@ final class GameWorld {
         }
     }
 
-    /// True when head or a hand intersects a blocked wall slab's volume.
-    private func overlapsWall(
+    /// True when the head intersects a blocked wall slab (forgiving edge inset).
+    private func headHitsWall(
         wallZ: Float,
         blockedLanes: Set<Int>,
-        head: SIMD3<Float>,
-        handsInRoot: [SIMD3<Float>]
+        head: SIMD3<Float>
     ) -> Bool {
-        let halfDepth = GameWorld.wallThickness * 0.5 + GameWorld.hitZPad
+        // Use a thinner effective depth than the visual mesh so being near a
+        // thick translucent slab does not read as a hit too early.
+        let halfDepth = min(GameWorld.wallThickness * 0.5, 0.22) + GameWorld.hitZPad
         let halfWidth = max(0.05, GameWorld.wallWidth * 0.5 - GameWorld.hitXInset)
+        guard abs(wallZ - head.z) <= halfDepth else { return false }
 
         for laneValue in blockedLanes {
             let laneX = Float(laneValue) * GameWorld.laneSpacing
-            let minX = laneX - halfWidth
-            let maxX = laneX + halfWidth
-
-            // Head: X inside slab and Z overlapping the wall depth.
-            if head.x >= minX, head.x <= maxX, abs(wallZ - head.z) <= halfDepth {
+            if head.x >= laneX - halfWidth, head.x <= laneX + halfWidth {
                 return true
-            }
-
-            for hand in handsInRoot {
-                // Hands must be clearly inside the slab — not merely in the same lane.
-                guard hand.y >= 0.15, hand.y <= GameWorld.wallHeight else { continue }
-                guard hand.x >= minX, hand.x <= maxX else { continue }
-                if abs(wallZ - hand.z) <= halfDepth {
-                    return true
-                }
             }
         }
         return false
