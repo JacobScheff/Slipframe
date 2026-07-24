@@ -520,6 +520,7 @@ final class GameWorld {
             // ending runs while the body was clearly in a gap.
             if headHitsWall(wallZ: wallZ, blockedLanes: walls[index].blockedLanes, head: head) {
                 walls[index].hasResolvedHit = true
+                GameSFX.shared.playWallHit()
                 gameModel.endRun()
                 return
             }
@@ -541,6 +542,7 @@ final class GameWorld {
                     coins[index].collected = true
                     coins[index].entity.removeFromParent()
                     gameModel.collectCoin(points: GameWorld.coinPoints)
+                    GameSFX.shared.playCoinCollect()
                     break
                 }
             }
