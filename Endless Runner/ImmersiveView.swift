@@ -8,15 +8,30 @@
 import SwiftUI
 import RealityKit
 
+private enum ImmersiveAttachmentID: String {
+    case playHUD
+}
+
 struct ImmersiveView: View {
     @EnvironmentObject private var gameModel: GameModel
     @State private var gameWorld = GameWorld()
 
     var body: some View {
-        RealityView { content in
+        RealityView { content, attachments in
             gameWorld.attach(to: content, gameModel: gameModel)
-        } update: { _ in
+            if let hud = attachments.entity(for: ImmersiveAttachmentID.playHUD.rawValue) {
+                gameWorld.attachHUD(hud)
+            }
+        } update: { _, attachments in
             gameWorld.syncRun(with: gameModel)
+            if let hud = attachments.entity(for: ImmersiveAttachmentID.playHUD.rawValue) {
+                gameWorld.attachHUD(hud)
+            }
+        } attachments: {
+            Attachment(id: ImmersiveAttachmentID.playHUD.rawValue) {
+                PlayHUDView()
+                    .environmentObject(gameModel)
+            }
         }
         .onAppear {
             gameModel.immersiveSpaceOpen = true

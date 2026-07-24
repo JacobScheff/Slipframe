@@ -4,8 +4,9 @@
 //
 //  Minimal single-environment endless runner:
 //  - World scrolls toward the player
-//  - Red walls block 1–2 lanes (head X collision)
+//  - Red walls block 1–2 lanes (head + hand collision)
 //  - Gold coins collected by hand proximity
+//  - Play / score HUD is fixed above the track
 //  Placeholder meshes only (no art assets).
 //
 
@@ -54,9 +55,12 @@ final class GameWorld {
     private static let spawnGapMin: Float = 2.4
     private static let spawnGapMax: Float = 3.6
     private static let coinPoints = 10
+    /// HUD sits above the corridor, ahead of the player, clear of the play volume.
+    private static let hudPosition = SIMD3<Float>(0, 2.35, -2.2)
 
     let root = Entity()
     private let headAnchor = AnchorEntity(.head)
+    private let hudAnchor = Entity()
 
     private weak var gameModel: GameModel?
     private var walls: [WallItem] = []
@@ -87,7 +91,18 @@ final class GameWorld {
         }
 
         buildStaticEnvironment()
+        ensureHUDAnchor()
         startHandTracking()
+    }
+
+    /// Parents the SwiftUI play/score attachment so it stays fixed with the track.
+    func attachHUD(_ hudEntity: Entity) {
+        ensureHUDAnchor()
+        guard hudEntity.parent !== hudAnchor else { return }
+        hudEntity.removeFromParent()
+        // Face the player (looking down −Z toward the oncoming track).
+        hudEntity.orientation = simd_quatf(angle: .pi, axis: SIMD3<Float>(0, 1, 0))
+        hudAnchor.addChild(hudEntity)
     }
 
     func syncRun(with gameModel: GameModel) {
@@ -101,8 +116,19 @@ final class GameWorld {
         handTask = nil
         updateSubscription = nil
         clearDynamicContent()
+        for child in hudAnchor.children {
+            child.removeFromParent()
+        }
         for child in root.children {
             child.removeFromParent()
+        }
+    }
+
+    private func ensureHUDAnchor() {
+        hudAnchor.name = "playHUD"
+        hudAnchor.position = GameWorld.hudPosition
+        if hudAnchor.parent !== root {
+            root.addChild(hudAnchor)
         }
     }
 
@@ -110,7 +136,7 @@ final class GameWorld {
 
     private func buildStaticEnvironment() {
         // One static warm corridor (placeholder for Ember Run).
-        guard root.children.isEmpty else { return }
+        if root.children.contains(where: { $0.name == "floor" }) { return }
 
         let floorMesh = MeshResource.generateBox(width: 3.2, height: 0.02, depth: 24)
         let floorMaterial = SimpleMaterial(
@@ -119,6 +145,7 @@ final class GameWorld {
             isMetallic: false
         )
         let floor = ModelEntity(mesh: floorMesh, materials: [floorMaterial])
+        floor.name = "floor"
         floor.position = SIMD3(0, 0, -8)
         root.addChild(floor)
 
@@ -298,21 +325,21 @@ final class GameWorld {
 
     private func resolveCollisions(gameModel: GameModel) {
         let head = headAnchor.position(relativeTo: root)
+        // Root stays at world origin; ARKit hand anchors are also world-space.
+        let hands = [leftHandPosition, rightHandPosition].compactMap { $0 }
 
         for index in walls.indices {
             guard !walls[index].hasResolvedHit else { continue }
             let z = walls[index].entity.position.z
             guard abs(z) <= GameWorld.hitZWindow else { continue }
 
-            walls[index].hasResolvedHit = true
-            let playerLane = lane(for: head.x)
-            if walls[index].blockedLanes.contains(playerLane) {
+            if bodyHitsWall(head: head, hands: hands, blockedLanes: walls[index].blockedLanes) {
+                walls[index].hasResolvedHit = true
                 gameModel.endRun()
                 return
             }
         }
 
-        let hands = [leftHandPosition, rightHandPosition].compactMap { $0 }
         guard !hands.isEmpty else { return }
 
         for index in coins.indices {
@@ -322,11 +349,31 @@ final class GameWorld {
                 if distance(hand, coinPos) <= GameWorld.collectDistance {
                     coins[index].collected = true
                     coins[index].entity.removeFromParent()
-                    gameModel.addScore(GameWorld.coinPoints)
+                    gameModel.collectCoin(points: GameWorld.coinPoints)
                     break
                 }
             }
         }
+    }
+
+    /// Head or either hand in a blocked lane (within wall height) counts as a hit.
+    private func bodyHitsWall(
+        head: SIMD3<Float>,
+        hands: [SIMD3<Float>],
+        blockedLanes: Set<Int>
+    ) -> Bool {
+        if blockedLanes.contains(lane(for: head.x)) {
+            return true
+        }
+
+        for hand in hands {
+            // Ignore hands clearly above / below the wall slab.
+            guard hand.y >= 0, hand.y <= GameWorld.wallHeight else { continue }
+            if blockedLanes.contains(lane(for: hand.x)) {
+                return true
+            }
+        }
+        return false
     }
 
     private func lane(for x: Float) -> Int {

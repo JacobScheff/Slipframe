@@ -11,6 +11,7 @@ import SwiftUI
 @MainActor
 final class GameModel: ObservableObject {
     @Published var score: Int = 0
+    @Published var coinsCollected: Int = 0
     @Published var isPlaying: Bool = false
     @Published var isGameOver: Bool = false
     @Published var immersiveSpaceOpen: Bool = false
@@ -20,6 +21,7 @@ final class GameModel: ObservableObject {
 
     func startRun() {
         score = 0
+        coinsCollected = 0
         isGameOver = false
         isPlaying = true
         runID += 1
@@ -27,6 +29,12 @@ final class GameModel: ObservableObject {
 
     func addScore(_ points: Int) {
         guard isPlaying else { return }
+        score += points
+    }
+
+    func collectCoin(points: Int = 10) {
+        guard isPlaying else { return }
+        coinsCollected += 1
         score += points
     }
 

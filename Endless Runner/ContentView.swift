@@ -2,7 +2,8 @@
 //  ContentView.swift
 //  Endless Runner
 //
-//  Simple window HUD: open immersive space, start / restart, show score.
+//  Launcher window: open / leave the immersive play space.
+//  Score and run controls live on the track-anchored HUD.
 //
 
 import SwiftUI
@@ -17,12 +18,9 @@ struct ContentView: View {
             Text("Endless Runner")
                 .font(.largeTitle)
 
-            Text(scoreText)
-                .font(.title)
-                .monospacedDigit()
-
             Text(statusText)
                 .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
 
             if !gameModel.immersiveSpaceOpen {
                 Button("Enter Play Space") {
@@ -31,57 +29,29 @@ struct ContentView: View {
                     }
                 }
                 .buttonStyle(.borderedProminent)
-            } else if gameModel.isGameOver {
-                Button("Restart") {
-                    gameModel.startRun()
-                }
-                .buttonStyle(.borderedProminent)
-
-                Button("Leave Play Space") {
-                    Task {
-                        await dismissImmersiveSpace()
-                    }
-                }
-            } else if !gameModel.isPlaying {
-                Button("Start Run") {
-                    gameModel.startRun()
-                }
-                .buttonStyle(.borderedProminent)
-
-                Button("Leave Play Space") {
-                    Task {
-                        await dismissImmersiveSpace()
-                    }
-                }
             } else {
-                Text("Dodge red walls with your body.\nGrab gold coins with your hands.")
-                    .multilineTextAlignment(.center)
+                Text("Score and coins are on the panel above the track.")
+                    .font(.subheadline)
                     .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
 
-                Button("End Run") {
-                    gameModel.endRun()
+                Button("Leave Play Space") {
+                    Task {
+                        await dismissImmersiveSpace()
+                    }
                 }
+                .buttonStyle(.borderedProminent)
             }
         }
         .padding(32)
-        .frame(minWidth: 360, minHeight: 280)
-    }
-
-    private var scoreText: String {
-        "Score: \(gameModel.score)"
+        .frame(minWidth: 320, minHeight: 200)
     }
 
     private var statusText: String {
         if !gameModel.immersiveSpaceOpen {
-            return "Open the play space to begin."
+            return "Open the play space to begin.\nThe score panel stays fixed above the track."
         }
-        if gameModel.isGameOver {
-            return "Hit a wall — run over."
-        }
-        if gameModel.isPlaying {
-            return "Running…"
-        }
-        return "Ready."
+        return "Play space open."
     }
 }
 

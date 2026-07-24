@@ -17,6 +17,7 @@
 		B01A10012C72000100A00002 /* ImmersiveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A10002C72000100A00001 /* ImmersiveView.swift */; };
 		B01A10032C72000100A00004 /* GameModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A10022C72000100A00003 /* GameModel.swift */; };
 		B01A10052C72000100A00006 /* GameWorld.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A10042C72000100A00005 /* GameWorld.swift */; };
+		B01A10072C72000100A00008 /* PlayHUDView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A10062C72000100A00007 /* PlayHUDView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -43,6 +44,7 @@
 		B01A10002C72000100A00001 /* ImmersiveView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImmersiveView.swift; sourceTree = "<group>"; };
 		B01A10022C72000100A00003 /* GameModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameModel.swift; sourceTree = "<group>"; };
 		B01A10042C72000100A00005 /* GameWorld.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameWorld.swift; sourceTree = "<group>"; };
+		B01A10062C72000100A00007 /* PlayHUDView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayHUDView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -93,6 +95,7 @@
 				B01A10002C72000100A00001 /* ImmersiveView.swift */,
 				B01A10022C72000100A00003 /* GameModel.swift */,
 				B01A10042C72000100A00005 /* GameWorld.swift */,
+				B01A10062C72000100A00007 /* PlayHUDView.swift */,
 				3A9B452E2C503B7D0080BBBE /* Assets.xcassets */,
 				3A9B45332C503B7D0080BBBE /* Info.plist */,
 				3A9B45302C503B7D0080BBBE /* Preview Content */,
@@ -239,6 +242,7 @@
 				B01A10012C72000100A00002 /* ImmersiveView.swift in Sources */,
 				B01A10032C72000100A00004 /* GameModel.swift in Sources */,
 				B01A10052C72000100A00006 /* GameWorld.swift in Sources */,
+				B01A10072C72000100A00008 /* PlayHUDView.swift in Sources */,
 				3A9B45292C503B710080BBBE /* Endless_RunnerApp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
