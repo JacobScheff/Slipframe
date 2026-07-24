@@ -41,13 +41,15 @@ final class GameWorld {
     // Layout
     private static let laneSpacing: Float = 0.75
     private static let wallHeight: Float = 1.8
-    private static let wallThickness: Float = 0.12
+    /// Depth along the track so slabs read as thick volumes, not paper-thin panels.
+    private static let wallThickness: Float = 0.7
     private static let wallWidth: Float = 0.7
     private static let coinRadius: Float = 0.07
     private static let coinHeight: Float = 1.25
     private static let spawnZ: Float = -8
     private static let despawnZ: Float = 1.5
-    private static let hitZWindow: Float = 0.35
+    /// Covers the deeper wall volume as it passes through the player.
+    private static let hitZWindow: Float = wallThickness * 0.5 + 0.12
     private static let collectDistance: Float = 0.18
     private static let baseSpeed: Float = 2.2
     private static let maxSpeed: Float = 5.5
@@ -57,6 +59,10 @@ final class GameWorld {
     private static let coinPoints = 10
     /// HUD sits above the corridor, ahead of the player, clear of the play volume.
     private static let hudPosition = SIMD3<Float>(0, 2.35, -2.2)
+
+    /// Cached hazard look so every wall shares one stripe texture.
+    private static let wallBodyMaterial: any Material = makeWallBodyMaterial()
+    private static let wallStripeMaterial: any Material = makeWallStripeMaterial()
 
     let root = Entity()
     private let headAnchor = AnchorEntity(.head)
@@ -285,25 +291,104 @@ final class GameWorld {
         parent.position = SIMD3(0, GameWorld.wallHeight * 0.5, GameWorld.spawnZ)
         parent.name = "wall"
 
-        let red = SimpleMaterial(
-            color: UIColor(red: 1, green: 0.15, blue: 0.12, alpha: 0.45),
-            roughness: 0.4,
-            isMetallic: false
-        )
-
         for lane in lanes {
-            let mesh = MeshResource.generateBox(
-                width: GameWorld.wallWidth,
-                height: GameWorld.wallHeight,
-                depth: GameWorld.wallThickness
-            )
-            let slab = ModelEntity(mesh: mesh, materials: [red])
+            let slab = makeWallSlab()
             slab.position = SIMD3(lane.x, 0, 0)
             parent.addChild(slab)
         }
 
         root.addChild(parent)
         walls.append(WallItem(entity: parent, blockedLanes: Set(lanes.map(\.rawValue))))
+    }
+
+    /// Thick translucent slab with hazard diagonals on the player-facing face.
+    private func makeWallSlab() -> Entity {
+        let slab = Entity()
+        slab.name = "wallSlab"
+
+        let bodyMesh = MeshResource.generateBox(
+            width: GameWorld.wallWidth,
+            height: GameWorld.wallHeight,
+            depth: GameWorld.wallThickness
+        )
+        let body = ModelEntity(mesh: bodyMesh, materials: [GameWorld.wallBodyMaterial])
+        slab.addChild(body)
+
+        // Diagonal hazard bars sit on the +Z face (toward the player).
+        let frontZ = GameWorld.wallThickness * 0.5 + 0.012
+        let barWidth: Float = 0.055
+        let barDepth: Float = 0.03
+        // Long enough to cover the face after a 45° rotation.
+        let barLength = hypot(GameWorld.wallWidth, GameWorld.wallHeight) * 0.92
+        let spacing: Float = 0.22
+        let stripeCount = 7
+        let start = -spacing * Float(stripeCount - 1) * 0.5
+
+        for index in 0..<stripeCount {
+            let barMesh = MeshResource.generateBox(
+                width: barWidth,
+                height: barLength,
+                depth: barDepth
+            )
+            let bar = ModelEntity(mesh: barMesh, materials: [GameWorld.wallStripeMaterial])
+            let offset = start + Float(index) * spacing
+            bar.position = SIMD3(offset, 0, frontZ)
+            bar.orientation = simd_quatf(angle: .pi / 4, axis: SIMD3<Float>(0, 0, 1))
+            slab.addChild(bar)
+        }
+
+        return slab
+    }
+
+    private static func makeWallBodyMaterial() -> any Material {
+        var material = PhysicallyBasedMaterial()
+        material.baseColor = .init(tint: UIColor(red: 0.95, green: 0.12, blue: 0.1, alpha: 0.42))
+        material.roughness = .init(floatLiteral: 0.35)
+        material.metallic = .init(floatLiteral: 0.05)
+        material.emissiveColor = .init(color: UIColor(red: 1.0, green: 0.18, blue: 0.12, alpha: 1.0))
+        material.emissiveIntensity = 0.55
+        material.blending = .transparent(opacity: .init(floatLiteral: 0.42))
+        if let texture = makeHazardTexture() {
+            material.baseColor = .init(
+                tint: UIColor(red: 1, green: 0.25, blue: 0.18, alpha: 0.55),
+                texture: .init(texture)
+            )
+            material.emissiveColor = .init(
+                color: UIColor(red: 1.0, green: 0.2, blue: 0.1, alpha: 1.0),
+                texture: .init(texture)
+            )
+        }
+        return material
+    }
+
+    private static func makeWallStripeMaterial() -> any Material {
+        UnlitMaterial(color: UIColor(red: 1.0, green: 0.72, blue: 0.28, alpha: 0.95))
+    }
+
+    private static func makeHazardTexture() -> TextureResource? {
+        let size = 256
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: size, height: size))
+        let image = renderer.image { context in
+            let cg = context.cgContext
+            UIColor(red: 0.85, green: 0.08, blue: 0.08, alpha: 0.7).setFill()
+            cg.fill(CGRect(x: 0, y: 0, width: size, height: size))
+
+            cg.setStrokeColor(UIColor(red: 1.0, green: 0.55, blue: 0.18, alpha: 0.8).cgColor)
+            cg.setLineWidth(18)
+            var x: CGFloat = -CGFloat(size)
+            while x < CGFloat(size) * 2 {
+                cg.move(to: CGPoint(x: x, y: 0))
+                cg.addLine(to: CGPoint(x: x + CGFloat(size), y: CGFloat(size)))
+                cg.strokePath()
+                x += 40
+            }
+        }
+        guard let cgImage = image.cgImage else { return nil }
+        return try? TextureResource.generate(
+            from: cgImage,
+            withName: "wallHazardStripes",
+            options: TextureResource.CreateOptions(semantic: .color)
+        )
     }
 
     private func spawnCoin(in lane: Lane) {
