@@ -11,25 +11,25 @@ struct PlayHUDView: View {
     @EnvironmentObject private var gameModel: GameModel
 
     var body: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: 28) {
             Text("Endless Runner")
-                .font(.title2.weight(.semibold))
+                .font(.system(size: 48, weight: .semibold))
 
-            HStack(spacing: 28) {
+            HStack(spacing: 56) {
                 labeledValue(title: "Score", value: "\(gameModel.score)")
                 labeledValue(title: "Coins", value: "\(gameModel.coinsCollected)")
             }
 
             Text(statusText)
-                .font(.subheadline)
+                .font(.title2)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
 
             controls
         }
-        .padding(.horizontal, 28)
-        .padding(.vertical, 22)
-        .frame(minWidth: 320)
+        .padding(.horizontal, 56)
+        .padding(.vertical, 44)
+        .frame(minWidth: 720)
         .glassBackgroundEffect()
     }
 
@@ -40,32 +40,38 @@ struct PlayHUDView: View {
                 gameModel.startRun()
             }
             .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .font(.title2)
         } else if !gameModel.isPlaying {
             Button("Start Run") {
                 gameModel.startRun()
             }
             .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .font(.title2)
         } else {
             Text("Dodge walls with head and hands.\nGrab gold coins with your hands.")
-                .font(.caption)
+                .font(.title3)
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
 
             Button("End Run") {
                 gameModel.endRun()
             }
+            .controlSize(.large)
+            .font(.title2)
         }
     }
 
     private func labeledValue(title: String, value: String) -> some View {
-        VStack(spacing: 4) {
+        VStack(spacing: 8) {
             Text(title)
-                .font(.caption.weight(.medium))
+                .font(.title3.weight(.medium))
                 .foregroundStyle(.secondary)
             Text(value)
-                .font(.title.monospacedDigit().weight(.bold))
+                .font(.system(size: 56, weight: .bold, design: .monospaced))
         }
-        .frame(minWidth: 90)
+        .frame(minWidth: 180)
     }
 
     private var statusText: String {

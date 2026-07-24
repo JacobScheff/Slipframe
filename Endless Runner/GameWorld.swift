@@ -12,7 +12,6 @@
 
 import ARKit
 import RealityKit
-import SwiftUI
 import UIKit
 
 @MainActor
@@ -60,7 +59,9 @@ final class GameWorld {
     private static let spawnGapMax: Float = 3.6
     private static let coinPoints = 10
     /// HUD sits above the corridor, ahead of the player, clear of the play volume.
-    private static let hudPosition = SIMD3<Float>(0, 2.35, -2.2)
+    private static let hudPosition = SIMD3<Float>(0, 2.45, -2.4)
+    /// World scale for the SwiftUI attachment (attachments are small by default).
+    private static let hudScale: Float = 3.0
 
     /// Cached hazard look so every wall shares one stripe texture.
     private static let wallBodyMaterial: any RealityKit.Material = makeWallBodyMaterial()
@@ -106,10 +107,12 @@ final class GameWorld {
     /// Parents the SwiftUI play/score attachment so it stays fixed with the track.
     func attachHUD(_ hudEntity: Entity) {
         ensureHUDAnchor()
+        // Attachments face +Z by default; player looks down −Z, so identity faces you.
+        // (A 180° yaw shows the panel mirrored from behind.)
+        hudEntity.orientation = simd_quatf(ix: 0, iy: 0, iz: 0, r: 1)
+        hudEntity.scale = SIMD3(repeating: GameWorld.hudScale)
         guard hudEntity.parent !== hudAnchor else { return }
         hudEntity.removeFromParent()
-        // Face the player (looking down −Z toward the oncoming track).
-        hudEntity.orientation = simd_quatf(angle: .pi, axis: SIMD3<Float>(0, 1, 0))
         hudAnchor.addChild(hudEntity)
     }
 
