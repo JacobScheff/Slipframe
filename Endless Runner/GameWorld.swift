@@ -52,7 +52,7 @@ final class GameWorld {
     private static let coinOutwardOffset: Float = 0.12
     private static let spawnZ: Float = -8
     private static let despawnZ: Float = 1.5
-    /// Hit test at the stand line (playfield z = 0), matching visual pass-through.
+    /// Depth window around the headset when a wall can register a hit.
     private static let hitZWindow: Float = wallThickness * 0.5 + 0.12
     /// Mild shrink so grazing a lane edge is less punishing.
     private static let hitXInset: Float = 0.1
@@ -511,15 +511,22 @@ final class GameWorld {
     // MARK: - Collisions
 
     private func resolveCollisions(gameModel: GameModel) {
+        // Always use the live headset pose in playfield space (not the locked origin).
         let head = headAnchor.position(relativeTo: root)
         let handsWorld = [leftHandPosition, rightHandPosition].compactMap { $0 }
 
         for index in walls.indices {
             guard !walls[index].hasResolvedHit else { continue }
             let wallZ = walls[index].entity.position.z
-            // Resolve once at the stand line — not against head depth (walking
-            // forward was making distant walls register as hits).
-            guard abs(wallZ) <= GameWorld.hitZWindow else { continue }
+            let depthDelta = wallZ - head.z
+
+            // One-shot when the wall passes through the headset's current depth.
+            guard abs(depthDelta) <= GameWorld.hitZWindow else {
+                if depthDelta > GameWorld.hitZWindow {
+                    walls[index].hasResolvedHit = true
+                }
+                continue
+            }
 
             walls[index].hasResolvedHit = true
             if headHitsBlockedSlab(blockedLanes: walls[index].blockedLanes, headX: head.x) {
@@ -546,7 +553,7 @@ final class GameWorld {
         }
     }
 
-    /// Head-only check against the real slab widths (restored full-size hit box).
+    /// Head-only check against the real slab widths using current headset X.
     private func headHitsBlockedSlab(blockedLanes: Set<Int>, headX: Float) -> Bool {
         let halfWidth = max(0.05, GameWorld.wallWidth * 0.5 - GameWorld.hitXInset)
         for laneValue in blockedLanes {
