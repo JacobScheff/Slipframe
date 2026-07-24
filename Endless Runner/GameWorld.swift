@@ -45,12 +45,14 @@ final class GameWorld {
     private static let wallThickness: Float = 0.7
     private static let wallWidth: Float = 0.7
     private static let coinRadius: Float = 0.07
-    private static let coinHeight: Float = 1.25
+    private static let coinHeight: Float = 1.2
+    /// How far side-lane coins sit outside the lane center (smaller = easier reach).
+    private static let coinOutwardOffset: Float = 0.12
     private static let spawnZ: Float = -8
     private static let despawnZ: Float = 1.5
     /// Covers the deeper wall volume as it passes through the player.
     private static let hitZWindow: Float = wallThickness * 0.5 + 0.12
-    private static let collectDistance: Float = 0.18
+    private static let collectDistance: Float = 0.24
     private static let baseSpeed: Float = 2.2
     private static let maxSpeed: Float = 5.5
     private static let speedRampPerSecond: Float = 0.04
@@ -398,8 +400,8 @@ final class GameWorld {
             isMetallic: true
         )
         let coin = ModelEntity(mesh: mesh, materials: [material])
-        // Offset slightly outward so collecting requires a reach.
-        let outward: Float = lane == .center ? 0 : (lane.x > 0 ? 0.2 : -0.2)
+        // Mild outward offset — still a reach, but easier to snag mid-dodge.
+        let outward: Float = lane == .center ? 0 : (lane.x > 0 ? GameWorld.coinOutwardOffset : -GameWorld.coinOutwardOffset)
         coin.position = SIMD3(lane.x + outward, GameWorld.coinHeight, GameWorld.spawnZ)
         coin.name = "coin"
         root.addChild(coin)
