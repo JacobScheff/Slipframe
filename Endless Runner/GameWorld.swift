@@ -64,16 +64,27 @@ final class GameWorld {
     /// World scale for the SwiftUI attachment (attachments are small by default).
     private static let hudScale: Float = 3.0
 
+    // Endless track tiles — recycled as they pass behind the player.
+    private static let trackWidth: Float = 3.2
+    private static let trackSegmentLength: Float = 4.0
+    private static let trackSegmentCount = 12
+    /// When a segment center passes this Z, snap it to the far end of the ribbon.
+    private static let trackRecycleZ: Float = 2.2
+    /// First segment sits slightly behind the stand line so the ribbon covers your feet.
+    private static let trackFirstCenterZ: Float = trackSegmentLength * 0.2
+
     /// Simple glowing placeholder until real wall art is dropped in.
     private static let wallBodyMaterial: any RealityKit.Material = makeWallBodyMaterial()
 
     let root = Entity()
     private let headAnchor = AnchorEntity(.head)
     private let hudAnchor = Entity()
+    private let trackRoot = Entity()
 
     private weak var gameModel: GameModel?
     private var walls: [WallItem] = []
     private var coins: [CoinItem] = []
+    private var trackSegments: [Entity] = []
     private var speed: Float = GameWorld.baseSpeed
     private var distanceUntilSpawn: Float = 1.5
     private var distanceAccumulator: Float = 0
@@ -127,7 +138,11 @@ final class GameWorld {
         handTask = nil
         updateSubscription = nil
         clearDynamicContent()
+        trackSegments.removeAll()
         for child in hudAnchor.children {
+            child.removeFromParent()
+        }
+        for child in trackRoot.children {
             child.removeFromParent()
         }
         for child in root.children {
@@ -146,10 +161,44 @@ final class GameWorld {
     // MARK: - Setup
 
     private func buildStaticEnvironment() {
-        // One static warm corridor (placeholder for Ember Run).
-        if root.children.contains(where: { $0.name == "floor" }) { return }
+        // Tiled corridor ribbon (placeholder for Ember Run) + fixed stand marker.
+        if trackRoot.parent === root, !trackSegments.isEmpty { return }
 
-        let floorMesh = MeshResource.generateBox(width: 3.2, height: 0.02, depth: 24)
+        trackRoot.name = "trackRoot"
+        if trackRoot.parent !== root {
+            root.addChild(trackRoot)
+        }
+
+        trackSegments.removeAll()
+        for child in trackRoot.children {
+            child.removeFromParent()
+        }
+
+        for index in 0..<GameWorld.trackSegmentCount {
+            let segment = makeTrackSegment()
+            segment.position = SIMD3(
+                0,
+                0,
+                GameWorld.trackFirstCenterZ - Float(index) * GameWorld.trackSegmentLength
+            )
+            trackRoot.addChild(segment)
+            trackSegments.append(segment)
+        }
+
+        buildStartMarker()
+    }
+
+    private func makeTrackSegment() -> Entity {
+        let segment = Entity()
+        segment.name = "trackSegment"
+
+        // Slight overlap avoids hairline gaps between recycled tiles.
+        let depth = GameWorld.trackSegmentLength + 0.02
+        let floorMesh = MeshResource.generateBox(
+            width: GameWorld.trackWidth,
+            height: 0.02,
+            depth: depth
+        )
         let floorMaterial = SimpleMaterial(
             color: UIColor(red: 0.45, green: 0.28, blue: 0.12, alpha: 1),
             roughness: 0.85,
@@ -157,29 +206,69 @@ final class GameWorld {
         )
         let floor = ModelEntity(mesh: floorMesh, materials: [floorMaterial])
         floor.name = "floor"
-        floor.position = SIMD3(0, 0, -8)
-        root.addChild(floor)
+        segment.addChild(floor)
 
+        let stripeMaterial = SimpleMaterial(
+            color: UIColor(red: 1.0, green: 0.72, blue: 0.25, alpha: 0.9),
+            roughness: 0.7,
+            isMetallic: false
+        )
         for lane in Lane.allCases {
-            let stripeMesh = MeshResource.generateBox(width: 0.08, height: 0.025, depth: 24)
-            let stripeMaterial = SimpleMaterial(
-                color: UIColor(red: 1.0, green: 0.72, blue: 0.25, alpha: 0.9),
-                roughness: 0.7,
-                isMetallic: false
-            )
+            let stripeMesh = MeshResource.generateBox(width: 0.08, height: 0.025, depth: depth)
             let stripe = ModelEntity(mesh: stripeMesh, materials: [stripeMaterial])
-            stripe.position = SIMD3(lane.x, 0.02, -8)
-            root.addChild(stripe)
+            stripe.position = SIMD3(lane.x, 0.02, 0)
+            segment.addChild(stripe)
         }
+
+        return segment
+    }
+
+    /// Minimal stand line at the player's start — easy to find, quiet otherwise.
+    private func buildStartMarker() {
+        if root.children.contains(where: { $0.name == "startMarker" }) { return }
+
+        let marker = Entity()
+        marker.name = "startMarker"
+        // Fixed in world space at z = 0 (does not scroll with the ribbon).
+        marker.position = SIMD3(0, 0.03, 0)
+
+        let lineMesh = MeshResource.generateBox(width: 2.35, height: 0.008, depth: 0.028)
+        let lineMaterial = UnlitMaterial(
+            color: UIColor(red: 0.98, green: 0.93, blue: 0.82, alpha: 0.75)
+        )
+        let line = ModelEntity(mesh: lineMesh, materials: [lineMaterial])
+        marker.addChild(line)
+
+        // Small center tick so the midline is findable at a glance.
+        let tickMesh = MeshResource.generateBox(width: 0.1, height: 0.01, depth: 0.1)
+        let tickMaterial = UnlitMaterial(
+            color: UIColor(red: 1.0, green: 0.86, blue: 0.45, alpha: 0.9)
+        )
+        let tick = ModelEntity(mesh: tickMesh, materials: [tickMaterial])
+        tick.position = SIMD3(0, 0.004, 0)
+        marker.addChild(tick)
+
+        root.addChild(marker)
     }
 
     private func beginRun(runID: Int) {
         activeRunID = runID
         clearDynamicContent()
+        resetTrackLayout()
         speed = GameWorld.baseSpeed
         distanceUntilSpawn = 1.0
         distanceAccumulator = 0
         patternIndex = 0
+    }
+
+    private func resetTrackLayout() {
+        for (index, segment) in trackSegments.enumerated() {
+            segment.position = SIMD3(
+                0,
+                0,
+                GameWorld.trackFirstCenterZ - Float(index) * GameWorld.trackSegmentLength
+            )
+        }
     }
 
     private func clearDynamicContent() {
@@ -249,6 +338,7 @@ final class GameWorld {
         }
 
         advanceEntities(by: travel)
+        advanceTrack(by: travel)
         distanceUntilSpawn -= travel
         if distanceUntilSpawn <= 0 {
             spawnNextPattern()
@@ -265,6 +355,18 @@ final class GameWorld {
         }
         for coin in coins {
             coin.entity.position.z += travel
+        }
+    }
+
+    private func advanceTrack(by travel: Float) {
+        for segment in trackSegments {
+            segment.position.z += travel
+        }
+
+        // Recycle any tiles that have slid behind the player to the far horizon.
+        while let segment = trackSegments.first(where: { $0.position.z > GameWorld.trackRecycleZ }) {
+            let farthestZ = trackSegments.map(\.position.z).min() ?? segment.position.z
+            segment.position.z = farthestZ - GameWorld.trackSegmentLength
         }
     }
 
