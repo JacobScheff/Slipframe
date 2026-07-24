@@ -52,10 +52,10 @@ final class GameWorld {
     private static let coinOutwardOffset: Float = 0.12
     private static let spawnZ: Float = -8
     private static let despawnZ: Float = 1.5
-    /// Extra depth pad beyond the wall box when testing Z overlap.
-    private static let hitZPad: Float = 0.02
-    /// Shrink the wall's X kill box so grazing a lane edge is not a hit.
-    private static let hitXInset: Float = 0.18
+    /// Hit test at the stand line (playfield z = 0), matching visual pass-through.
+    private static let hitZWindow: Float = wallThickness * 0.5 + 0.12
+    /// Mild shrink so grazing a lane edge is less punishing.
+    private static let hitXInset: Float = 0.1
     private static let collectDistance: Float = 0.24
     private static let baseSpeed: Float = 2.2
     private static let maxSpeed: Float = 5.5
@@ -447,8 +447,10 @@ final class GameWorld {
             spawnWall(blocking: [.center])
             spawnCoin(in: .left)
         default:
-            spawnWall(blocking: [.left, .center])
-            spawnCoin(in: .right)
+            // Gate with an open center — left+center was punishing the stand-line
+            // pose (center) even when dodging clear of the side slab.
+            spawnWall(blocking: [.left, .right])
+            spawnCoin(in: .center)
         }
         patternIndex += 1
     }
@@ -515,20 +517,15 @@ final class GameWorld {
         for index in walls.indices {
             guard !walls[index].hasResolvedHit else { continue }
             let wallZ = walls[index].entity.position.z
+            // Resolve once at the stand line — not against head depth (walking
+            // forward was making distant walls register as hits).
+            guard abs(wallZ) <= GameWorld.hitZWindow else { continue }
 
-            // Head-only wall hits. Hand tracking is too noisy at the sides and was
-            // ending runs while the body was clearly in a gap.
-            if headHitsWall(wallZ: wallZ, blockedLanes: walls[index].blockedLanes, head: head) {
-                walls[index].hasResolvedHit = true
+            walls[index].hasResolvedHit = true
+            if headHitsBlockedSlab(blockedLanes: walls[index].blockedLanes, headX: head.x) {
                 GameSFX.shared.playWallHit()
                 gameModel.endRun()
                 return
-            }
-
-            // Once the wall has fully passed the head, never test it again.
-            let halfDepth = GameWorld.wallThickness * 0.5 + GameWorld.hitZPad
-            if wallZ - head.z > halfDepth {
-                walls[index].hasResolvedHit = true
             }
         }
 
@@ -549,21 +546,12 @@ final class GameWorld {
         }
     }
 
-    /// True when the head intersects a blocked wall slab (forgiving edge inset).
-    private func headHitsWall(
-        wallZ: Float,
-        blockedLanes: Set<Int>,
-        head: SIMD3<Float>
-    ) -> Bool {
-        // Use a thinner effective depth than the visual mesh so being near a
-        // thick translucent slab does not read as a hit too early.
-        let halfDepth = min(GameWorld.wallThickness * 0.5, 0.22) + GameWorld.hitZPad
+    /// Head-only check against the real slab widths (restored full-size hit box).
+    private func headHitsBlockedSlab(blockedLanes: Set<Int>, headX: Float) -> Bool {
         let halfWidth = max(0.05, GameWorld.wallWidth * 0.5 - GameWorld.hitXInset)
-        guard abs(wallZ - head.z) <= halfDepth else { return false }
-
         for laneValue in blockedLanes {
             let laneX = Float(laneValue) * GameWorld.laneSpacing
-            if head.x >= laneX - halfWidth, head.x <= laneX + halfWidth {
+            if headX >= laneX - halfWidth, headX <= laneX + halfWidth {
                 return true
             }
         }
