@@ -29,10 +29,16 @@ final class GameWorld {
         }
     }
 
-    private struct WallItem {
+    private final class WallItem {
         let entity: Entity
-        let blockedLanes: Set<Int>
+        /// Local X centers of each red slab (playfield / parent space).
+        let slabXs: [Float]
         var hasResolvedHit = false
+
+        init(entity: Entity, slabXs: [Float]) {
+            self.entity = entity
+            self.slabXs = slabXs
+        }
     }
 
     private struct CoinItem {
@@ -53,7 +59,7 @@ final class GameWorld {
     private static let spawnZ: Float = -8
     private static let despawnZ: Float = 1.5
     /// Depth window around the headset when a wall can register a hit.
-    private static let hitZWindow: Float = wallThickness * 0.5 + 0.12
+    private static let hitZWindow: Float = wallThickness * 0.5 + 0.08
     /// Mild shrink so grazing a lane edge is less punishing.
     private static let hitXInset: Float = 0.1
     private static let collectDistance: Float = 0.24
@@ -447,8 +453,6 @@ final class GameWorld {
             spawnWall(blocking: [.center])
             spawnCoin(in: .left)
         default:
-            // Gate with an open center — left+center was punishing the stand-line
-            // pose (center) even when dodging clear of the side slab.
             spawnWall(blocking: [.left, .right])
             spawnCoin(in: .center)
         }
@@ -460,14 +464,16 @@ final class GameWorld {
         parent.position = SIMD3(0, GameWorld.wallHeight * 0.5, GameWorld.spawnZ)
         parent.name = "wall"
 
+        var slabXs: [Float] = []
         for lane in lanes {
             let slab = makeWallSlab()
             slab.position = SIMD3(lane.x, 0, 0)
             parent.addChild(slab)
+            slabXs.append(lane.x)
         }
 
         root.addChild(parent)
-        walls.append(WallItem(entity: parent, blockedLanes: Set(lanes.map(\.rawValue))))
+        walls.append(WallItem(entity: parent, slabXs: slabXs))
     }
 
     /// Thick translucent placeholder slab (swap for a real model later).
@@ -511,25 +517,29 @@ final class GameWorld {
     // MARK: - Collisions
 
     private func resolveCollisions(gameModel: GameModel) {
-        // Always use the live headset pose in playfield space (not the locked origin).
-        let head = headAnchor.position(relativeTo: root)
+        // Live headset pose in playfield space (follows movement after lock).
+        let headWorld = headAnchor.position(relativeTo: nil)
+        let head = root.convert(position: headWorld, from: nil)
         let handsWorld = [leftHandPosition, rightHandPosition].compactMap { $0 }
 
-        for index in walls.indices {
-            guard !walls[index].hasResolvedHit else { continue }
-            let wallZ = walls[index].entity.position.z
+        for wall in walls {
+            guard !wall.hasResolvedHit else { continue }
+            let wallZ = wall.entity.position.z
             let depthDelta = wallZ - head.z
 
-            // One-shot when the wall passes through the headset's current depth.
-            guard abs(depthDelta) <= GameWorld.hitZWindow else {
-                if depthDelta > GameWorld.hitZWindow {
-                    walls[index].hasResolvedHit = true
-                }
+            if depthDelta > GameWorld.hitZWindow {
+                // Fully behind the headset — never test again.
+                wall.hasResolvedHit = true
                 continue
             }
 
-            walls[index].hasResolvedHit = true
-            if headHitsBlockedSlab(blockedLanes: walls[index].blockedLanes, headX: head.x) {
+            // Keep testing while overlapping so a dodge can still clear a wall
+            // that has entered the window but is still a bit in front
+            // (one-shot-on-enter was killing on the first center wall ~0.5m out).
+            guard abs(depthDelta) <= GameWorld.hitZWindow else { continue }
+
+            if headOverlapsSlabs(slabXs: wall.slabXs, headX: head.x) {
+                wall.hasResolvedHit = true
                 GameSFX.shared.playWallHit()
                 gameModel.endRun()
                 return
@@ -553,12 +563,11 @@ final class GameWorld {
         }
     }
 
-    /// Head-only check against the real slab widths using current headset X.
-    private func headHitsBlockedSlab(blockedLanes: Set<Int>, headX: Float) -> Bool {
+    /// Head-only check against each slab's full-size width at the current headset X.
+    private func headOverlapsSlabs(slabXs: [Float], headX: Float) -> Bool {
         let halfWidth = max(0.05, GameWorld.wallWidth * 0.5 - GameWorld.hitXInset)
-        for laneValue in blockedLanes {
-            let laneX = Float(laneValue) * GameWorld.laneSpacing
-            if headX >= laneX - halfWidth, headX <= laneX + halfWidth {
+        for slabX in slabXs {
+            if headX >= slabX - halfWidth, headX <= slabX + halfWidth {
                 return true
             }
         }
