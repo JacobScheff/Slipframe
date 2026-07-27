@@ -56,7 +56,7 @@ final class GameWorld {
     private static let coinHeight: Float = 1.2
     /// How far side-lane coins sit outside the lane center (smaller = easier reach).
     private static let coinOutwardOffset: Float = 0.12
-    private static let spawnZ: Float = -8
+    private static let spawnZ: Float = -12
     private static let despawnZ: Float = 1.5
     /// Kill-box depth pad beyond the thinned collision half-depth.
     private static let hitZPad: Float = 0.02
@@ -71,12 +71,12 @@ final class GameWorld {
     private static let headHitMinY: Float = 0.4
     private static let headHitMaxY: Float = wallHeight + 0.35
     private static let collectDistance: Float = 0.24
-    private static let baseSpeed: Float = 2.2
-    private static let maxSpeed: Float = 5.5
-    private static let speedRampPerSecond: Float = 0.04
+    private static let baseSpeed: Float = 3.0
+    private static let maxSpeed: Float = 7.0
+    private static let speedRampPerSecond: Float = 0.055
     /// Distance traveled between obstacle / coin patterns.
-    private static let spawnGapMin: Float = 3.6
-    private static let spawnGapMax: Float = 5.2
+    private static let spawnGapMin: Float = 4.2
+    private static let spawnGapMax: Float = 5.6
     private static let coinPoints = 10
     /// HUD sits above the corridor, further down the track, clear of the play volume.
     private static let hudPosition = SIMD3<Float>(0, 2.45, -4.0)
@@ -115,9 +115,9 @@ final class GameWorld {
     private var coins: [CoinItem] = []
     private var trackSegments: [Entity] = []
     private var speed: Float = GameWorld.baseSpeed
-    private var distanceUntilSpawn: Float = 1.5
+    /// First pattern arrives almost immediately after Start.
+    private var distanceUntilSpawn: Float = 0.15
     private var distanceAccumulator: Float = 0
-    private var patternIndex = 0
     private var updateSubscription: EventSubscription?
     private var activeRunID: Int = -1
     /// After Start, playfield pose no longer follows the player.
@@ -301,9 +301,8 @@ final class GameWorld {
         clearDynamicContent()
         resetTrackLayout()
         speed = GameWorld.baseSpeed
-        distanceUntilSpawn = 1.0
+        distanceUntilSpawn = 0.15
         distanceAccumulator = 0
-        patternIndex = 0
         GameSFX.shared.prepare()
     }
 
@@ -480,8 +479,8 @@ final class GameWorld {
     // MARK: - Spawning
 
     private func spawnNextPattern() {
-        // Simple repeating warm-up patterns for the first base environment.
-        switch patternIndex % 6 {
+        // Random mix of wall / coin layouts so each run feels different.
+        switch Int.random(in: 0..<6) {
         case 0:
             spawnWall(blocking: [.left])
         case 1:
@@ -497,7 +496,6 @@ final class GameWorld {
             spawnWall(blocking: [.left, .right])
             spawnCoin(in: .center)
         }
-        patternIndex += 1
     }
 
     private func spawnWall(blocking lanes: Set<Lane>) {
