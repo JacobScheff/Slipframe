@@ -2,7 +2,7 @@
 //  ImmersiveView.swift
 //  Endless Runner
 //
-//  Mixed immersive play space for the base runner loop.
+//  Mixed immersive play space with an optional wall-anchored portal window.
 //
 
 import SwiftUI

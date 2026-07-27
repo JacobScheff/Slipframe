@@ -81,7 +81,7 @@ struct PlayHUDView: View {
         if gameModel.isPlaying {
             return "Running…"
         }
-        return "Ready."
+        return "Face a wall for the portal, or play in open space."
     }
 }
 
