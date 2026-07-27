@@ -117,8 +117,8 @@ final class Endless_RunnerTests: XCTestCase {
     }
 
     func testHandTouchingSideSlabCountsAsHit() {
-        let halfWidth = WallCollision.halfWidth(visualWidth: 0.7, inset: 0.12)
-        let halfDepth = WallCollision.halfDepth(visualThickness: 0.7)
+        let halfWidth = WallCollision.halfWidth(visualWidth: 0.7, inset: 0.12) + 0.12
+        let halfDepth = WallCollision.halfDepth(visualThickness: 0.7) + 0.12
         let hand = SIMD3<Float>(0.75, 1.1, 0)
         let hit = WallCollision.pointHitsSlabs(
             point: hand,
@@ -126,15 +126,32 @@ final class Endless_RunnerTests: XCTestCase {
             slabXs: [0.75],
             halfWidth: halfWidth,
             halfDepth: halfDepth,
-            minY: 0.15,
-            maxY: 1.85
+            minY: 0.05,
+            maxY: 1.95
+        )
+        XCTAssertTrue(hit)
+    }
+
+    func testHandNearSlabWithPalmRadiusCountsAsHit() {
+        // Wrist/palm slightly outside the visual slab still counts with hand radius.
+        let halfWidth = WallCollision.halfWidth(visualWidth: 0.7, inset: 0.12) + 0.12
+        let halfDepth = WallCollision.halfDepth(visualThickness: 0.7) + 0.12
+        let hand = SIMD3<Float>(0.75 - 0.30, 1.1, 0)
+        let hit = WallCollision.pointHitsSlabs(
+            point: hand,
+            wallZ: 0,
+            slabXs: [0.75],
+            halfWidth: halfWidth,
+            halfDepth: halfDepth,
+            minY: 0.05,
+            maxY: 1.95
         )
         XCTAssertTrue(hit)
     }
 
     func testHandOutsideSlabDoesNotCountAsHit() {
-        let halfWidth = WallCollision.halfWidth(visualWidth: 0.7, inset: 0.12)
-        let halfDepth = WallCollision.halfDepth(visualThickness: 0.7)
+        let halfWidth = WallCollision.halfWidth(visualWidth: 0.7, inset: 0.12) + 0.12
+        let halfDepth = WallCollision.halfDepth(visualThickness: 0.7) + 0.12
         // Hand hanging near body while a side slab is out at the lane center.
         let hand = SIMD3<Float>(0.2, 1.0, 0)
         let hit = WallCollision.pointHitsSlabs(
@@ -143,8 +160,8 @@ final class Endless_RunnerTests: XCTestCase {
             slabXs: [0.75],
             halfWidth: halfWidth,
             halfDepth: halfDepth,
-            minY: 0.15,
-            maxY: 1.85
+            minY: 0.05,
+            maxY: 1.95
         )
         XCTAssertFalse(hit)
     }

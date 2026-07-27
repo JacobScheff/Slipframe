@@ -12,17 +12,23 @@ import Foundation
 final class GameSFX {
     static let shared = GameSFX()
 
-    private var coinPlayer: AVAudioPlayer?
+    /// Several short coin players so rapid collects do not restart one buffer mid-play.
+    private var coinPlayers: [AVAudioPlayer] = []
+    private var nextCoinPlayer = 0
     private var hitPlayer: AVAudioPlayer?
     private var didConfigureSession = false
 
     private init() {
-        coinPlayer = Self.makePlayer(
-            frequencies: [1046.5, 1318.5], // bright C6 → E6 blip
-            duration: 0.11,
-            volume: 0.5,
-            noiseAmount: 0
-        )
+        for _ in 0..<3 {
+            if let player = Self.makePlayer(
+                frequencies: [1046.5, 1318.5], // bright C6 → E6 blip
+                duration: 0.11,
+                volume: 0.5,
+                noiseAmount: 0
+            ) {
+                coinPlayers.append(player)
+            }
+        }
         hitPlayer = Self.makePlayer(
             frequencies: [140, 90], // low thud
             duration: 0.28,
@@ -31,9 +37,20 @@ final class GameSFX {
         )
     }
 
+    /// Call when the immersive world attaches so the first collect is hitch-free.
+    func prepare() {
+        prepareSessionIfNeeded()
+        for player in coinPlayers {
+            player.prepareToPlay()
+        }
+        hitPlayer?.prepareToPlay()
+    }
+
     func playCoinCollect() {
         prepareSessionIfNeeded()
-        guard let player = coinPlayer else { return }
+        guard !coinPlayers.isEmpty else { return }
+        let player = coinPlayers[nextCoinPlayer % coinPlayers.count]
+        nextCoinPlayer = (nextCoinPlayer + 1) % coinPlayers.count
         player.currentTime = 0
         player.play()
     }
