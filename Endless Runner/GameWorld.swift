@@ -12,6 +12,7 @@
 //  Placeholder meshes only (no art assets).
 //
 
+import ARKit
 import RealityKit
 import SwiftUI
 import UIKit
@@ -64,7 +65,7 @@ final class GameWorld {
     /// Hands must be inside the slab height — ignore floor/ceiling noise.
     private static let handHitMinY: Float = 0.05
     private static let handHitMaxY: Float = wallHeight + 0.15
-    /// Palm anchors are a point — expand so a real hand volume can touch a slab.
+    /// Expand around tracked joints so a real hand volume can touch a slab.
     private static let handHitRadius: Float = 0.12
     /// Head stays within the standing eye band for wall tests.
     private static let headHitMinY: Float = 0.4
@@ -122,18 +123,21 @@ final class GameWorld {
     /// After Start, playfield pose no longer follows the player.
     private var isPlayfieldLocked = false
 
-    /// RealityKit hand anchors stay in the same space as the head / playfield
-    /// (raw ARKit transforms were drifting enough that wall AABBs never connected).
-    private let leftHandAnchor = AnchorEntity(.hand(.left, location: .palm))
-    private let rightHandAnchor = AnchorEntity(.hand(.right, location: .palm))
+    /// ARKit hand tracking — AnchorEntity(.hand) transforms are privacy-locked
+    /// unless a SpatialTrackingSession is running (visionOS 2+), so we read
+    /// joint positions from HandTrackingProvider instead.
+    private let arSession = ARKitSession()
+    private let handTracking = HandTrackingProvider()
+    private var handTask: Task<Void, Never>?
+    /// World-space contact points (wrist + fingertips) for each hand.
+    private var leftHandContactsWorld: [SIMD3<Float>] = []
+    private var rightHandContactsWorld: [SIMD3<Float>] = []
 
     func attach(to content: RealityViewContent, gameModel: GameModel) {
         self.gameModel = gameModel
         content.add(root)
         content.add(headAnchor)
         content.add(floorAnchor)
-        content.add(leftHandAnchor)
-        content.add(rightHandAnchor)
         isPlayfieldLocked = false
 
         if updateSubscription == nil {
@@ -144,6 +148,7 @@ final class GameWorld {
 
         buildStaticEnvironment()
         ensureHUDAnchor()
+        startHandTracking()
         // Warm audio before the first coin so setActive does not hitch mid-run.
         GameSFX.shared.prepare()
         snapPlayfieldToPlayer()
@@ -168,6 +173,10 @@ final class GameWorld {
     }
 
     func teardown() {
+        handTask?.cancel()
+        handTask = nil
+        leftHandContactsWorld = []
+        rightHandContactsWorld = []
         updateSubscription = nil
         isPlayfieldLocked = false
         clearDynamicContent()
@@ -349,6 +358,69 @@ final class GameWorld {
         coins.removeAll()
     }
 
+    // MARK: - Hand tracking
+
+    private func startHandTracking() {
+        guard handTask == nil else { return }
+        handTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            guard HandTrackingProvider.isSupported else { return }
+
+            do {
+                let auth = await arSession.requestAuthorization(for: [.handTracking])
+                guard auth[.handTracking] == .allowed else { return }
+                try await arSession.run([handTracking])
+
+                for await update in handTracking.anchorUpdates {
+                    guard !Task.isCancelled else { break }
+                    let anchor = update.anchor
+                    guard anchor.isTracked else {
+                        switch anchor.chirality {
+                        case .left: leftHandContactsWorld = []
+                        case .right: rightHandContactsWorld = []
+                        @unknown default: break
+                        }
+                        continue
+                    }
+                    let contacts = Self.contactPoints(from: anchor)
+                    switch anchor.chirality {
+                    case .left:
+                        leftHandContactsWorld = contacts
+                    case .right:
+                        rightHandContactsWorld = contacts
+                    @unknown default:
+                        break
+                    }
+                }
+            } catch {
+                // Hand tracking is optional for dodge; walls still work via head.
+                print("Hand tracking failed: \(error)")
+            }
+        }
+    }
+
+    /// Wrist / palm origin plus fingertips — better "touch" than wrist alone.
+    private static func contactPoints(from anchor: HandAnchor) -> [SIMD3<Float>] {
+        let origin = anchor.originFromAnchorTransform
+        var points: [SIMD3<Float>] = [
+            SIMD3(origin.columns.3.x, origin.columns.3.y, origin.columns.3.z)
+        ]
+
+        guard let skeleton = anchor.handSkeleton else { return points }
+        let tips: [HandSkeleton.JointName] = [
+            .indexFingerTip,
+            .middleFingerTip,
+            .thumbTip
+        ]
+        for name in tips {
+            let joint = skeleton.joint(name)
+            guard joint.isTracked else { continue }
+            let world = origin * joint.anchorFromJointTransform
+            points.append(SIMD3(world.columns.3.x, world.columns.3.y, world.columns.3.z))
+        }
+        return points
+    }
+
     // MARK: - Loop
 
     private func tick(deltaTime: Float) {
@@ -486,15 +558,10 @@ final class GameWorld {
     // MARK: - Collisions
 
     private func resolveCollisions(gameModel: GameModel) {
-        // Live poses in locked playfield space (same RealityKit anchors for head + hands).
         let head = headAnchor.position(relativeTo: root)
-        var hands: [SIMD3<Float>] = []
-        if leftHandAnchor.isAnchored {
-            hands.append(leftHandAnchor.position(relativeTo: root))
-        }
-        if rightHandAnchor.isAnchored {
-            hands.append(rightHandAnchor.position(relativeTo: root))
-        }
+        // ARKit hand joints are world-space; convert into the locked playfield.
+        let handsWorld = leftHandContactsWorld + rightHandContactsWorld
+        let hands = handsWorld.map { root.convert(position: $0, from: nil) }
 
         let halfDepth = WallCollision.halfDepth(
             visualThickness: GameWorld.wallThickness,
