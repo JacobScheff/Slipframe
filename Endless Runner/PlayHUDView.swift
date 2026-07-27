@@ -50,7 +50,7 @@ struct PlayHUDView: View {
             .controlSize(.large)
             .font(.title2)
         } else {
-            Text("Dodge walls with your body.\nGrab gold coins with your hands.")
+            Text("Dodge walls with your head and hands.\nGrab gold coins with your hands.")
                 .font(.title3)
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
