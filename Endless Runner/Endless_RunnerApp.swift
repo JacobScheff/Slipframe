@@ -13,11 +13,7 @@ struct Endless_RunnerApp: App {
     @State private var immersionState: ImmersionStyle = .mixed
 
     var body: some SwiftUI.Scene {
-        WindowGroup {
-            ContentView()
-                .environmentObject(gameModel)
-        }
-
+        // Immersive-first: Info.plist preferred scene role launches this space.
         ImmersiveSpace(id: "RunnerSpace") {
             ImmersiveView()
                 .environmentObject(gameModel)

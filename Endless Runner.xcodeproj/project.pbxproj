@@ -17,6 +17,9 @@
 		B01A10012C72000100A00002 /* ImmersiveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A10002C72000100A00001 /* ImmersiveView.swift */; };
 		B01A10032C72000100A00004 /* GameModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A10022C72000100A00003 /* GameModel.swift */; };
 		B01A10052C72000100A00006 /* GameWorld.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A10042C72000100A00005 /* GameWorld.swift */; };
+		B01A10072C72000100A00008 /* PlayHUDView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A10062C72000100A00007 /* PlayHUDView.swift */; };
+		B01A10092C72000100A0000A /* GameSFX.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A10082C72000100A00009 /* GameSFX.swift */; };
+		B01A100B2C72000100A0000C /* WallCollision.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A100A2C72000100A0000B /* WallCollision.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -43,6 +46,9 @@
 		B01A10002C72000100A00001 /* ImmersiveView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImmersiveView.swift; sourceTree = "<group>"; };
 		B01A10022C72000100A00003 /* GameModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameModel.swift; sourceTree = "<group>"; };
 		B01A10042C72000100A00005 /* GameWorld.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameWorld.swift; sourceTree = "<group>"; };
+		B01A10062C72000100A00007 /* PlayHUDView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayHUDView.swift; sourceTree = "<group>"; };
+		B01A10082C72000100A00009 /* GameSFX.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameSFX.swift; sourceTree = "<group>"; };
+		B01A100A2C72000100A0000B /* WallCollision.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WallCollision.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -93,6 +99,9 @@
 				B01A10002C72000100A00001 /* ImmersiveView.swift */,
 				B01A10022C72000100A00003 /* GameModel.swift */,
 				B01A10042C72000100A00005 /* GameWorld.swift */,
+				B01A100A2C72000100A0000B /* WallCollision.swift */,
+				B01A10062C72000100A00007 /* PlayHUDView.swift */,
+				B01A10082C72000100A00009 /* GameSFX.swift */,
 				3A9B452E2C503B7D0080BBBE /* Assets.xcassets */,
 				3A9B45332C503B7D0080BBBE /* Info.plist */,
 				3A9B45302C503B7D0080BBBE /* Preview Content */,
@@ -239,6 +248,9 @@
 				B01A10012C72000100A00002 /* ImmersiveView.swift in Sources */,
 				B01A10032C72000100A00004 /* GameModel.swift in Sources */,
 				B01A10052C72000100A00006 /* GameWorld.swift in Sources */,
+				B01A100B2C72000100A0000C /* WallCollision.swift in Sources */,
+				B01A10072C72000100A00008 /* PlayHUDView.swift in Sources */,
+				B01A10092C72000100A0000A /* GameSFX.swift in Sources */,
 				3A9B45292C503B710080BBBE /* Endless_RunnerApp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -399,7 +411,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "Jacob-Scheff.Endless-Runner";
+				PRODUCT_BUNDLE_IDENTIFIER = "Jacob-Scheff.Endless-Runner-1";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "xros xrsimulator";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -426,7 +438,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "Jacob-Scheff.Endless-Runner";
+				PRODUCT_BUNDLE_IDENTIFIER = "Jacob-Scheff.Endless-Runner-1";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "xros xrsimulator";
 				SWIFT_EMIT_LOC_STRINGS = YES;
