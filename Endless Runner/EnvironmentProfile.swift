@@ -163,7 +163,7 @@ enum EnvironmentCatalog {
             )
 
         case .ghostGlass:
-            // Transparency-only twist — no fog / haze volumes.
+            // All walls are white + transparent — no fog / haze volumes.
             return EnvironmentProfile(
                 id: .ghostGlass,
                 twist: .ghostWalls,
@@ -177,15 +177,14 @@ enum EnvironmentCatalog {
                     ambienceBrightness: 1.0,
                     fogDensity: 0.0,
                     fogColor: TintColor(r: 0.7, g: 0.8, b: 0.9, a: 0.0),
-                    wallTint: TintColor(r: 0.85, g: 0.2, b: 0.22, a: 0.4),
-                    wallEmissive: TintColor(r: 0.95, g: 0.35, b: 0.4, a: 1),
-                    wallOpacity: 0.4,
-                    wallEmissiveIntensity: 0.5,
+                    wallTint: TintColor(r: 0.95, g: 0.97, b: 1.0, a: 0.12),
+                    wallEmissive: TintColor(r: 1.0, g: 1.0, b: 1.0, a: 1),
+                    wallOpacity: 0.12,
+                    wallEmissiveIntensity: 0.35,
                     coinTint: TintColor(r: 0.85, g: 0.95, b: 1.0, a: 1)
                 ),
-                ghostWallChance: 0.5,
-                // Nearly invisible — faint edge shimmer is the main tell.
-                ghostWallOpacity: 0.035,
+                ghostWallChance: 1.0,
+                ghostWallOpacity: 0.12,
                 lowCrawlTeachCount: 0,
                 duckHazardChance: 0
             )

@@ -299,11 +299,15 @@ final class Endless_RunnerTests: XCTestCase {
         XCTAssertLessThan(fog.wallOpacity, ember.wallOpacity)
     }
 
-    func testGhostGlassConfiguresGhostChance() {
+    func testGhostGlassUsesWhiteTransparentWalls() {
         let ghost = EnvironmentCatalog.profile(for: .ghostGlass)
         XCTAssertEqual(ghost.twist, .ghostWalls)
-        XCTAssertGreaterThan(ghost.ghostWallChance, 0)
-        XCTAssertLessThan(ghost.ghostWallOpacity, ghost.palette.wallOpacity)
+        XCTAssertEqual(ghost.ghostWallChance, 1.0, accuracy: 0.001)
+        XCTAssertLessThan(ghost.ghostWallOpacity, 0.25)
+        // White-ish tint (high RGB, low chroma).
+        XCTAssertGreaterThan(ghost.palette.wallTint.r, 0.9)
+        XCTAssertGreaterThan(ghost.palette.wallTint.g, 0.9)
+        XCTAssertGreaterThan(ghost.palette.wallTint.b, 0.9)
         // Transparency only — no fog volumes outside Fog Hollow.
         XCTAssertEqual(ghost.palette.fogDensity, 0)
     }

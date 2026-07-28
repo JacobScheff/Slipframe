@@ -1182,8 +1182,8 @@ final class GameWorld {
 
     private func spawnGhostGlassPattern(profile: EnvironmentProfile) {
         let blocking = Self.randomWallLanes()
-        let kind: WallKind = Float.random(in: 0...1) < profile.ghostWallChance ? .ghost : .standard
-        spawnWall(blocking: blocking, kind: kind, profile: profile)
+        // Every Ghost Glass wall is the white transparent ghost variant.
+        spawnWall(blocking: blocking, kind: .ghost, profile: profile)
 
         let safeLanes = Lane.allCases.filter { !blocking.contains($0) }
         if let coinLane = safeLanes.randomElement(), Float.random(in: 0...1) < 0.7 {
@@ -1334,18 +1334,13 @@ final class GameWorld {
         body.name = "wallSlab"
 
         if kind == .ghost {
-            // Very faint edge shimmer — body is nearly invisible, this is the main tell.
+            // Soft white glass rim so transparent walls still read a little.
             let edgeMesh = MeshResource.generateBox(
                 width: GameWorld.wallWidth + 0.03,
                 height: GameWorld.wallHeight + 0.03,
                 depth: GameWorld.wallThickness + 0.03
             )
-            let edgeTint = TintColor(
-                r: profile.palette.wallEmissive.r,
-                g: profile.palette.wallEmissive.g,
-                b: profile.palette.wallEmissive.b,
-                a: 0.07
-            )
+            let edgeTint = TintColor(r: 1.0, g: 1.0, b: 1.0, a: 0.1)
             let edge = ModelEntity(mesh: edgeMesh, materials: [EnvironmentMaterials.unlit(edgeTint)])
             edge.name = "ghostEdge"
             body.addChild(edge)
