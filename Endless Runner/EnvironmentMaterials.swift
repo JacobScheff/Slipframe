@@ -45,6 +45,19 @@ enum EnvironmentMaterials {
         simple(tint, metallic: true, roughness: 0.25)
     }
 
+    /// Soft translucent haze volume for Fog Hollow (not a solid occluding plate).
+    static func fogVolume(_ tint: TintColor) -> PhysicallyBasedMaterial {
+        var material = PhysicallyBasedMaterial()
+        let alpha = max(0.02, min(0.16, tint.a))
+        material.baseColor = .init(tint: uiColor(TintColor(r: tint.r, g: tint.g, b: tint.b, a: alpha)))
+        material.roughness = .init(floatLiteral: 1.0)
+        material.metallic = .init(floatLiteral: 0.0)
+        material.emissiveColor = .init(color: uiColor(TintColor(r: tint.r, g: tint.g, b: tint.b, a: 1)))
+        material.emissiveIntensity = 0.08
+        material.blending = .transparent(opacity: .init(floatLiteral: alpha))
+        return material
+    }
+
     static func crystalHalf(type: CrystalHalfType, charged: Bool) -> PhysicallyBasedMaterial {
         let tint = CrystalCombine.tint(for: type, charged: charged)
         var material = PhysicallyBasedMaterial()

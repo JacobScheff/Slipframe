@@ -276,6 +276,19 @@ final class Endless_RunnerTests: XCTestCase {
         XCTAssertEqual(ghost.twist, .ghostWalls)
         XCTAssertGreaterThan(ghost.ghostWallChance, 0)
         XCTAssertLessThan(ghost.ghostWallOpacity, ghost.palette.wallOpacity)
+        // Transparency only — no fog volumes outside Fog Hollow.
+        XCTAssertEqual(ghost.palette.fogDensity, 0)
+    }
+
+    func testOnlyFogHollowUsesFogDensity() {
+        for id in EnvironmentID.allCases {
+            let density = EnvironmentCatalog.profile(for: id).palette.fogDensity
+            if id == .fogHollow {
+                XCTAssertGreaterThan(density, 0)
+            } else {
+                XCTAssertEqual(density, 0, "Unexpected fog on \(id.displayName)")
+            }
+        }
     }
 
     func testLowCrawlTeachCountIsPositive() {

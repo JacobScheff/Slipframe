@@ -144,9 +144,9 @@ The six biomes in the random pool:
 
 ##### Fog Hollow
 
-- **Look / feel:** Darker, dense fog, muted greys and desaturated reds. Depth cues soften; distant geometry reads as silhouettes.
+- **Look / feel:** Darker corridor, muted greys and desaturated reds, with soft mist volumes mid-track toward the portal (stand line stays clear).
 - **Music mood:** Low, tense drone — almost motionless, anxious underground atmosphere.
-- **Special twist — worse visibility:** Spawn distance stays the same, but walls are more transparent and the environment uses fog cards + lower ambience brightness so reading obstacles is harder.
+- **Special twist — worse visibility:** Spawn distance stays the same; walls are more transparent and Fog Hollow is the **only** biome with fog/mist.
 - **Gameplay notes:** Keep lane patterns fair (avoid surprise double-blocks while walls are hard to read). Coins stay at normal readability so rewards still pop through the fog.
 
 ##### Low Crawl
@@ -158,9 +158,9 @@ The six biomes in the random pool:
 
 ##### Ghost Glass
 
-- **Look / feel:** Pale wash, soft diffuse light, slightly ethereal. Surfaces feel thin and glassy.
+- **Look / feel:** Pale wash, soft diffuse light, slightly ethereal. Surfaces feel thin and glassy. **No fog** — clarity stays high.
 - **Music mood:** Thin, eerie pad — fragile, haunted, spacious.
-- **Special twist — harder-to-notice walls:** A subset of obstacles spawn much more transparent than normal red walls, so they are easier to miss visually.
+- **Special twist — harder-to-notice walls:** Transparency only. A subset of obstacles spawn much more transparent than normal walls; no mist/haze volumes.
 - **Gameplay notes:** Not every wall should be ghosted — mix solid-readable walls with ghost walls so players stay alert. Ghost walls still use the same collision rules; only opacity/readability changes. Optional faint edge shimmer so skillful players can still learn to spot them.
 
 ##### Ember Run

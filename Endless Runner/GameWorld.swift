@@ -164,7 +164,6 @@ final class GameWorld {
     private let portalRoot = Entity()
     private let portalEntity = Entity()
     private let portalWorld = Entity()
-    private let ambienceWash = Entity()
 
     private weak var gameModel: GameModel?
     private let environmentDirector = EnvironmentDirector()
@@ -302,7 +301,6 @@ final class GameWorld {
         portalRoot.removeFromParent()
         portalWorld.removeFromParent()
         fogRoot.removeFromParent()
-        ambienceWash.removeFromParent()
         for child in root.children {
             child.removeFromParent()
         }
@@ -329,7 +327,7 @@ final class GameWorld {
         }
         rebuildFixedTrack(force: true)
         buildStartMarker()
-        rebuildFogCards(density: 0, color: .clear)
+        rebuildFogVolumes(density: 0, color: .clear)
     }
 
     /// One static floor slab from the stand line to the portal — never scrolls.
@@ -394,7 +392,6 @@ final class GameWorld {
 
         buildPortalRim()
         buildPortalInterior()
-        buildAmbienceWash()
 
         if portalEntity.parent !== portalRoot {
             portalRoot.addChild(portalEntity)
@@ -510,21 +507,6 @@ final class GameWorld {
         portalWorld.addChild(interior)
     }
 
-    private func buildAmbienceWash() {
-        if ambienceWash.parent !== root {
-            ambienceWash.name = "ambienceWash"
-            let mesh = MeshResource.generatePlane(width: 4.5, height: 3.0)
-            let plane = ModelEntity(
-                mesh: mesh,
-                materials: [UnlitMaterial(color: UIColor(white: 0, alpha: 0))]
-            )
-            plane.name = "ambienceWashPlane"
-            plane.position = SIMD3(0, 1.4, -1.8)
-            ambienceWash.addChild(plane)
-            root.addChild(ambienceWash)
-        }
-    }
-
     private func layoutPortal() {
         portalRoot.position = SIMD3(0, GameWorld.portalHeight * 0.5, portalZ)
         activeSpawnZ = portalZ + GameWorld.spawnInFrontOfPortal
@@ -593,7 +575,18 @@ final class GameWorld {
         if let rim = portalRoot.children.first(where: { $0.name == "portalRim" }) {
             for child in rim.children {
                 guard let model = child as? ModelEntity else { continue }
-                model.model?.materials = [EnvironmentMaterials.unlit(palette.portalRim)]
+                // Brief rim pulse on biome switch — no full-screen wash in front of the player.
+                var rimTint = palette.portalRim
+                if telegraph > 0.01 {
+                    let boost = 0.35 * telegraph
+                    rimTint = TintColor(
+                        r: min(1, rimTint.r + boost),
+                        g: min(1, rimTint.g + boost),
+                        b: min(1, rimTint.b + boost),
+                        a: rimTint.a
+                    )
+                }
+                model.model?.materials = [EnvironmentMaterials.unlit(rimTint)]
             }
         }
 
@@ -611,34 +604,45 @@ final class GameWorld {
             }
         }
 
-        rebuildFogCards(density: palette.fogDensity, color: palette.fogColor)
-
-        if let wash = ambienceWash.children.first as? ModelEntity {
-            let darkness = max(0, min(0.55, (1 - palette.ambienceBrightness) * 0.5 + telegraph * 0.2))
-            let washColor = UIColor(red: 0.02, green: 0.02, blue: 0.05, alpha: CGFloat(darkness))
-            wash.model?.materials = [UnlitMaterial(color: washColor)]
-        }
+        rebuildFogVolumes(density: palette.fogDensity, color: palette.fogColor)
     }
 
-    private func rebuildFogCards(density: Float, color: TintColor) {
+    /// Soft mist for Fog Hollow only. Kept mid-track → portal so the stand line stays clear.
+    private func rebuildFogVolumes(density: Float, color: TintColor) {
         for child in fogRoot.children {
             child.removeFromParent()
         }
         guard density > 0.02 else { return }
 
-        let cardCount = max(1, Int(ceil(Double(density * 5))))
-        let startZ: Float = -1.2
-        let endZ = portalZ + 0.8
-        for index in 0..<cardCount {
-            let t = cardCount == 1 ? 0.5 : Float(index) / Float(cardCount - 1)
-            let z = startZ + (endZ - startZ) * t
-            let alpha = color.a * density * (0.55 + 0.45 * (1 - t))
-            let tint = TintColor(r: color.r, g: color.g, b: color.b, a: alpha)
-            let mesh = MeshResource.generatePlane(width: 3.8, height: 2.6)
-            let card = ModelEntity(mesh: mesh, materials: [EnvironmentMaterials.unlit(tint)])
-            card.name = "fogCard"
-            card.position = SIMD3(0, 1.3, z)
-            fogRoot.addChild(card)
+        // Keep the first ~2.5 m of play space open; haze builds toward the portal.
+        let clearUntilZ: Float = -2.5
+        let endZ = min(portalZ + 0.4, -3.0)
+        guard endZ < clearUntilZ - 0.5 else { return }
+
+        let layerCount = max(3, Int(ceil(Double(density * 6))))
+        for index in 0..<layerCount {
+            let t = Float(index) / Float(max(1, layerCount - 1))
+            let z = clearUntilZ + (endZ - clearUntilZ) * t
+            // Farther layers are denser; near layers stay wispy.
+            let alpha = min(0.14, 0.03 + density * 0.08 * (0.35 + 0.65 * t))
+            let mist = TintColor(
+                r: color.r,
+                g: color.g,
+                b: color.b,
+                a: alpha
+            )
+            // Thin depth slabs read as volume haze better than flat face-on cards.
+            let width: Float = 3.4 + t * 0.4
+            let height: Float = 2.1 + t * 0.3
+            let depth: Float = 0.55
+            let mesh = MeshResource.generateBox(width: width, height: height, depth: depth)
+            let volume = ModelEntity(
+                mesh: mesh,
+                materials: [EnvironmentMaterials.fogVolume(mist)]
+            )
+            volume.name = "fogVolume"
+            volume.position = SIMD3(0, 1.15, z)
+            fogRoot.addChild(volume)
         }
     }
 
