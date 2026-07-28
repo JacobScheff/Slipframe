@@ -204,6 +204,8 @@ final class GameWorld {
     /// Where obstacles / coins appear (just in front of the portal).
     private var activeSpawnZ: Float = GameWorld.defaultPortalZ + GameWorld.spawnInFrontOfPortal
     private var lastBuiltPortalZ: Float = .greatestFiniteMagnitude
+    private var lastFogActive = false
+    private var lastFogLayoutPortalZ: Float = .greatestFiniteMagnitude
     private var updateSubscription: EventSubscription?
     private var activeRunID: Int = -1
     /// After Start, playfield pose no longer follows the player.
@@ -305,6 +307,8 @@ final class GameWorld {
         portalZ = GameWorld.defaultPortalZ
         activeSpawnZ = GameWorld.defaultPortalZ + GameWorld.spawnInFrontOfPortal
         lastBuiltPortalZ = .greatestFiniteMagnitude
+        lastFogActive = false
+        lastFogLayoutPortalZ = .greatestFiniteMagnitude
         clearDynamicContent()
         dropHeldHalves()
         GameMusic.shared.stop()
@@ -352,7 +356,7 @@ final class GameWorld {
         }
         rebuildFixedTrack(force: true)
         buildStartMarker()
-        rebuildFogVolumes(density: 0, color: .clear)
+        updateFog(density: 0, color: .clear)
     }
 
     /// One static floor slab from the stand line to the portal — never scrolls.
@@ -634,47 +638,70 @@ final class GameWorld {
             }
         }
 
-        rebuildFogVolumes(density: palette.fogDensity, color: palette.fogColor)
+        updateFog(density: palette.fogDensity, color: palette.fogColor)
     }
 
-    /// Soft mist for Fog Hollow only. Many deep overlapping layers so density ramps
-    /// smoothly (no hard “fog walls”), while the stand line stays relatively clear.
-    private func rebuildFogVolumes(density: Float, color: TintColor) {
+    /// Lightweight Fog Hollow mist: a few unlit planes (not dozens of overlapping
+    /// PBR boxes). Rebuild only when fog turns on/off or portal depth jumps.
+    private func updateFog(density: Float, color: TintColor) {
+        let wantsFog = density > 0.02
+        if !wantsFog {
+            if lastFogActive {
+                for child in fogRoot.children {
+                    child.removeFromParent()
+                }
+                lastFogActive = false
+            }
+            return
+        }
+
+        let layoutChanged = !lastFogActive
+            || fogRoot.children.isEmpty
+            || abs(portalZ - lastFogLayoutPortalZ) > 0.35
+        if layoutChanged {
+            rebuildFogPlanes(density: density, color: color)
+            lastFogLayoutPortalZ = portalZ
+            lastFogActive = true
+            return
+        }
+
+        // Cheap path: retint existing planes while the palette lerps.
+        let planes = fogRoot.children.compactMap { $0 as? ModelEntity }
+        for (index, plane) in planes.enumerated() {
+            let t = planes.count <= 1 ? 1 : Float(index) / Float(planes.count - 1)
+            let ramp = t * t * (3 - 2 * t)
+            let alpha = min(0.22, 0.06 + 0.14 * density * (0.35 + 0.65 * ramp))
+            let mist = TintColor(r: color.r, g: color.g, b: color.b, a: alpha)
+            plane.model?.materials = [EnvironmentMaterials.fogPlane(mist)]
+        }
+    }
+
+    private func rebuildFogPlanes(density: Float, color: TintColor) {
         for child in fogRoot.children {
             child.removeFromParent()
         }
-        guard density > 0.02 else { return }
 
-        // Start haze a bit closer, but keep layer alpha very low near the player.
-        let clearUntilZ: Float = -1.8
-        let endZ = min(portalZ + 0.2, -2.4)
-        guard endZ < clearUntilZ - 0.75 else { return }
+        // Stand line stays mostly clear; haze sits mid-track → portal.
+        let nearZ: Float = -2.4
+        let farZ = min(portalZ + 0.5, -3.2)
+        guard farZ < nearZ - 0.5 else { return }
 
-        // Depth >> spacing ⇒ layers blend into a continuous gradient.
-        let layerCount = max(14, Int(ceil(Double(density * 18))))
-        let span = clearUntilZ - endZ
-        let spacing = span / Float(max(1, layerCount - 1))
-        let layerDepth = max(1.1, spacing * 3.2)
-
+        // Three planes is enough for a soft ramp without heavy transparent overdraw.
+        let layerCount = 3
         for index in 0..<layerCount {
-            let t = Float(index) / Float(max(1, layerCount - 1))
-            // Smoothstep: slow start near the player, heavier toward the portal.
+            let t = Float(index) / Float(layerCount - 1)
             let ramp = t * t * (3 - 2 * t)
-            let z = clearUntilZ - span * t
-            let alpha = (0.018 + 0.055 * density * ramp)
+            let z = nearZ + (farZ - nearZ) * t
+            let alpha = min(0.22, 0.06 + 0.14 * density * (0.35 + 0.65 * ramp))
             let mist = TintColor(r: color.r, g: color.g, b: color.b, a: alpha)
-
-            let width: Float = 3.6 + ramp * 0.35
-            let height: Float = 2.35 + ramp * 0.25
-            let mesh = MeshResource.generateBox(width: width, height: height, depth: layerDepth)
-            let volume = ModelEntity(
+            let mesh = MeshResource.generatePlane(width: 3.5, height: 2.3)
+            let plane = ModelEntity(
                 mesh: mesh,
-                materials: [EnvironmentMaterials.fogVolume(mist)]
+                materials: [EnvironmentMaterials.fogPlane(mist)]
             )
-            volume.name = "fogVolume"
-            // Slight vertical drift breaks stacked-edge banding.
-            volume.position = SIMD3(0, 1.2 + sin(t * 6.2) * 0.04, z)
-            fogRoot.addChild(volume)
+            plane.name = "fogPlane"
+            plane.position = SIMD3(0, 1.2, z)
+            fogRoot.addChild(plane)
         }
     }
 
@@ -786,6 +813,7 @@ final class GameWorld {
 
             do {
                 var providers: [any DataProvider] = []
+                var handsEnabled = false
                 if WorldTrackingProvider.isSupported {
                     providers.append(worldTracking)
                 }
@@ -793,14 +821,13 @@ final class GameWorld {
                     let auth = await arSession.requestAuthorization(for: [.handTracking])
                     if auth[.handTracking] == .allowed {
                         providers.append(handTracking)
+                        handsEnabled = true
                     }
                 }
                 guard !providers.isEmpty else { return }
                 try await arSession.run(providers)
 
-                guard HandTrackingProvider.isSupported,
-                      providers.contains(where: { $0 is HandTrackingProvider })
-                else { return }
+                guard handsEnabled else { return }
 
                 for await update in handTracking.anchorUpdates {
                     guard !Task.isCancelled else { break }
