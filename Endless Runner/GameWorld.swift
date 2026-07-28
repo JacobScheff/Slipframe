@@ -1194,8 +1194,7 @@ final class GameWorld {
 
     /// Grows the warning streak from the far edge toward the shove direction.
     private func layoutGustBar(progress: Float, telegraph: Bool, direction: Float) {
-        guard let gust = gustEntity,
-              let model = gust.children.first as? ModelEntity else { return }
+        guard let model = gustEntity?.children.first as? ModelEntity else { return }
 
         let dir: Float = direction >= 0 ? 1 : -1
         let fullWidth = GameWorld.gustBarWidth
