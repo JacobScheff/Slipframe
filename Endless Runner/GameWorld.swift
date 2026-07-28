@@ -168,6 +168,14 @@ final class GameWorld {
     /// Only skip a shove when a wall is already in this near danger band.
     private static let windDangerMinZ: Float = -1.1
     private static let windDangerMaxZ: Float = 0.7
+    /// Storm warning streak size / placement (unit-width mesh, scaled on X).
+    private static let gustBarWidth: Float = 2.8
+    private static let gustBarHeight: Float = 0.08
+    private static let gustBarDepth: Float = 0.35
+    private static let gustBarY: Float = 1.25
+    private static let gustBarZ: Float = -1.4
+    /// Fraction of the telegraph used to finish the expand animation.
+    private static let gustExpandFinishAt: Float = 0.7
 
     /// Playfield origin: floor at y=0, stand line at z=0, track extends along −Z.
     let root = Entity()
@@ -1163,35 +1171,63 @@ final class GameWorld {
         gustEntity?.removeFromParent()
         let gust = Entity()
         gust.name = "windGust"
-        let mesh = MeshResource.generateBox(width: 2.8, height: 0.1, depth: 0.4)
-        let mat = UnlitMaterial(color: UIColor(red: 0.55, green: 0.75, blue: 1.0, alpha: 0.45))
+        gust.position = SIMD3(0, GameWorld.gustBarY, GameWorld.gustBarZ)
+
+        // Unit-width bar; X scale + offset grow it in the shove direction.
+        let mesh = MeshResource.generateBox(
+            width: 1,
+            height: GameWorld.gustBarHeight,
+            depth: GameWorld.gustBarDepth
+        )
+        let mat = UnlitMaterial(color: UIColor(red: 0.55, green: 0.75, blue: 1.0, alpha: 0.2))
         let model = ModelEntity(mesh: mesh, materials: [mat])
-        model.position = SIMD3(direction * 0.25, 1.25, -1.4)
+        model.name = "windGustBar"
         gust.addChild(model)
         root.addChild(gust)
         gustEntity = gust
+        layoutGustBar(progress: 0, telegraph: true, direction: direction)
     }
 
     private func updateGustVisual(progress: Float, telegraph: Bool) {
-        guard let gust = gustEntity else { return }
-        if let model = gust.children.first as? ModelEntity {
-            let alpha: CGFloat
-            if telegraph {
-                // Pulse brighter as the warning counts down.
-                let pulse = 0.5 + 0.5 * sin(Double(progress) * .pi * 4)
-                alpha = 0.35 + 0.45 * pulse
-            } else {
-                let fade = max(0, 1 - progress)
-                alpha = 0.2 + 0.35 * CGFloat(fade)
-            }
-            model.model?.materials = [
-                UnlitMaterial(color: UIColor(red: 0.55, green: 0.8, blue: 1.0, alpha: alpha))
-            ]
-            // Nudge the streak in the shove direction during the warning.
-            if telegraph {
-                model.position.x = pendingWindDirection * (0.25 + progress * 0.2)
-            }
+        layoutGustBar(progress: progress, telegraph: telegraph, direction: pendingWindDirection)
+    }
+
+    /// Grows the warning streak from the far edge toward the shove direction.
+    private func layoutGustBar(progress: Float, telegraph: Bool, direction: Float) {
+        guard let gust = gustEntity,
+              let model = gust.children.first as? ModelEntity else { return }
+
+        let dir: Float = direction >= 0 ? 1 : -1
+        let fullWidth = GameWorld.gustBarWidth
+
+        let expand: Float
+        if telegraph {
+            // Ease out so the line reads clearly before boxes move.
+            let t = min(1, max(0, progress) / GameWorld.gustExpandFinishAt)
+            expand = 1 - (1 - t) * (1 - t)
+        } else {
+            expand = 1
         }
+
+        let width = max(0.05, fullWidth * expand)
+        model.scale = SIMD3(width, 1, 1)
+
+        // Keep the origin-side edge fixed; grow toward where walls will shove.
+        let fixedEdgeX = -dir * (fullWidth * 0.5)
+        model.position = SIMD3(fixedEdgeX + dir * (width * 0.5), 0, 0)
+
+        let alpha: CGFloat
+        if telegraph {
+            let settle = CGFloat(min(1, expand))
+            let pulse = 0.5 + 0.5 * sin(Double(progress) * .pi * 3)
+            alpha = (0.25 + 0.35 * settle) + 0.25 * pulse * settle
+        } else {
+            let fade = max(0, 1 - progress)
+            alpha = 0.15 + 0.35 * CGFloat(fade)
+        }
+        model.model?.materials = [
+            UnlitMaterial(color: UIColor(red: 0.55, green: 0.8, blue: 1.0, alpha: alpha))
+        ]
     }
 
     // MARK: - Spawning
