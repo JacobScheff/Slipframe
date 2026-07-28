@@ -2,11 +2,17 @@
 //  WallCollision.swift
 //  Endless Runner
 //
-//  Pure AABB helpers for red-wall hits. A contact (head or hand) only counts
-//  when it overlaps a slab's kill box — not merely the same lane.
+//  Pure AABB helpers for wall / duck-hazard hits. A contact (head or hand)
+//  only counts when it overlaps a slab's kill box — not merely the same lane.
 //
 
 import simd
+
+enum WallKind: Equatable {
+    case standard
+    case ghost
+    case duck
+}
 
 enum WallCollision {
     /// Visual walls are thick for readability; the kill volume stays thinner so
@@ -38,6 +44,22 @@ enum WallCollision {
             }
         }
         return false
+    }
+
+    /// Hanging low-ceiling hazard: hit if the contact is inside the XZ box and
+    /// still above `clearanceY` (player must duck under).
+    static func pointHitsDuckBarrier(
+        point: SIMD3<Float>,
+        wallZ: Float,
+        centerX: Float,
+        halfWidth: Float,
+        halfDepth: Float,
+        clearanceY: Float,
+        maxY: Float
+    ) -> Bool {
+        guard point.y >= clearanceY, point.y <= maxY else { return false }
+        guard abs(point.z - wallZ) <= halfDepth else { return false }
+        return abs(point.x - centerX) <= halfWidth
     }
 
     /// True when the wall's back face has fully cleared behind the contact depth.

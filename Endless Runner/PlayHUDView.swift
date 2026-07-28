@@ -26,6 +26,8 @@ struct PlayHUDView: View {
                 .multilineTextAlignment(.center)
 
             controls
+
+            debugEnvironmentPicker
         }
         .padding(.horizontal, 56)
         .padding(.vertical, 44)
@@ -63,6 +65,44 @@ struct PlayHUDView: View {
         }
     }
 
+    /// Temporary test control — remove once biome QA is done.
+    private var debugEnvironmentPicker: some View {
+        VStack(spacing: 10) {
+            Text("Debug Environment")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+
+            Picker("Environment Mode", selection: debugModeBinding) {
+                Text("Normal (random)").tag(DebugPickerValue.normal)
+                ForEach(EnvironmentID.allCases) { id in
+                    Text("Force: \(id.displayName)").tag(DebugPickerValue.force(id))
+                }
+            }
+            .pickerStyle(.menu)
+            .font(.title3)
+        }
+        .padding(.top, 8)
+    }
+
+    private var debugModeBinding: Binding<DebugPickerValue> {
+        Binding(
+            get: {
+                switch gameModel.environmentDebugMode {
+                case .normal: return .normal
+                case .force(let id): return .force(id)
+                }
+            },
+            set: { value in
+                switch value {
+                case .normal:
+                    gameModel.environmentDebugMode = .normal
+                case .force(let id):
+                    gameModel.environmentDebugMode = .force(id)
+                }
+            }
+        )
+    }
+
     private func labeledValue(title: String, value: String) -> some View {
         VStack(spacing: 8) {
             Text(title)
@@ -83,6 +123,12 @@ struct PlayHUDView: View {
         }
         return "Obstacles come through the portal — dodge and grab coins."
     }
+}
+
+/// Hashable picker tags for the temporary environment debug control.
+private enum DebugPickerValue: Hashable {
+    case normal
+    case force(EnvironmentID)
 }
 
 #Preview {

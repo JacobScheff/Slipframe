@@ -165,4 +165,143 @@ final class Endless_RunnerTests: XCTestCase {
         )
         XCTAssertFalse(hit)
     }
+
+    func testDuckBarrierHitsStandingHead() {
+        let head = SIMD3<Float>(0, 1.5, 0)
+        let hit = WallCollision.pointHitsDuckBarrier(
+            point: head,
+            wallZ: 0,
+            centerX: 0,
+            halfWidth: 1.1,
+            halfDepth: 0.2,
+            clearanceY: 1.05,
+            maxY: 2.2
+        )
+        XCTAssertTrue(hit)
+    }
+
+    func testDuckBarrierClearedWhenHeadIsLow() {
+        let head = SIMD3<Float>(0, 0.9, 0)
+        let hit = WallCollision.pointHitsDuckBarrier(
+            point: head,
+            wallZ: 0,
+            centerX: 0,
+            halfWidth: 1.1,
+            halfDepth: 0.2,
+            clearanceY: 1.05,
+            maxY: 2.2
+        )
+        XCTAssertFalse(hit)
+    }
+
+    func testCrystalMergeRequiresDifferentTypes() {
+        XCTAssertTrue(CrystalCombine.canMerge(left: .red, right: .blue))
+        XCTAssertFalse(CrystalCombine.canMerge(left: .red, right: .red))
+        XCTAssertFalse(CrystalCombine.canMerge(left: .blue, right: .blue))
+    }
+
+    func testCrystalMergePayouts() {
+        XCTAssertEqual(CrystalCombine.mergePayout(leftCharged: false, rightCharged: false), 50)
+        XCTAssertEqual(CrystalCombine.mergePayout(leftCharged: true, rightCharged: false), 100)
+        XCTAssertEqual(CrystalCombine.mergePayout(leftCharged: false, rightCharged: true), 100)
+        XCTAssertEqual(CrystalCombine.mergePayout(leftCharged: true, rightCharged: true), 10_000)
+    }
+
+    func testCrystalChargedSpawnRateAroundOnePercent() {
+        var rng = SeededGenerator(seed: 42)
+        var charged = 0
+        let trials = 20_000
+        for _ in 0..<trials {
+            if CrystalCombine.makeHalf(rng: &rng).charged {
+                charged += 1
+            }
+        }
+        let rate = Double(charged) / Double(trials)
+        XCTAssertGreaterThan(rate, 0.005)
+        XCTAssertLessThan(rate, 0.02)
+    }
+
+    func testEnvironmentDirectorStartsOnEmberRun() {
+        let director = EnvironmentDirector()
+        director.beginRun(debugMode: .normal)
+        XCTAssertEqual(director.currentID, .emberRun)
+        XCTAssertEqual(director.currentProfile.twist, .baseline)
+    }
+
+    func testEnvironmentDirectorForceModeLocksBiome() {
+        let director = EnvironmentDirector()
+        director.beginRun(debugMode: .force(.fogHollow))
+        XCTAssertEqual(director.currentID, .fogHollow)
+
+        // Even after many switch intervals, forced biome should stick.
+        for _ in 0..<5 {
+            let frame = director.update(deltaTime: EnvironmentCatalog.switchInterval + 1)
+            XCTAssertEqual(frame.currentID, .fogHollow)
+            XCTAssertFalse(frame.didEnterEnvironment)
+        }
+    }
+
+    func testEnvironmentDirectorRandomNextAvoidsCurrent() {
+        for id in EnvironmentID.allCases {
+            var rng = SeededGenerator(seed: UInt64(id.hashValue))
+            for _ in 0..<20 {
+                let next = EnvironmentDirector.randomNext(excluding: id, rng: &rng)
+                XCTAssertNotEqual(next, id)
+            }
+        }
+    }
+
+    func testFogHollowPaletteIsDarkerAndFoggierThanEmber() {
+        let ember = EnvironmentCatalog.profile(for: .emberRun).palette
+        let fog = EnvironmentCatalog.profile(for: .fogHollow).palette
+        XCTAssertLessThan(fog.ambienceBrightness, ember.ambienceBrightness)
+        XCTAssertGreaterThan(fog.fogDensity, ember.fogDensity)
+        XCTAssertLessThan(fog.wallOpacity, ember.wallOpacity)
+    }
+
+    func testGhostGlassConfiguresGhostChance() {
+        let ghost = EnvironmentCatalog.profile(for: .ghostGlass)
+        XCTAssertEqual(ghost.twist, .ghostWalls)
+        XCTAssertGreaterThan(ghost.ghostWallChance, 0)
+        XCTAssertLessThan(ghost.ghostWallOpacity, ghost.palette.wallOpacity)
+    }
+
+    func testLowCrawlTeachCountIsPositive() {
+        let crawl = EnvironmentCatalog.profile(for: .lowCrawl)
+        XCTAssertEqual(crawl.twist, .lowCrawl)
+        XCTAssertGreaterThan(crawl.lowCrawlTeachCount, 0)
+        let director = EnvironmentDirector()
+        director.beginRun(debugMode: .force(.lowCrawl))
+        XCTAssertTrue(director.isTeachingLowCrawl)
+        for _ in 0..<crawl.lowCrawlTeachCount {
+            director.noteDuckGateSpawned()
+        }
+        XCTAssertFalse(director.isTeachingLowCrawl)
+    }
+
+    func testGameMusicCrossfadeRecordsCue() {
+        let music = GameMusic.shared
+        music.prepare()
+        music.crossfade(to: EnvironmentID.stormPass.musicCue, duration: 1.25)
+        XCTAssertEqual(music.currentCue, "stormPass")
+        music.stop()
+        XCTAssertNil(music.currentCue)
+    }
+}
+
+/// Deterministic RNG for spawn-rate tests.
+private struct SeededGenerator: RandomNumberGenerator {
+    private var state: UInt64
+
+    init(seed: UInt64) {
+        state = seed == 0 ? 0x4d595df4d0f33173 : seed
+    }
+
+    mutating func next() -> UInt64 {
+        state &+= 0x9e3779b97f4a7c15
+        var z = state
+        z = (z ^ (z >> 30)) &* 0xbf58476d1ce4e5b9
+        z = (z ^ (z >> 27)) &* 0x94d049bb133111eb
+        return z ^ (z >> 31)
+    }
 }

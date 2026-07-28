@@ -146,8 +146,8 @@ The six biomes in the random pool:
 
 - **Look / feel:** Darker, dense fog, muted greys and desaturated reds. Depth cues soften; distant geometry reads as silhouettes.
 - **Music mood:** Low, tense drone — almost motionless, anxious underground atmosphere.
-- **Special twist — worse visibility:** Walls appear later / are harder to read at distance. Telegraph distance is shorter than normal so players must react closer-in.
-- **Gameplay notes:** Keep lane patterns fair (avoid surprise double-blocks that spawn too late). Coins stay at normal readability so rewards still pop through the fog.
+- **Special twist — worse visibility:** Spawn distance stays the same, but walls are more transparent and the environment uses fog cards + lower ambience brightness so reading obstacles is harder.
+- **Gameplay notes:** Keep lane patterns fair (avoid surprise double-blocks while walls are hard to read). Coins stay at normal readability so rewards still pop through the fog.
 
 ##### Low Crawl
 
@@ -174,8 +174,8 @@ The six biomes in the random pool:
 
 - **Look / feel:** Cold steel blue, rain-streak atmosphere, unsettled sky/corridor energy.
 - **Music mood:** Rolling thunder rhythm — pressure, gusts, weather you can feel.
-- **Special twist — wind shove:** Occasional lateral drift nudges the player off-lane (a brief force on head/lane position), so players must correct mid-approach.
-- **Gameplay notes:** Telegraph wind shoves with a short audio whoosh + visual gust. Limit shove frequency so it doesn’t feel random-punishy; never shove directly into an unavoidable wall. Shoves should be correctable with a step/lean.
+- **Special twist — wind shove:** Occasional smooth horizontal drift shifts obstacle boxes (walls/coins/halves) — not the lanes or portal — so players must correct mid-approach.
+- **Gameplay notes:** Telegraph wind shoves with a short audio whoosh + visual gust. Limit shove frequency so it doesn’t feel random-punishy; never shove when a wall is already imminent. Shoves should be correctable with a step/lean.
 
 ##### Crystal Cave
 
@@ -190,10 +190,13 @@ The six biomes in the random pool:
 - **Drop:** release the fist — the held half disappears (nothing left on the floor).
 - Each hand can hold **one** half at a time.
 - When left and right hold **different** types, bring hands together to **combine** them into one crystal coin.
-- A combined crystal is worth **~5× a normal coin**, plays a short combine animation, then goes away.
+- A combined crystal is worth **5× a normal coin**, plays a short combine animation, then goes away.
 - Same-type in both hands: no merge (optional soft reject feedback).
 
-**Rare charged half:** occasionally a half spawns as a **charged** variant (distinct glow/pulse). Merging a pair that includes a charged half (or two) pays **~10×** a normal coin instead of 5×.
+**Rare charged half:** about **1%** of halves spawn as a **charged** variant (distinct glow/pulse). Merge payouts vs a normal coin:
+- no charged halves → **5×**
+- one charged half → **10×**
+- both charged → **1000×**
 
 **Fairness notes for this biome:** prefer simpler / fewer walls while halves are in play so fist + combine remains readable mid-dodge. Combine distance should be generous (~15–20 cm between hands).
 

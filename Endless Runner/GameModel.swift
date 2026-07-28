@@ -2,7 +2,7 @@
 //  GameModel.swift
 //  Endless Runner
 //
-//  Shared UI / run state for the base endless-runner loop.
+//  Shared UI / run state for the endless-runner loop.
 //
 
 import Foundation
@@ -15,6 +15,9 @@ final class GameModel: ObservableObject {
     @Published var isPlaying: Bool = false
     @Published var isGameOver: Bool = false
     @Published var immersiveSpaceOpen: Bool = false
+
+    /// Temporary debug control: Normal rotates biomes; Force locks one biome.
+    @Published var environmentDebugMode: EnvironmentDebugMode = .normal
 
     /// Bumped on each restart so the immersive session can reset its world.
     @Published private(set) var runID: Int = 0
