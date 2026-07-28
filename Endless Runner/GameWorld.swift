@@ -85,7 +85,8 @@ final class GameWorld {
     private static let coinOutwardOffset: Float = 0.12
     /// Portal / spawn depth when no wall plane is available.
     private static let defaultPortalZ: Float = -8
-    private static let despawnZ: Float = 1.5
+    /// Obstacles stay visible this far past the stand line (+Z) before cleanup.
+    private static let despawnZ: Float = 3.0
     /// Kill-box depth pad beyond the thinned collision half-depth.
     private static let hitZPad: Float = 0.02
     /// Shrink the slab's X kill box so grazing a lane edge is less punishing.
@@ -146,7 +147,8 @@ final class GameWorld {
 
     // Fixed track slab from the stand line to just behind the portal.
     private static let trackWidth: Float = 3.2
-    private static let trackNearZ: Float = 0.55
+    /// Track slab extends this far behind the stand line (+Z).
+    private static let trackNearZ: Float = 1.1
     private static let trackPastPortal: Float = 0.35
     /// Used only when a floor plane has not been found yet.
     private static let fallbackEyeHeight: Float = 1.55
