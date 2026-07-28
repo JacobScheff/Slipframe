@@ -4,8 +4,9 @@
 //
 //  Minimal single-environment endless runner:
 //  - Playfield sits on the real floor and locks pose when a run starts
-//  - Tiled track ribbon recycles for an endless corridor
-//  - World scrolls toward the player
+//  - Synth Riders-style portal window at the end of a fixed track
+//  - Obstacles emerge from the portal into the real room
+//  - Track is a static slab (does not scroll or recycle)
 //  - Red walls block 1–2 lanes (head + hand collision)
 //  - Gold coins collected by hand proximity
 //  - Play / score HUD is fixed above the track
@@ -56,7 +57,8 @@ final class GameWorld {
     private static let coinHeight: Float = 1.2
     /// How far side-lane coins sit outside the lane center (smaller = easier reach).
     private static let coinOutwardOffset: Float = 0.12
-    private static let spawnZ: Float = -8
+    /// Portal / spawn depth when no wall plane is available.
+    private static let defaultPortalZ: Float = -8
     private static let despawnZ: Float = 1.5
     /// Kill-box depth pad beyond the thinned collision half-depth.
     private static let hitZPad: Float = 0.02
@@ -71,26 +73,35 @@ final class GameWorld {
     private static let headHitMinY: Float = 0.4
     private static let headHitMaxY: Float = wallHeight + 0.35
     private static let collectDistance: Float = 0.24
-    private static let baseSpeed: Float = 2.2
-    private static let maxSpeed: Float = 5.5
-    private static let speedRampPerSecond: Float = 0.04
-    /// Distance traveled between obstacle / coin patterns.
-    private static let spawnGapMin: Float = 3.6
-    private static let spawnGapMax: Float = 5.2
+    private static let baseSpeed: Float = 3.0
+    private static let maxSpeed: Float = 7.0
+    private static let speedRampPerSecond: Float = 0.055
+    /// Continuous obstacle stream with a bit of breathing room between beats.
+    private static let spawnGapMin: Float = 2.2
+    private static let spawnGapMax: Float = 2.9
     private static let coinPoints = 10
     /// HUD sits above the corridor, further down the track, clear of the play volume.
-    private static let hudPosition = SIMD3<Float>(0, 2.45, -4.0)
+    private static let hudPosition = SIMD3<Float>(0, 2.45, -3.2)
     /// World scale for the SwiftUI attachment (attachments are small by default).
     private static let hudScale: Float = 3.0
 
-    // Endless track tiles — recycled as they pass behind the player.
+    // Synth Riders-style portal aperture (always visible at the track end).
+    private static let portalWidth: Float = 3.6
+    private static let portalHeight: Float = 2.5
+    private static let portalCornerRadius: Float = 0.85
+    /// Neon halo that peeks out around the portal mesh.
+    private static let portalRimThickness: Float = 0.11
+    /// Prefer snapping the portal onto a real wall in this band.
+    private static let portalMinDistance: Float = 3.5
+    private static let portalMaxDistance: Float = 10.0
+    /// Obstacles appear just in front of the portal mouth (toward the player).
+    private static let spawnInFrontOfPortal: Float = 0.35
+    private static let wallMinimumBounds = SIMD2<Float>(0.8, 1.5)
+
+    // Fixed track slab from the stand line to just behind the portal.
     private static let trackWidth: Float = 3.2
-    private static let trackSegmentLength: Float = 4.0
-    private static let trackSegmentCount = 12
-    /// When a segment center passes this Z, snap it to the far end of the ribbon.
-    private static let trackRecycleZ: Float = 2.2
-    /// First segment sits slightly behind the stand line so the ribbon covers your feet.
-    private static let trackFirstCenterZ: Float = trackSegmentLength * 0.2
+    private static let trackNearZ: Float = 0.55
+    private static let trackPastPortal: Float = 0.35
     /// Used only when a floor plane has not been found yet.
     private static let fallbackEyeHeight: Float = 1.55
 
@@ -107,17 +118,33 @@ final class GameWorld {
             minimumBounds: SIMD2<Float>(0.5, 0.5)
         )
     )
+    /// First matching vertical wall — portal attaches here when in range.
+    private let wallAnchor = AnchorEntity(
+        .plane(
+            .vertical,
+            classification: .wall,
+            minimumBounds: GameWorld.wallMinimumBounds
+        )
+    )
     private let hudAnchor = Entity()
     private let trackRoot = Entity()
+    /// Holds the portal plane + neon rim in playfield space (always visible).
+    private let portalRoot = Entity()
+    private let portalEntity = Entity()
+    private let portalWorld = Entity()
 
     private weak var gameModel: GameModel?
     private var walls: [WallItem] = []
     private var coins: [CoinItem] = []
-    private var trackSegments: [Entity] = []
     private var speed: Float = GameWorld.baseSpeed
-    private var distanceUntilSpawn: Float = 1.5
+    /// First obstacle spawns on the opening tick of a run.
+    private var distanceUntilSpawn: Float = 0
     private var distanceAccumulator: Float = 0
-    private var patternIndex = 0
+    /// Portal plane depth along playfield −Z.
+    private var portalZ: Float = GameWorld.defaultPortalZ
+    /// Where obstacles / coins appear (just in front of the portal).
+    private var activeSpawnZ: Float = GameWorld.defaultPortalZ + GameWorld.spawnInFrontOfPortal
+    private var lastBuiltPortalZ: Float = .greatestFiniteMagnitude
     private var updateSubscription: EventSubscription?
     private var activeRunID: Int = -1
     /// After Start, playfield pose no longer follows the player.
@@ -138,6 +165,7 @@ final class GameWorld {
         content.add(root)
         content.add(headAnchor)
         content.add(floorAnchor)
+        content.add(wallAnchor)
         isPlayfieldLocked = false
 
         if updateSubscription == nil {
@@ -146,12 +174,14 @@ final class GameWorld {
             }
         }
 
+        buildPortal()
         buildStaticEnvironment()
         ensureHUDAnchor()
         startHandTracking()
         // Warm audio before the first coin so setActive does not hitch mid-run.
         GameSFX.shared.prepare()
         snapPlayfieldToPlayer()
+        updatePortalAndTrack()
     }
 
     /// Parents the SwiftUI play/score attachment so it stays fixed with the track.
@@ -179,14 +209,24 @@ final class GameWorld {
         rightHandContactsWorld = []
         updateSubscription = nil
         isPlayfieldLocked = false
+        portalZ = GameWorld.defaultPortalZ
+        activeSpawnZ = GameWorld.defaultPortalZ + GameWorld.spawnInFrontOfPortal
+        lastBuiltPortalZ = .greatestFiniteMagnitude
         clearDynamicContent()
-        trackSegments.removeAll()
         for child in hudAnchor.children {
             child.removeFromParent()
         }
         for child in trackRoot.children {
             child.removeFromParent()
         }
+        for child in portalRoot.children {
+            child.removeFromParent()
+        }
+        for child in portalWorld.children {
+            child.removeFromParent()
+        }
+        portalRoot.removeFromParent()
+        portalWorld.removeFromParent()
         for child in root.children {
             child.removeFromParent()
         }
@@ -203,66 +243,192 @@ final class GameWorld {
     // MARK: - Setup
 
     private func buildStaticEnvironment() {
-        // Tiled corridor ribbon (placeholder for Ember Run) + fixed stand marker.
-        if trackRoot.parent === root, !trackSegments.isEmpty { return }
-
         trackRoot.name = "trackRoot"
         if trackRoot.parent !== root {
             root.addChild(trackRoot)
         }
+        rebuildFixedTrack(force: true)
+        buildStartMarker()
+    }
 
-        trackSegments.removeAll()
+    /// One static floor slab from the stand line to the portal — never scrolls.
+    private func rebuildFixedTrack(force: Bool = false) {
+        if !force, abs(portalZ - lastBuiltPortalZ) < 0.05, !trackRoot.children.isEmpty {
+            return
+        }
+        lastBuiltPortalZ = portalZ
+
         for child in trackRoot.children {
             child.removeFromParent()
         }
 
-        for index in 0..<GameWorld.trackSegmentCount {
-            let segment = makeTrackSegment()
-            segment.position = SIMD3(
-                0,
-                0,
-                GameWorld.trackFirstCenterZ - Float(index) * GameWorld.trackSegmentLength
-            )
-            trackRoot.addChild(segment)
-            trackSegments.append(segment)
-        }
+        let farZ = portalZ - GameWorld.trackPastPortal
+        let nearZ = GameWorld.trackNearZ
+        let depth = max(1.0, nearZ - farZ)
+        let centerZ = (nearZ + farZ) * 0.5
 
-        buildStartMarker()
-    }
-
-    private func makeTrackSegment() -> Entity {
-        let segment = Entity()
-        segment.name = "trackSegment"
-
-        // Slight overlap avoids hairline gaps between recycled tiles.
-        let depth = GameWorld.trackSegmentLength + 0.02
         let floorMesh = MeshResource.generateBox(
             width: GameWorld.trackWidth,
             height: 0.02,
             depth: depth
         )
         let floorMaterial = SimpleMaterial(
-            color: UIColor(red: 0.45, green: 0.28, blue: 0.12, alpha: 1),
+            color: UIColor(red: 0.12, green: 0.1, blue: 0.16, alpha: 1),
             roughness: 0.85,
             isMetallic: false
         )
         let floor = ModelEntity(mesh: floorMesh, materials: [floorMaterial])
         floor.name = "floor"
-        segment.addChild(floor)
+        floor.position = SIMD3(0, 0, centerZ)
+        trackRoot.addChild(floor)
 
-        let stripeMaterial = SimpleMaterial(
-            color: UIColor(red: 1.0, green: 0.72, blue: 0.25, alpha: 0.9),
-            roughness: 0.7,
-            isMetallic: false
+        let stripeMaterial = UnlitMaterial(
+            color: UIColor(red: 0.35, green: 0.95, blue: 1.0, alpha: 0.85)
         )
         for lane in Lane.allCases {
-            let stripeMesh = MeshResource.generateBox(width: 0.08, height: 0.025, depth: depth)
+            let stripeMesh = MeshResource.generateBox(width: 0.07, height: 0.025, depth: depth)
             let stripe = ModelEntity(mesh: stripeMesh, materials: [stripeMaterial])
-            stripe.position = SIMD3(lane.x, 0.02, 0)
-            segment.addChild(stripe)
+            stripe.position = SIMD3(lane.x, 0.02, centerZ)
+            trackRoot.addChild(stripe)
+        }
+    }
+
+    /// Always-on Synth Riders-style aperture at the end of the track.
+    private func buildPortal() {
+        portalRoot.name = "portalRoot"
+        portalEntity.name = "portal"
+        portalWorld.name = "portalWorld"
+        portalWorld.components.set(WorldComponent())
+
+        let portalMesh = MeshResource.generatePlane(
+            width: GameWorld.portalWidth,
+            height: GameWorld.portalHeight,
+            cornerRadius: GameWorld.portalCornerRadius
+        )
+        // Plane faces +Z (toward the player looking down −Z).
+        portalEntity.components.set(
+            ModelComponent(mesh: portalMesh, materials: [PortalMaterial()])
+        )
+        portalEntity.components.set(PortalComponent(target: portalWorld))
+
+        buildPortalRim()
+        buildPortalInterior()
+
+        if portalEntity.parent !== portalRoot {
+            portalRoot.addChild(portalEntity)
+        }
+        // World must live in the scene graph; keep it under portalRoot so it moves with the aperture.
+        if portalWorld.parent !== portalRoot {
+            portalRoot.addChild(portalWorld)
+        }
+        if portalRoot.parent !== root {
+            root.addChild(portalRoot)
         }
 
-        return segment
+        // Also register the world at the RealityView root level via portalRoot parenting.
+        layoutPortal()
+    }
+
+    private func buildPortalRim() {
+        if let existing = portalRoot.children.first(where: { $0.name == "portalRim" }) {
+            existing.removeFromParent()
+        }
+
+        let rim = Entity()
+        rim.name = "portalRim"
+        let t = GameWorld.portalRimThickness
+
+        // One rounded neon halo behind the aperture — reads as a clean glowing border.
+        let haloMesh = MeshResource.generatePlane(
+            width: GameWorld.portalWidth + t * 2,
+            height: GameWorld.portalHeight + t * 2,
+            cornerRadius: GameWorld.portalCornerRadius + t * 0.4
+        )
+        let halo = ModelEntity(
+            mesh: haloMesh,
+            materials: [UnlitMaterial(color: UIColor(red: 0.35, green: 0.95, blue: 1.0, alpha: 1))]
+        )
+        // Sit just behind the portal plane so only the border peeks out.
+        halo.position = SIMD3(0, 0, -0.015)
+        rim.addChild(halo)
+
+        portalRoot.addChild(rim)
+    }
+
+    /// Dark tunnel visible only through the portal — blocks passthrough cleanly.
+    private func buildPortalInterior() {
+        for child in portalWorld.children {
+            child.removeFromParent()
+        }
+
+        let interior = Entity()
+        interior.name = "portalInterior"
+        interior.position = SIMD3(0, 0, -0.05)
+
+        let voidColor = UIColor(red: 0.03, green: 0.04, blue: 0.08, alpha: 1)
+        let voidMat = UnlitMaterial(color: voidColor)
+        let railMat = UnlitMaterial(color: UIColor(red: 0.25, green: 0.9, blue: 1.0, alpha: 1))
+        let accentMat = UnlitMaterial(color: UIColor(red: 0.15, green: 0.55, blue: 0.75, alpha: 1))
+
+        let tunnelW: Float = 4.4
+        let tunnelH = GameWorld.portalHeight + 0.4
+        let tunnelDepth: Float = 10
+
+        // Closed box so the aperture is a solid window into another space.
+        let floor = ModelEntity(
+            mesh: MeshResource.generateBox(width: tunnelW, height: 0.06, depth: tunnelDepth),
+            materials: [voidMat]
+        )
+        floor.position = SIMD3(0, -tunnelH * 0.5, -tunnelDepth * 0.5)
+        interior.addChild(floor)
+
+        let ceiling = ModelEntity(
+            mesh: MeshResource.generateBox(width: tunnelW, height: 0.06, depth: tunnelDepth),
+            materials: [voidMat]
+        )
+        ceiling.position = SIMD3(0, tunnelH * 0.5, -tunnelDepth * 0.5)
+        interior.addChild(ceiling)
+
+        for sign: Float in [-1, 1] {
+            let wall = ModelEntity(
+                mesh: MeshResource.generateBox(width: 0.06, height: tunnelH, depth: tunnelDepth),
+                materials: [voidMat]
+            )
+            wall.position = SIMD3(sign * tunnelW * 0.5, 0, -tunnelDepth * 0.5)
+            interior.addChild(wall)
+        }
+
+        let back = ModelEntity(
+            mesh: MeshResource.generateBox(width: tunnelW, height: tunnelH, depth: 0.08),
+            materials: [voidMat]
+        )
+        back.position = SIMD3(0, 0, -tunnelDepth)
+        interior.addChild(back)
+
+        // Quiet depth cues — thin floor rails + a soft far glow (no stacked frames).
+        for sign: Float in [-1, 1] {
+            let rail = ModelEntity(
+                mesh: MeshResource.generateBox(width: 0.05, height: 0.05, depth: tunnelDepth - 0.5),
+                materials: [railMat]
+            )
+            rail.position = SIMD3(sign * 1.35, -tunnelH * 0.5 + 0.08, -tunnelDepth * 0.5)
+            interior.addChild(rail)
+        }
+
+        let farGlow = ModelEntity(
+            mesh: MeshResource.generateSphere(radius: 0.45),
+            materials: [accentMat]
+        )
+        farGlow.position = SIMD3(0, -0.15, -tunnelDepth + 1.2)
+        interior.addChild(farGlow)
+
+        portalWorld.addChild(interior)
+    }
+
+    private func layoutPortal() {
+        // Center the aperture at standing height, flush with the portal depth.
+        portalRoot.position = SIMD3(0, GameWorld.portalHeight * 0.5, portalZ)
+        activeSpawnZ = portalZ + GameWorld.spawnInFrontOfPortal
     }
 
     /// Minimal stand line at the player's start — easy to find, quiet otherwise.
@@ -295,21 +461,23 @@ final class GameWorld {
 
     private func beginRun(runID: Int) {
         activeRunID = runID
-        // Final snap to feet / facing / real floor, then freeze world pose for the run.
+        // Final snap toward wall (if any) / feet / facing, then freeze pose for the run.
         snapPlayfieldToPlayer()
+        updatePortalAndTrack()
         isPlayfieldLocked = true
         clearDynamicContent()
-        resetTrackLayout()
+        rebuildFixedTrack(force: true)
+        layoutPortal()
         speed = GameWorld.baseSpeed
-        distanceUntilSpawn = 1.0
+        distanceUntilSpawn = 0
         distanceAccumulator = 0
-        patternIndex = 0
         GameSFX.shared.prepare()
     }
 
     // MARK: - Playfield pose
 
-    /// Places the playfield on the real floor under the player, facing their look direction.
+    /// Places the playfield on the real floor. Faces a nearby wall when one is found;
+    /// otherwise faces the player's look direction. Portal stays at the track end either way.
     private func snapPlayfieldToPlayer() {
         let headWorld = headAnchor.position(relativeTo: nil)
         let headRotation = headAnchor.orientation(relativeTo: nil)
@@ -321,29 +489,63 @@ final class GameWorld {
             floorY = headWorld.y - GameWorld.fallbackEyeHeight
         }
 
-        // Flatten head forward onto the floor plane (track runs along local −Z).
-        let forwardWorld = headRotation.act(SIMD3<Float>(0, 0, -1))
-        var flatForward = SIMD3<Float>(forwardWorld.x, 0, forwardWorld.z)
-        let forwardLength = length(flatForward)
-        if forwardLength < 0.05 {
-            flatForward = SIMD3(0, 0, -1)
+        let position = SIMD3<Float>(headWorld.x, floorY, headWorld.z)
+        let flatForward: SIMD3<Float>
+
+        if let towardWall = suitableWallForward(from: position) {
+            flatForward = towardWall
         } else {
-            flatForward /= forwardLength
+            let forwardWorld = headRotation.act(SIMD3<Float>(0, 0, -1))
+            var flattened = SIMD3<Float>(forwardWorld.x, 0, forwardWorld.z)
+            let forwardLength = length(flattened)
+            if forwardLength < 0.05 {
+                flattened = SIMD3(0, 0, -1)
+            } else {
+                flattened /= forwardLength
+            }
+            flatForward = flattened
         }
 
         let yaw = atan2(-flatForward.x, -flatForward.z)
-        let position = SIMD3<Float>(headWorld.x, floorY, headWorld.z)
         root.setPosition(position, relativeTo: nil)
         root.setOrientation(simd_quatf(angle: yaw, axis: SIMD3(0, 1, 0)), relativeTo: nil)
     }
 
-    private func resetTrackLayout() {
-        for (index, segment) in trackSegments.enumerated() {
-            segment.position = SIMD3(
-                0,
-                0,
-                GameWorld.trackFirstCenterZ - Float(index) * GameWorld.trackSegmentLength
-            )
+    /// Horizontal unit vector from the player toward a wall in the accepted distance band.
+    private func suitableWallForward(from playerPosition: SIMD3<Float>) -> SIMD3<Float>? {
+        guard wallAnchor.isAnchored else { return nil }
+
+        let wallWorld = wallAnchor.position(relativeTo: nil)
+        var toWall = SIMD3<Float>(
+            wallWorld.x - playerPosition.x,
+            0,
+            wallWorld.z - playerPosition.z
+        )
+        let distance = length(toWall)
+        guard distance >= GameWorld.portalMinDistance,
+              distance <= GameWorld.portalMaxDistance
+        else { return nil }
+
+        toWall /= distance
+        return toWall
+    }
+
+    /// Portal is always shown. Snap it onto a wall when one is in range; otherwise use default depth.
+    private func updatePortalAndTrack() {
+        let playerPosition = root.position(relativeTo: nil)
+
+        if wallAnchor.isAnchored,
+           suitableWallForward(from: playerPosition) != nil {
+            let wallInRoot = root.convert(position: wallAnchor.position(relativeTo: nil), from: nil)
+            // Sit the aperture on / just in front of the real wall.
+            portalZ = min(-GameWorld.portalMinDistance, wallInRoot.z + 0.05)
+        } else {
+            portalZ = GameWorld.defaultPortalZ
+        }
+
+        layoutPortal()
+        if !isPlayfieldLocked {
+            rebuildFixedTrack()
         }
     }
 
@@ -424,10 +626,11 @@ final class GameWorld {
     // MARK: - Loop
 
     private func tick(deltaTime: Float) {
-        // Before Start, keep the stand line under the player. After Start, pose is frozen
-        // so walking forward/back does not drag the track.
+        // Before Start, keep the stand line under the player and refresh portal depth.
+        // After Start, pose / portal / track are frozen — only obstacles move.
         if !isPlayfieldLocked {
             snapPlayfieldToPlayer()
+            updatePortalAndTrack()
         }
 
         guard let gameModel, gameModel.isPlaying, !gameModel.isGameOver else { return }
@@ -445,7 +648,6 @@ final class GameWorld {
         }
 
         advanceEntities(by: travel)
-        advanceTrack(by: travel)
         distanceUntilSpawn -= travel
         if distanceUntilSpawn <= 0 {
             spawnNextPattern()
@@ -465,44 +667,35 @@ final class GameWorld {
         }
     }
 
-    private func advanceTrack(by travel: Float) {
-        for segment in trackSegments {
-            segment.position.z += travel
-        }
-
-        // Recycle any tiles that have slid behind the player to the far horizon.
-        while let segment = trackSegments.first(where: { $0.position.z > GameWorld.trackRecycleZ }) {
-            let farthestZ = trackSegments.map(\.position.z).min() ?? segment.position.z
-            segment.position.z = farthestZ - GameWorld.trackSegmentLength
-        }
-    }
-
     // MARK: - Spawning
 
     private func spawnNextPattern() {
-        // Simple repeating warm-up patterns for the first base environment.
-        switch patternIndex % 6 {
-        case 0:
-            spawnWall(blocking: [.left])
-        case 1:
-            spawnCoin(in: .right)
-        case 2:
-            spawnWall(blocking: [.right])
-        case 3:
-            spawnCoin(in: .left)
-        case 4:
-            spawnWall(blocking: [.center])
-            spawnCoin(in: .left)
-        default:
-            spawnWall(blocking: [.left, .right])
-            spawnCoin(in: .center)
+        // Always spawn a wall so there are no empty obstacle gaps.
+        let blocking = Self.randomWallLanes()
+        spawnWall(blocking: blocking)
+
+        // Often place a coin in a safe lane for reach variety.
+        let safeLanes = Lane.allCases.filter { !blocking.contains($0) }
+        if let coinLane = safeLanes.randomElement(), Float.random(in: 0...1) < 0.7 {
+            spawnCoin(in: coinLane)
         }
-        patternIndex += 1
+    }
+
+    /// Random 1–2 lane blocks (never all three — always a dodge path).
+    private static func randomWallLanes() -> Set<Lane> {
+        let patterns: [Set<Lane>] = [
+            [.left], [.center], [.right],
+            [.left], [.center], [.right],
+            [.left], [.right],
+            [.left, .center], [.center, .right], [.left, .right],
+            [.left, .right], [.left, .center], [.center, .right]
+        ]
+        return patterns.randomElement() ?? [.center]
     }
 
     private func spawnWall(blocking lanes: Set<Lane>) {
         let parent = Entity()
-        parent.position = SIMD3(0, GameWorld.wallHeight * 0.5, GameWorld.spawnZ)
+        parent.position = SIMD3(0, GameWorld.wallHeight * 0.5, activeSpawnZ)
         parent.name = "wall"
 
         var slabXs: [Float] = []
@@ -549,7 +742,7 @@ final class GameWorld {
         let coin = ModelEntity(mesh: mesh, materials: [material])
         // Mild outward offset — still a reach, but easier to snag mid-dodge.
         let outward: Float = lane == .center ? 0 : (lane.x > 0 ? GameWorld.coinOutwardOffset : -GameWorld.coinOutwardOffset)
-        coin.position = SIMD3(lane.x + outward, GameWorld.coinHeight, GameWorld.spawnZ)
+        coin.position = SIMD3(lane.x + outward, GameWorld.coinHeight, activeSpawnZ)
         coin.name = "coin"
         root.addChild(coin)
         coins.append(CoinItem(entity: coin))
