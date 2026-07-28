@@ -19,7 +19,7 @@ enum EnvironmentMaterials {
     }
 
     static func simple(_ tint: TintColor, metallic: Bool = false, roughness: Float = 0.5) -> SimpleMaterial {
-        SimpleMaterial(color: uiColor(tint), roughness: roughness, isMetallic: metallic)
+        SimpleMaterial(color: uiColor(tint), roughness: MaterialScalarParameter(floatLiteral: roughness), isMetallic: metallic)
     }
 
     /// Translucent wall body. Opacity/tint come from the active biome palette
