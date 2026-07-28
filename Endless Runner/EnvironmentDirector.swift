@@ -3,7 +3,7 @@
 //  Endless Runner
 //
 //  Owns biome timing, random/forced selection, and palette blending.
-//  Music hooks fire here; GameMusic can later swap in real tracks.
+//  Biome dwell time follows each track's length via GameMusic.
 //
 
 import Foundation
@@ -23,6 +23,8 @@ final class EnvironmentDirector {
     private(set) var currentID: EnvironmentID = .emberRun
     private(set) var displayedPalette: EnvironmentPalette
     private(set) var targetPalette: EnvironmentPalette
+    /// Seconds to stay in the current biome (matches active track length).
+    private(set) var currentSwitchInterval: Float = EnvironmentCatalog.fallbackSwitchInterval
 
     private var elapsedInEnvironment: Float = 0
     private var blendElapsed: Float = EnvironmentCatalog.ambienceLerpSeconds
@@ -72,6 +74,9 @@ final class EnvironmentDirector {
         case .force(let id):
             if id != currentID {
                 enter(id, telegraph: true, announceMusic: true)
+            } else {
+                // Same biome — restart/loop music for the forced lock.
+                _ = playMusic(for: id)
             }
         }
     }
@@ -91,7 +96,7 @@ final class EnvironmentDirector {
                 enter(forced, telegraph: true, announceMusic: true)
                 didEnter = true
             }
-        } else if elapsedInEnvironment >= EnvironmentCatalog.switchInterval {
+        } else if elapsedInEnvironment >= currentSwitchInterval {
             let next = Self.randomNext(excluding: currentID)
             previous = currentID
             enter(next, telegraph: true, announceMusic: true)
@@ -130,6 +135,16 @@ final class EnvironmentDirector {
         return randomNext(excluding: current, rng: &rng)
     }
 
+    /// Biome dwell time for a cue: full track length, minus the crossfade so the
+    /// next biome starts as the current song is fading out.
+    static func switchInterval(forTrackDuration trackDuration: Float, crossfade: Float) -> Float {
+        let usable = trackDuration - crossfade
+        return min(
+            EnvironmentCatalog.maxSwitchInterval,
+            max(EnvironmentCatalog.minSwitchInterval, usable)
+        )
+    }
+
     private func enter(_ id: EnvironmentID, telegraph: Bool, announceMusic: Bool) {
         currentID = id
         elapsedInEnvironment = 0
@@ -139,11 +154,29 @@ final class EnvironmentDirector {
         blendElapsed = 0
         telegraphRemaining = telegraph ? EnvironmentCatalog.telegraphSeconds : 0
         if announceMusic {
-            GameMusic.shared.crossfade(
-                to: id.musicCue,
-                duration: EnvironmentCatalog.ambienceLerpSeconds
+            let trackDuration = playMusic(for: id)
+            currentSwitchInterval = Self.switchInterval(
+                forTrackDuration: trackDuration,
+                crossfade: EnvironmentCatalog.ambienceLerpSeconds
             )
+        } else {
+            currentSwitchInterval = EnvironmentCatalog.fallbackSwitchInterval
         }
+    }
+
+    @discardableResult
+    private func playMusic(for id: EnvironmentID) -> Float {
+        let loop: Bool
+        if case .force = debugMode {
+            loop = true
+        } else {
+            loop = false
+        }
+        return GameMusic.shared.crossfade(
+            to: id.musicCue,
+            duration: EnvironmentCatalog.ambienceLerpSeconds,
+            loop: loop
+        )
     }
 
     private func blendPalette(from: EnvironmentPalette, to: EnvironmentPalette, t: Float) -> EnvironmentPalette {

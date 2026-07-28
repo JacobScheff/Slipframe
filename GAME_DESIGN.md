@@ -202,8 +202,9 @@ The six biomes in the random pool:
 
 #### Switch rules
 
-- Timer: ~45s per environment, then pick another at random.
-- On switch: crossfade music, lerp ambience/fog/tint, keep player score/speed continuity (don’t reset the run).
+- Timer: each environment lasts for **its own music track length** (about ~45s; a few seconds of variance is fine). Missing tracks fall back to 45s.
+- On switch: crossfade music (~1.25s), lerp ambience/fog/tint, keep player score/speed continuity (don’t reset the run).
 - Telegraph briefly (e.g. 1s color wash or audio sting) so the change doesn’t feel like a glitch.
 - Spawn rules for the new twist apply to newly spawned obstacles; don’t unfairly rewrite what’s already on top of the player.
 - Drop any held Crystal Cave halves on environment exit (they vanish; no carry into the next biome).
+- Audio files live in `Endless Runner/Music/` named by biome cue (`emberRun.m4a`, `fogHollow.m4a`, …).

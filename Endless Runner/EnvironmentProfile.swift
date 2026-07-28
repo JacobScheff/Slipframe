@@ -30,7 +30,8 @@ enum EnvironmentID: String, CaseIterable, Identifiable, Codable {
         }
     }
 
-    /// Stable music cue key — swap in real tracks later via GameMusic.
+    /// Filename stem for the biome track in `Endless Runner/Music/`
+    /// (e.g. `emberRun.m4a`). See Music/README.md.
     var musicCue: String { rawValue }
 }
 
@@ -97,7 +98,11 @@ struct EnvironmentProfile: Equatable {
 }
 
 enum EnvironmentCatalog {
-    static let switchInterval: Float = 45
+    /// Used when a biome track is missing or has an unreadable duration.
+    static let fallbackSwitchInterval: Float = 45
+    /// Clamp so a too-short / too-long file cannot break pacing.
+    static let minSwitchInterval: Float = 20
+    static let maxSwitchInterval: Float = 120
     static let ambienceLerpSeconds: Float = 1.25
     static let telegraphSeconds: Float = 1.0
 

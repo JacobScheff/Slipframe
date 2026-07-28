@@ -26,6 +26,7 @@
 		B01A10172C72000100A00017 /* CrystalCombine.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A10162C72000100A00016 /* CrystalCombine.swift */; };
 		B01A10192C72000100A00019 /* HandPose.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A10182C72000100A00018 /* HandPose.swift */; };
 		B01A101B2C72000100A0001B /* EnvironmentMaterials.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A101A2C72000100A0001A /* EnvironmentMaterials.swift */; };
+		B01A10212C72000100A00021 /* Music in Resources */ = {isa = PBXBuildFile; fileRef = B01A10202C72000100A00020 /* Music */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -61,6 +62,7 @@
 		B01A10162C72000100A00016 /* CrystalCombine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrystalCombine.swift; sourceTree = "<group>"; };
 		B01A10182C72000100A00018 /* HandPose.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HandPose.swift; sourceTree = "<group>"; };
 		B01A101A2C72000100A0001A /* EnvironmentMaterials.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentMaterials.swift; sourceTree = "<group>"; };
+		B01A10202C72000100A00020 /* Music */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Music; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -120,6 +122,7 @@
 				B01A101A2C72000100A0001A /* EnvironmentMaterials.swift */,
 				B01A10062C72000100A00007 /* PlayHUDView.swift */,
 				B01A10082C72000100A00009 /* GameSFX.swift */,
+				B01A10202C72000100A00020 /* Music */,
 				3A9B452E2C503B7D0080BBBE /* Assets.xcassets */,
 				3A9B45332C503B7D0080BBBE /* Info.plist */,
 				3A9B45302C503B7D0080BBBE /* Preview Content */,
@@ -245,6 +248,7 @@
 			files = (
 				3A9B45322C503B7D0080BBBE /* Preview Assets.xcassets in Resources */,
 				3A9B452F2C503B7D0080BBBE /* Assets.xcassets in Resources */,
+				B01A10212C72000100A00021 /* Music in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

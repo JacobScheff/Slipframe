@@ -235,10 +235,22 @@ final class Endless_RunnerTests: XCTestCase {
 
         // Even after many switch intervals, forced biome should stick.
         for _ in 0..<5 {
-            let frame = director.update(deltaTime: EnvironmentCatalog.switchInterval + 1)
+            let frame = director.update(deltaTime: director.currentSwitchInterval + 1)
             XCTAssertEqual(frame.currentID, .fogHollow)
             XCTAssertFalse(frame.didEnterEnvironment)
         }
+    }
+
+    func testSwitchIntervalFollowsTrackDurationMinusCrossfade() {
+        let interval = EnvironmentDirector.switchInterval(forTrackDuration: 47, crossfade: 1.25)
+        XCTAssertEqual(interval, 45.75, accuracy: 0.001)
+    }
+
+    func testSwitchIntervalClampsShortAndLongTracks() {
+        let short = EnvironmentDirector.switchInterval(forTrackDuration: 5, crossfade: 1.25)
+        let long = EnvironmentDirector.switchInterval(forTrackDuration: 400, crossfade: 1.25)
+        XCTAssertEqual(short, EnvironmentCatalog.minSwitchInterval)
+        XCTAssertEqual(long, EnvironmentCatalog.maxSwitchInterval)
     }
 
     func testEnvironmentDirectorRandomNextAvoidsCurrent() {
@@ -279,13 +291,30 @@ final class Endless_RunnerTests: XCTestCase {
         XCTAssertFalse(director.isTeachingLowCrawl)
     }
 
-    func testGameMusicCrossfadeRecordsCue() {
+    func testGameMusicCrossfadeRecordsCueAndFallbackDuration() {
         let music = GameMusic.shared
         music.prepare()
-        music.crossfade(to: EnvironmentID.stormPass.musicCue, duration: 1.25)
+        let duration = music.crossfade(
+            to: EnvironmentID.stormPass.musicCue,
+            duration: 1.25,
+            loop: false
+        )
         XCTAssertEqual(music.currentCue, "stormPass")
+        // No bundled track in test host → fallback duration.
+        XCTAssertEqual(duration, GameMusic.fallbackTrackDuration)
+        XCTAssertEqual(music.trackDuration(for: "stormPass"), GameMusic.fallbackTrackDuration)
         music.stop()
         XCTAssertNil(music.currentCue)
+    }
+
+    func testEnvironmentDirectorUsesMusicDurationForSwitchInterval() {
+        let director = EnvironmentDirector()
+        director.beginRun(debugMode: .normal)
+        let expected = EnvironmentDirector.switchInterval(
+            forTrackDuration: GameMusic.fallbackTrackDuration,
+            crossfade: EnvironmentCatalog.ambienceLerpSeconds
+        )
+        XCTAssertEqual(director.currentSwitchInterval, expected, accuracy: 0.001)
     }
 }
 
