@@ -1335,43 +1335,22 @@ final class GameWorld {
             depth: GameWorld.wallThickness
         )
 
-        let opacity: Float
-        let emissiveIntensity: Float
+        let material: PhysicallyBasedMaterial
         switch kind {
         case .ghost:
-            opacity = profile.ghostWallOpacity
-            emissiveIntensity = max(0.15, profile.palette.wallEmissiveIntensity * 0.35)
+            // No Unlit rim — UnlitMaterial ignores alpha and was painting a solid white shell.
+            material = EnvironmentMaterials.ghostWallBody(opacity: profile.ghostWallOpacity)
         case .standard, .duck:
-            opacity = profile.palette.wallOpacity
-            emissiveIntensity = profile.palette.wallEmissiveIntensity
-        }
-
-        let body = ModelEntity(
-            mesh: bodyMesh,
-            materials: [
-                EnvironmentMaterials.wallBody(
-                    tint: profile.palette.wallTint,
-                    emissive: profile.palette.wallEmissive,
-                    opacity: opacity,
-                    emissiveIntensity: emissiveIntensity
-                )
-            ]
-        )
-        body.name = "wallSlab"
-
-        if kind == .ghost {
-            // Soft white glass rim so transparent walls still read a little.
-            let edgeMesh = MeshResource.generateBox(
-                width: GameWorld.wallWidth + 0.03,
-                height: GameWorld.wallHeight + 0.03,
-                depth: GameWorld.wallThickness + 0.03
+            material = EnvironmentMaterials.wallBody(
+                tint: profile.palette.wallTint,
+                emissive: profile.palette.wallEmissive,
+                opacity: profile.palette.wallOpacity,
+                emissiveIntensity: profile.palette.wallEmissiveIntensity
             )
-            let edgeTint = TintColor(r: 1.0, g: 1.0, b: 1.0, a: 0.1)
-            let edge = ModelEntity(mesh: edgeMesh, materials: [EnvironmentMaterials.unlit(edgeTint)])
-            edge.name = "ghostEdge"
-            body.addChild(edge)
         }
 
+        let body = ModelEntity(mesh: bodyMesh, materials: [material])
+        body.name = "wallSlab"
         return body
     }
 
