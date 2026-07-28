@@ -139,24 +139,25 @@ enum EnvironmentCatalog {
                 id: .fogHollow,
                 twist: .fogVisibility,
                 palette: EnvironmentPalette(
-                    floor: TintColor(r: 0.05, g: 0.055, b: 0.07, a: 1),
-                    laneStripe: TintColor(r: 0.45, g: 0.5, b: 0.55, a: 0.55),
-                    portalRim: TintColor(r: 0.35, g: 0.4, b: 0.45, a: 1),
-                    portalVoid: TintColor(r: 0.015, g: 0.018, b: 0.025, a: 1),
-                    portalRail: TintColor(r: 0.3, g: 0.35, b: 0.4, a: 1),
-                    portalAccent: TintColor(r: 0.2, g: 0.22, b: 0.28, a: 1),
-                    ambienceBrightness: 0.45,
+                    // Darker corridor so mist reads as gloom, not hard slabs.
+                    floor: TintColor(r: 0.02, g: 0.022, b: 0.03, a: 1),
+                    laneStripe: TintColor(r: 0.22, g: 0.26, b: 0.3, a: 0.35),
+                    portalRim: TintColor(r: 0.18, g: 0.22, b: 0.26, a: 1),
+                    portalVoid: TintColor(r: 0.008, g: 0.01, b: 0.014, a: 1),
+                    portalRail: TintColor(r: 0.16, g: 0.2, b: 0.24, a: 1),
+                    portalAccent: TintColor(r: 0.1, g: 0.12, b: 0.16, a: 1),
+                    ambienceBrightness: 0.28,
                     // Only Fog Hollow uses volumetric mist.
-                    fogDensity: 0.9,
-                    fogColor: TintColor(r: 0.72, g: 0.76, b: 0.82, a: 0.1),
-                    wallTint: TintColor(r: 0.55, g: 0.16, b: 0.14, a: 0.18),
-                    wallEmissive: TintColor(r: 0.55, g: 0.14, b: 0.12, a: 1),
-                    wallOpacity: 0.18,
-                    wallEmissiveIntensity: 0.25,
+                    fogDensity: 1.0,
+                    fogColor: TintColor(r: 0.55, g: 0.6, b: 0.66, a: 0.12),
+                    wallTint: TintColor(r: 0.45, g: 0.14, b: 0.12, a: 0.16),
+                    wallEmissive: TintColor(r: 0.4, g: 0.12, b: 0.1, a: 1),
+                    wallOpacity: 0.16,
+                    wallEmissiveIntensity: 0.18,
                     coinTint: TintColor(r: 1.0, g: 0.86, b: 0.35, a: 1)
                 ),
                 ghostWallChance: 0,
-                ghostWallOpacity: 0.18,
+                ghostWallOpacity: 0.16,
                 lowCrawlTeachCount: 0,
                 duckHazardChance: 0
             )
@@ -182,8 +183,9 @@ enum EnvironmentCatalog {
                     wallEmissiveIntensity: 0.5,
                     coinTint: TintColor(r: 0.85, g: 0.95, b: 1.0, a: 1)
                 ),
-                ghostWallChance: 0.45,
-                ghostWallOpacity: 0.1,
+                ghostWallChance: 0.5,
+                // Nearly invisible — faint edge shimmer is the main tell.
+                ghostWallOpacity: 0.035,
                 lowCrawlTeachCount: 0,
                 duckHazardChance: 0
             )

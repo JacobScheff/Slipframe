@@ -625,41 +625,43 @@ final class GameWorld {
         rebuildFogVolumes(density: palette.fogDensity, color: palette.fogColor)
     }
 
-    /// Soft mist for Fog Hollow only. Kept mid-track → portal so the stand line stays clear.
+    /// Soft mist for Fog Hollow only. Many deep overlapping layers so density ramps
+    /// smoothly (no hard “fog walls”), while the stand line stays relatively clear.
     private func rebuildFogVolumes(density: Float, color: TintColor) {
         for child in fogRoot.children {
             child.removeFromParent()
         }
         guard density > 0.02 else { return }
 
-        // Keep the first ~2.5 m of play space open; haze builds toward the portal.
-        let clearUntilZ: Float = -2.5
-        let endZ = min(portalZ + 0.4, -3.0)
-        guard endZ < clearUntilZ - 0.5 else { return }
+        // Start haze a bit closer, but keep layer alpha very low near the player.
+        let clearUntilZ: Float = -1.8
+        let endZ = min(portalZ + 0.2, -2.4)
+        guard endZ < clearUntilZ - 0.75 else { return }
 
-        let layerCount = max(3, Int(ceil(Double(density * 6))))
+        // Depth >> spacing ⇒ layers blend into a continuous gradient.
+        let layerCount = max(14, Int(ceil(Double(density * 18))))
+        let span = clearUntilZ - endZ
+        let spacing = span / Float(max(1, layerCount - 1))
+        let layerDepth = max(1.1, spacing * 3.2)
+
         for index in 0..<layerCount {
             let t = Float(index) / Float(max(1, layerCount - 1))
-            let z = clearUntilZ + (endZ - clearUntilZ) * t
-            // Farther layers are denser; near layers stay wispy.
-            let alpha = min(0.14, 0.03 + density * 0.08 * (0.35 + 0.65 * t))
-            let mist = TintColor(
-                r: color.r,
-                g: color.g,
-                b: color.b,
-                a: alpha
-            )
-            // Thin depth slabs read as volume haze better than flat face-on cards.
-            let width: Float = 3.4 + t * 0.4
-            let height: Float = 2.1 + t * 0.3
-            let depth: Float = 0.55
-            let mesh = MeshResource.generateBox(width: width, height: height, depth: depth)
+            // Smoothstep: slow start near the player, heavier toward the portal.
+            let ramp = t * t * (3 - 2 * t)
+            let z = clearUntilZ - span * t
+            let alpha = (0.018 + 0.055 * density * ramp)
+            let mist = TintColor(r: color.r, g: color.g, b: color.b, a: alpha)
+
+            let width: Float = 3.6 + ramp * 0.35
+            let height: Float = 2.35 + ramp * 0.25
+            let mesh = MeshResource.generateBox(width: width, height: height, depth: layerDepth)
             let volume = ModelEntity(
                 mesh: mesh,
                 materials: [EnvironmentMaterials.fogVolume(mist)]
             )
             volume.name = "fogVolume"
-            volume.position = SIMD3(0, 1.15, z)
+            // Slight vertical drift breaks stacked-edge banding.
+            volume.position = SIMD3(0, 1.2 + sin(t * 6.2) * 0.04, z)
             fogRoot.addChild(volume)
         }
     }
@@ -1216,17 +1218,17 @@ final class GameWorld {
         body.name = "wallSlab"
 
         if kind == .ghost {
-            // Faint edge shimmer so skilled players can still learn to spot ghosts.
+            // Very faint edge shimmer — body is nearly invisible, this is the main tell.
             let edgeMesh = MeshResource.generateBox(
-                width: GameWorld.wallWidth + 0.04,
-                height: GameWorld.wallHeight + 0.04,
-                depth: GameWorld.wallThickness + 0.04
+                width: GameWorld.wallWidth + 0.03,
+                height: GameWorld.wallHeight + 0.03,
+                depth: GameWorld.wallThickness + 0.03
             )
             let edgeTint = TintColor(
                 r: profile.palette.wallEmissive.r,
                 g: profile.palette.wallEmissive.g,
                 b: profile.palette.wallEmissive.b,
-                a: 0.12
+                a: 0.07
             )
             let edge = ModelEntity(mesh: edgeMesh, materials: [EnvironmentMaterials.unlit(edgeTint)])
             edge.name = "ghostEdge"
