@@ -133,7 +133,7 @@ final class GameWorld {
     private static let duckSlabWidth: Float = 2.5
     /// Duck gates use a deeper kill volume so fast approach cannot skip the head.
     private static let duckHitHalfDepth: Float = 0.4
-    /// Low Crawl coins sit under the hanging ceiling, but high enough to grab comfortably.
+    /// Coins paired with a duck ceiling sit under it; other Low Crawl coins stay normal height.
     private static let lowCrawlCoinHeight: Float = duckClearanceY * 0.65
 
     // Synth Riders-style portal aperture (always visible at the track end).
@@ -1211,9 +1211,9 @@ final class GameWorld {
         if environmentDirector.isTeachingLowCrawl {
             spawnDuckWall()
             environmentDirector.noteDuckGateSpawned()
-            // Low coins stay under the hanging ceiling so ducking still rewards grabs.
+            // Coin under the hanging ceiling — lowered so ducking still rewards grabs.
             if Float.random(in: 0...1) < 0.7, let lane = Lane.allCases.randomElement() {
-                spawnCoin(in: lane)
+                spawnCoin(in: lane, underCeiling: true)
             }
             return
         }
@@ -1229,9 +1229,10 @@ final class GameWorld {
             spawnDuckWall()
             let coinLanes = Lane.allCases.filter { !blocked.contains($0) }
             if Float.random(in: 0...1) < 0.7, let lane = coinLanes.randomElement() {
-                spawnCoin(in: lane)
+                spawnCoin(in: lane, underCeiling: true)
             }
         } else {
+            // No ceiling on this beat — normal standing coin height.
             spawnStandardPattern(preferFairFog: false)
         }
     }
@@ -1354,14 +1355,12 @@ final class GameWorld {
         return body
     }
 
-    private func spawnCoin(in lane: Lane) {
+    private func spawnCoin(in lane: Lane, underCeiling: Bool = false) {
         let mesh = MeshResource.generateSphere(radius: GameWorld.coinRadius)
         let material = EnvironmentMaterials.coin(activeSpawnProfile.palette.coinTint)
         let coin = ModelEntity(mesh: mesh, materials: [material])
         let outward: Float = lane == .center ? 0 : (lane.x > 0 ? GameWorld.coinOutwardOffset : -GameWorld.coinOutwardOffset)
-        let height = activeSpawnProfile.twist == .lowCrawl
-            ? GameWorld.lowCrawlCoinHeight
-            : GameWorld.coinHeight
+        let height = underCeiling ? GameWorld.lowCrawlCoinHeight : GameWorld.coinHeight
         coin.position = SIMD3(lane.x + outward + windCurrentX, height, activeSpawnZ)
         coin.name = "coin"
         root.addChild(coin)
