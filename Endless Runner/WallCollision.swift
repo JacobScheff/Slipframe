@@ -43,10 +43,23 @@ enum WallCollision {
         max(0.05, visualWidth * 0.5 - inset)
     }
 
+    /// True when `pointZ` overlaps the swept slab interval from last frame → this frame.
+    static func overlapsSweptZ(
+        pointZ: Float,
+        wallZ: Float,
+        previousWallZ: Float,
+        halfDepth: Float
+    ) -> Bool {
+        let lo = min(wallZ, previousWallZ) - halfDepth
+        let hi = max(wallZ, previousWallZ) + halfDepth
+        return pointZ >= lo && pointZ <= hi
+    }
+
     /// True when `point` overlaps any slab centered at `slabXs` on the wall's Z.
     static func pointHitsSlabs(
         point: SIMD3<Float>,
         wallZ: Float,
+        previousWallZ: Float? = nil,
         slabXs: [Float],
         halfWidth: Float,
         halfDepth: Float,
@@ -54,7 +67,13 @@ enum WallCollision {
         maxY: Float
     ) -> Bool {
         guard point.y >= minY, point.y <= maxY else { return false }
-        guard abs(point.z - wallZ) <= halfDepth else { return false }
+        let prior = previousWallZ ?? wallZ
+        guard overlapsSweptZ(
+            pointZ: point.z,
+            wallZ: wallZ,
+            previousWallZ: prior,
+            halfDepth: halfDepth
+        ) else { return false }
 
         for slabX in slabXs {
             if point.x >= slabX - halfWidth, point.x <= slabX + halfWidth {
@@ -69,6 +88,7 @@ enum WallCollision {
     static func pointHitsDuckBarrier(
         point: SIMD3<Float>,
         wallZ: Float,
+        previousWallZ: Float? = nil,
         centerX: Float,
         halfWidth: Float,
         halfDepth: Float,
@@ -76,7 +96,13 @@ enum WallCollision {
         maxY: Float
     ) -> Bool {
         guard point.y >= clearanceY, point.y <= maxY else { return false }
-        guard abs(point.z - wallZ) <= halfDepth else { return false }
+        let prior = previousWallZ ?? wallZ
+        guard overlapsSweptZ(
+            pointZ: point.z,
+            wallZ: wallZ,
+            previousWallZ: prior,
+            halfDepth: halfDepth
+        ) else { return false }
         return abs(point.x - centerX) <= halfWidth
     }
 

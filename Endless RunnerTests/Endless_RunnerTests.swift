@@ -174,24 +174,52 @@ final class Endless_RunnerTests: XCTestCase {
             centerX: 0,
             halfWidth: 1.1,
             halfDepth: 0.2,
-            clearanceY: 1.05,
+            clearanceY: 0.95,
             maxY: 2.2
         )
         XCTAssertTrue(hit)
     }
 
     func testDuckBarrierClearedWhenHeadIsLow() {
-        let head = SIMD3<Float>(0, 0.9, 0)
+        let head = SIMD3<Float>(0, 0.8, 0)
         let hit = WallCollision.pointHitsDuckBarrier(
             point: head,
             wallZ: 0,
             centerX: 0,
             halfWidth: 1.1,
             halfDepth: 0.2,
-            clearanceY: 1.05,
+            clearanceY: 0.95,
             maxY: 2.2
         )
         XCTAssertFalse(hit)
+    }
+
+    func testSweptZCatchesTunnelingWall() {
+        // Wall jumped from z=-0.4 to z=0.4 in one frame past a head at z=0.
+        XCTAssertTrue(
+            WallCollision.overlapsSweptZ(
+                pointZ: 0,
+                wallZ: 0.4,
+                previousWallZ: -0.4,
+                halfDepth: 0.2
+            )
+        )
+    }
+
+    func testWallNotRetiredByForwardHandBeforeHead() {
+        // Forward hand at z=-0.5 must not count as "passed" while head is still at 0
+        // and the wall is still in front (z=-0.2).
+        let wallZ: Float = -0.2
+        let headZ: Float = 0
+        let forwardHandZ: Float = -0.5
+        let halfDepth: Float = 0.2
+        XCTAssertFalse(
+            WallCollision.hasPassedContact(wallZ: wallZ, contactZ: headZ, halfDepth: halfDepth)
+        )
+        // Old buggy rule used the forward hand and retired the wall too early:
+        XCTAssertTrue(
+            WallCollision.hasPassedContact(wallZ: wallZ, contactZ: forwardHandZ, halfDepth: halfDepth)
+        )
     }
 
     func testCrystalMergeRequiresDifferentTypes() {
@@ -322,10 +350,6 @@ final class Endless_RunnerTests: XCTestCase {
             -0.75,
             accuracy: 0.0001
         )
-    }
-
-    func testLowCrawlSpawnGapIsWiderThanDefault() {
-        XCTAssertGreaterThan(3.3, 2.9) // low-crawl min above default max
     }
 
     func testLowCrawlTeachCountIsPositive() {

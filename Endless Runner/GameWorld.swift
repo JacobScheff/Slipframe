@@ -33,11 +33,14 @@ final class GameWorld {
         let localSlabXs: [Float]
         let kind: WallKind
         var hasResolvedHit = false
+        /// Prior-frame Z for swept head/hand collision (prevents tunneling).
+        var previousZ: Float
 
         init(entity: Entity, localSlabXs: [Float], kind: WallKind) {
             self.entity = entity
             self.localSlabXs = localSlabXs
             self.kind = kind
+            self.previousZ = entity.position.z
         }
 
         func worldSlabXs() -> [Float] {
@@ -115,9 +118,12 @@ final class GameWorld {
     private static let hudScale: Float = 3.0
 
     // Duck hazard geometry (Low Crawl).
-    private static let duckClearanceY: Float = 1.05
-    private static let duckSlabHeight: Float = 0.55
+    /// Bottom of the hanging slab — stand through it = hit; duck under to clear.
+    private static let duckClearanceY: Float = 0.95
+    private static let duckSlabHeight: Float = 0.7
     private static let duckSlabWidth: Float = 2.4
+    /// Duck gates use a deeper kill volume so fast approach cannot skip the head.
+    private static let duckHitHalfDepth: Float = 0.28
 
     // Synth Riders-style portal aperture (always visible at the track end).
     private static let portalWidth: Float = 3.6
@@ -913,6 +919,7 @@ final class GameWorld {
 
     private func advanceEntities(by travel: Float) {
         for wall in walls {
+            wall.previousZ = wall.entity.position.z
             wall.entity.position.z += travel
         }
         for coin in coins {
@@ -1401,6 +1408,7 @@ final class GameWorld {
         for wall in walls {
             guard !wall.hasResolvedHit else { continue }
             let wallZ = wall.entity.position.z
+            let previousZ = wall.previousZ
 
             let hit: Bool
             if wall.kind == .duck {
@@ -1408,9 +1416,10 @@ final class GameWorld {
                 let headHit = WallCollision.pointHitsDuckBarrier(
                     point: head,
                     wallZ: wallZ,
+                    previousWallZ: previousZ,
                     centerX: centerX,
                     halfWidth: duckHalfWidth,
-                    halfDepth: halfDepth,
+                    halfDepth: GameWorld.duckHitHalfDepth,
                     clearanceY: GameWorld.duckClearanceY,
                     maxY: GameWorld.headHitMaxY
                 )
@@ -1418,9 +1427,10 @@ final class GameWorld {
                     WallCollision.pointHitsDuckBarrier(
                         point: hand,
                         wallZ: wallZ,
+                        previousWallZ: previousZ,
                         centerX: centerX,
                         halfWidth: duckHalfWidth + GameWorld.handHitRadius,
-                        halfDepth: handHalfDepth,
+                        halfDepth: GameWorld.duckHitHalfDepth + GameWorld.handHitRadius,
                         clearanceY: GameWorld.duckClearanceY,
                         maxY: GameWorld.handHitMaxY
                     )
@@ -1431,6 +1441,7 @@ final class GameWorld {
                 let headHit = WallCollision.pointHitsSlabs(
                     point: head,
                     wallZ: wallZ,
+                    previousWallZ: previousZ,
                     slabXs: slabXs,
                     halfWidth: halfWidth,
                     halfDepth: halfDepth,
@@ -1441,6 +1452,7 @@ final class GameWorld {
                     WallCollision.pointHitsSlabs(
                         point: hand,
                         wallZ: wallZ,
+                        previousWallZ: previousZ,
                         slabXs: slabXs,
                         halfWidth: handHalfWidth,
                         halfDepth: handHalfDepth,
@@ -1459,10 +1471,11 @@ final class GameWorld {
                 return
             }
 
-            let farthestContactZ = hands.map(\.z).min().map { min($0, head.z) } ?? head.z
+            // Retire only after the slab clears the head. Using a forward hand Z here
+            // used to mark walls "passed" before the head could collide (bad for duck gates).
             if WallCollision.hasPassedContact(
                 wallZ: wallZ,
-                contactZ: farthestContactZ,
+                contactZ: head.z,
                 halfDepth: handHalfDepth
             ) {
                 wall.hasResolvedHit = true
