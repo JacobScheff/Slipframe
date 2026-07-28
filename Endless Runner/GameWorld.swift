@@ -11,6 +11,7 @@
 //
 
 import ARKit
+import QuartzCore
 import RealityKit
 import SwiftUI
 import UIKit
@@ -119,11 +120,11 @@ final class GameWorld {
 
     // Duck hazard geometry (Low Crawl).
     /// Bottom of the hanging slab — stand through it = hit; duck under to clear.
-    private static let duckClearanceY: Float = 0.95
-    private static let duckSlabHeight: Float = 0.7
-    private static let duckSlabWidth: Float = 2.4
+    private static let duckClearanceY: Float = 1.0
+    private static let duckSlabHeight: Float = 0.75
+    private static let duckSlabWidth: Float = 2.5
     /// Duck gates use a deeper kill volume so fast approach cannot skip the head.
-    private static let duckHitHalfDepth: Float = 0.28
+    private static let duckHitHalfDepth: Float = 0.4
 
     // Synth Riders-style portal aperture (always visible at the track end).
     private static let portalWidth: Float = 3.6
@@ -219,12 +220,12 @@ final class GameWorld {
     private var timeUntilWind: Float = GameWorld.windMinInterval
     private var gustEntity: Entity?
 
-    /// ARKit hand tracking — AnchorEntity(.hand) transforms are privacy-locked
-    /// unless a SpatialTrackingSession is running (visionOS 2+), so we read
-    /// joint positions from HandTrackingProvider instead.
+    /// ARKit providers — AnchorEntity(.head/.hand) transforms are privacy-locked
+    /// on visionOS, so gameplay reads DeviceAnchor + HandTrackingProvider instead.
     private let arSession = ARKitSession()
     private let handTracking = HandTrackingProvider()
-    private var handTask: Task<Void, Never>?
+    private let worldTracking = WorldTrackingProvider()
+    private var arTask: Task<Void, Never>?
     /// World-space contact points (wrist + fingertips) for each hand.
     private var leftHandContactsWorld: [SIMD3<Float>] = []
     private var rightHandContactsWorld: [SIMD3<Float>] = []
@@ -255,7 +256,7 @@ final class GameWorld {
         buildPortal()
         buildStaticEnvironment()
         ensureHUDAnchor()
-        startHandTracking()
+        startARSession()
         // Warm audio before the first coin so setActive does not hitch mid-run.
         GameSFX.shared.prepare()
         GameMusic.shared.prepare()
@@ -291,8 +292,8 @@ final class GameWorld {
     }
 
     func teardown() {
-        handTask?.cancel()
-        handTask = nil
+        arTask?.cancel()
+        arTask = nil
         leftHandContactsWorld = []
         rightHandContactsWorld = []
         leftHandPalmWorld = nil
@@ -680,22 +681,25 @@ final class GameWorld {
     // MARK: - Playfield pose
 
     private func snapPlayfieldToPlayer() {
-        let headWorld = headAnchor.position(relativeTo: nil)
-        let headRotation = headAnchor.orientation(relativeTo: nil)
-
-        let floorY: Float
-        if floorAnchor.isAnchored {
-            floorY = floorAnchor.position(relativeTo: nil).y
-        } else {
-            floorY = headWorld.y - GameWorld.fallbackEyeHeight
-        }
-
-        let position = SIMD3<Float>(headWorld.x, floorY, headWorld.z)
+        let headWorld: SIMD3<Float>
         let flatForward: SIMD3<Float>
 
-        if let towardWall = suitableWallForward(from: position) {
-            flatForward = towardWall
+        if worldTracking.state == .running,
+           let device = worldTracking.queryDeviceAnchor(atTimestamp: CACurrentMediaTime()),
+           device.isTracked {
+            let matrix = device.originFromAnchorTransform
+            headWorld = SIMD3(matrix.columns.3.x, matrix.columns.3.y, matrix.columns.3.z)
+            // Device forward is -Z in the device transform.
+            let forwardWorld = SIMD3(-matrix.columns.2.x, 0, -matrix.columns.2.z)
+            let forwardLength = length(forwardWorld)
+            if forwardLength < 0.05 {
+                flatForward = SIMD3(0, 0, -1)
+            } else {
+                flatForward = forwardWorld / forwardLength
+            }
         } else {
+            headWorld = headAnchor.position(relativeTo: nil)
+            let headRotation = headAnchor.orientation(relativeTo: nil)
             let forwardWorld = headRotation.act(SIMD3<Float>(0, 0, -1))
             var flattened = SIMD3<Float>(forwardWorld.x, 0, forwardWorld.z)
             let forwardLength = length(flattened)
@@ -707,7 +711,16 @@ final class GameWorld {
             flatForward = flattened
         }
 
-        let yaw = atan2(-flatForward.x, -flatForward.z)
+        let floorY: Float
+        if floorAnchor.isAnchored {
+            floorY = floorAnchor.position(relativeTo: nil).y
+        } else {
+            floorY = headWorld.y - GameWorld.fallbackEyeHeight
+        }
+
+        let position = SIMD3<Float>(headWorld.x, floorY, headWorld.z)
+        let facing = suitableWallForward(from: position) ?? flatForward
+        let yaw = atan2(-facing.x, -facing.z)
         root.setPosition(position, relativeTo: nil)
         root.setOrientation(simd_quatf(angle: yaw, axis: SIMD3(0, 1, 0)), relativeTo: nil)
     }
@@ -764,18 +777,30 @@ final class GameWorld {
         gustEntity = nil
     }
 
-    // MARK: - Hand tracking
+    // MARK: - ARKit tracking
 
-    private func startHandTracking() {
-        guard handTask == nil else { return }
-        handTask = Task { @MainActor [weak self] in
+    private func startARSession() {
+        guard arTask == nil else { return }
+        arTask = Task { @MainActor [weak self] in
             guard let self else { return }
-            guard HandTrackingProvider.isSupported else { return }
 
             do {
-                let auth = await arSession.requestAuthorization(for: [.handTracking])
-                guard auth[.handTracking] == .allowed else { return }
-                try await arSession.run([handTracking])
+                var providers: [any DataProvider] = []
+                if WorldTrackingProvider.isSupported {
+                    providers.append(worldTracking)
+                }
+                if HandTrackingProvider.isSupported {
+                    let auth = await arSession.requestAuthorization(for: [.handTracking])
+                    if auth[.handTracking] == .allowed {
+                        providers.append(handTracking)
+                    }
+                }
+                guard !providers.isEmpty else { return }
+                try await arSession.run(providers)
+
+                guard HandTrackingProvider.isSupported,
+                      providers.contains(where: { $0 is HandTrackingProvider })
+                else { return }
 
                 for await update in handTracking.anchorUpdates {
                     guard !Task.isCancelled else { break }
@@ -811,9 +836,28 @@ final class GameWorld {
                     }
                 }
             } catch {
-                print("Hand tracking failed: \(error)")
+                print("ARKit session failed: \(error)")
             }
         }
+    }
+
+    /// Head/device position in playfield space. Prefer ARKit DeviceAnchor because
+    /// AnchorEntity(.head) transforms are not readable for gameplay queries.
+    private func playfieldHeadPosition() -> SIMD3<Float> {
+        if worldTracking.state == .running,
+           let device = worldTracking.queryDeviceAnchor(atTimestamp: CACurrentMediaTime()),
+           device.isTracked {
+            let matrix = device.originFromAnchorTransform
+            let world = SIMD3<Float>(matrix.columns.3.x, matrix.columns.3.y, matrix.columns.3.z)
+            return root.convert(position: world, from: nil)
+        }
+
+        // Fallback if world tracking is unavailable.
+        var head = headAnchor.position(relativeTo: root)
+        if head.y < 0.9 {
+            head.y = GameWorld.fallbackEyeHeight
+        }
+        return head
     }
 
     private static func contactPoints(from anchor: HandAnchor) -> [SIMD3<Float>] {
@@ -1441,7 +1485,12 @@ final class GameWorld {
     // MARK: - Collisions
 
     private func resolveCollisions(gameModel: GameModel) {
-        let head = headAnchor.position(relativeTo: root)
+        let head = playfieldHeadPosition()
+        // Also test a slightly lower "chin/neck" sample so tall duck slabs are harder to skim.
+        let headSamples = [
+            head,
+            SIMD3<Float>(head.x, head.y - 0.12, head.z)
+        ]
         let handsWorld = leftHandContactsWorld + rightHandContactsWorld
         let hands = handsWorld.map { root.convert(position: $0, from: nil) }
 
@@ -1455,7 +1504,7 @@ final class GameWorld {
         )
         let handHalfDepth = halfDepth + GameWorld.handHitRadius
         let handHalfWidth = halfWidth + GameWorld.handHitRadius
-        let duckHalfWidth = GameWorld.duckSlabWidth * 0.5 - 0.08
+        let duckHalfWidth = GameWorld.duckSlabWidth * 0.5 - 0.05
 
         for wall in walls {
             guard !wall.hasResolvedHit else { continue }
@@ -1465,16 +1514,18 @@ final class GameWorld {
             let hit: Bool
             if wall.kind == .duck {
                 let centerX = wall.entity.position.x
-                let headHit = WallCollision.pointHitsDuckBarrier(
-                    point: head,
-                    wallZ: wallZ,
-                    previousWallZ: previousZ,
-                    centerX: centerX,
-                    halfWidth: duckHalfWidth,
-                    halfDepth: GameWorld.duckHitHalfDepth,
-                    clearanceY: GameWorld.duckClearanceY,
-                    maxY: GameWorld.headHitMaxY
-                )
+                let headHit = headSamples.contains { sample in
+                    WallCollision.pointHitsDuckBarrier(
+                        point: sample,
+                        wallZ: wallZ,
+                        previousWallZ: previousZ,
+                        centerX: centerX,
+                        halfWidth: duckHalfWidth,
+                        halfDepth: GameWorld.duckHitHalfDepth,
+                        clearanceY: GameWorld.duckClearanceY,
+                        maxY: GameWorld.headHitMaxY
+                    )
+                }
                 let handHit = hands.contains { hand in
                     WallCollision.pointHitsDuckBarrier(
                         point: hand,
@@ -1490,16 +1541,18 @@ final class GameWorld {
                 hit = headHit || handHit
             } else {
                 let slabXs = wall.worldSlabXs()
-                let headHit = WallCollision.pointHitsSlabs(
-                    point: head,
-                    wallZ: wallZ,
-                    previousWallZ: previousZ,
-                    slabXs: slabXs,
-                    halfWidth: halfWidth,
-                    halfDepth: halfDepth,
-                    minY: GameWorld.headHitMinY,
-                    maxY: GameWorld.headHitMaxY
-                )
+                let headHit = headSamples.contains { sample in
+                    WallCollision.pointHitsSlabs(
+                        point: sample,
+                        wallZ: wallZ,
+                        previousWallZ: previousZ,
+                        slabXs: slabXs,
+                        halfWidth: halfWidth,
+                        halfDepth: halfDepth,
+                        minY: GameWorld.headHitMinY,
+                        maxY: GameWorld.headHitMaxY
+                    )
+                }
                 let handHit = hands.contains { hand in
                     WallCollision.pointHitsSlabs(
                         point: hand,
