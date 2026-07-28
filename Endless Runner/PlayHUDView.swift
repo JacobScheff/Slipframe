@@ -34,6 +34,15 @@ struct PlayHUDView: View {
         .padding(.vertical, 44)
         .frame(minWidth: 720)
         .glassBackgroundEffect()
+        // Open menu overlays upward above the HUD so it doesn't grow the card.
+        .overlay(alignment: .bottom) {
+            if isEnvironmentMenuOpen {
+                environmentMenuPanel
+                    .padding(.bottom, 96)
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+            }
+        }
+        .zIndex(isEnvironmentMenuOpen ? 20 : 0)
     }
 
     @ViewBuilder
@@ -66,13 +75,11 @@ struct PlayHUDView: View {
         }
     }
 
-    /// Temporary test control — remove once biome QA is done.
-    /// Uses an expandable button list instead of `.menu` so open options stay readable
-    /// on the world-anchored HUD (system menu text was tiny).
+    /// Temporary test control — keep the closed control compact like the original menu.
     private var debugEnvironmentPicker: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(spacing: 10) {
             Text("Debug Environment")
-                .font(.system(size: 28, weight: .semibold))
+                .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
 
             Button {
@@ -80,37 +87,32 @@ struct PlayHUDView: View {
                     isEnvironmentMenuOpen.toggle()
                 }
             } label: {
-                HStack(spacing: 16) {
+                HStack(spacing: 10) {
                     Text(currentEnvironmentLabel)
-                        .font(.system(size: 40, weight: .semibold))
-                        .multilineTextAlignment(.leading)
-                    Spacer(minLength: 12)
-                    Image(systemName: isEnvironmentMenuOpen ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 28, weight: .semibold))
+                        .font(.title3)
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.caption.weight(.semibold))
                 }
-                .padding(.horizontal, 22)
-                .padding(.vertical, 18)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
             }
             .buttonStyle(.bordered)
-            .controlSize(.large)
-
-            if isEnvironmentMenuOpen {
-                VStack(spacing: 12) {
-                    environmentOptionButton(title: "Normal (random)", value: .normal)
-                    ForEach(EnvironmentID.allCases) { id in
-                        environmentOptionButton(
-                            title: "Force: \(id.displayName)",
-                            value: .force(id)
-                        )
-                    }
-                }
-                .padding(.top, 4)
-            }
+            .controlSize(.regular)
         }
         .padding(.top, 8)
-        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var environmentMenuPanel: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            environmentOptionButton(title: "Normal (random)", value: .normal)
+            ForEach(EnvironmentID.allCases) { id in
+                environmentOptionButton(
+                    title: "Force: \(id.displayName)",
+                    value: .force(id)
+                )
+            }
+        }
+        .padding(18)
+        .frame(minWidth: 520, alignment: .leading)
+        .glassBackgroundEffect()
     }
 
     private func environmentOptionButton(title: String, value: DebugPickerValue) -> some View {
@@ -131,14 +133,12 @@ struct PlayHUDView: View {
                         .font(.system(size: 36, weight: .bold))
                 }
             }
-            .padding(.horizontal, 22)
-            .padding(.vertical, 20)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 14)
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.borderedProminent)
-        .tint(selected ? Color.accentColor : Color.secondary.opacity(0.35))
-        .controlSize(.large)
+        .buttonStyle(.plain)
     }
 
     private var currentEnvironmentLabel: String {
