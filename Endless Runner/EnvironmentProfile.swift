@@ -73,7 +73,7 @@ struct EnvironmentPalette: Equatable {
     var portalAccent: TintColor
     /// Multiplies overall ambience darkness (1 = normal, lower = darker).
     var ambienceBrightness: Float
-    /// 0 = no fog cards, 1 = heavy fog.
+    /// >0 marks Fog Hollow — drives passthrough room dimming (not geometry fog cards).
     var fogDensity: Float
     var fogColor: TintColor
     var wallTint: TintColor
@@ -147,17 +147,17 @@ enum EnvironmentCatalog {
                     portalRail: TintColor(r: 0.16, g: 0.2, b: 0.24, a: 1),
                     portalAccent: TintColor(r: 0.1, g: 0.12, b: 0.16, a: 1),
                     ambienceBrightness: 0.28,
-                    // Only Fog Hollow uses volumetric mist.
+                    // Room gloom comes from preferredSurroundingsEffect, not fog boxes.
                     fogDensity: 1.0,
-                    fogColor: TintColor(r: 0.55, g: 0.6, b: 0.66, a: 0.12),
-                    wallTint: TintColor(r: 0.45, g: 0.14, b: 0.12, a: 0.16),
+                    fogColor: TintColor(r: 0.55, g: 0.6, b: 0.66, a: 0.0),
+                    wallTint: TintColor(r: 0.45, g: 0.14, b: 0.12, a: 0.32),
                     wallEmissive: TintColor(r: 0.4, g: 0.12, b: 0.1, a: 1),
-                    wallOpacity: 0.16,
-                    wallEmissiveIntensity: 0.18,
+                    wallOpacity: 0.32,
+                    wallEmissiveIntensity: 0.22,
                     coinTint: TintColor(r: 1.0, g: 0.86, b: 0.35, a: 1)
                 ),
                 ghostWallChance: 0,
-                ghostWallOpacity: 0.16,
+                ghostWallOpacity: 0.32,
                 lowCrawlTeachCount: 0,
                 duckHazardChance: 0
             )

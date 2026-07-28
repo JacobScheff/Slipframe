@@ -19,6 +19,9 @@ final class GameModel: ObservableObject {
     /// Temporary debug control: Normal rotates biomes; Force locks one biome.
     @Published var environmentDebugMode: EnvironmentDebugMode = .normal
 
+    /// Fog Hollow asks ImmersiveView to dim passthrough (Vision Pro room dimming).
+    @Published var prefersRoomDimming: Bool = false
+
     /// Bumped on each restart so the immersive session can reset its world.
     @Published private(set) var runID: Int = 0
 
@@ -27,6 +30,7 @@ final class GameModel: ObservableObject {
         coinsCollected = 0
         isGameOver = false
         isPlaying = true
+        prefersRoomDimming = false
         runID += 1
     }
 
@@ -45,5 +49,6 @@ final class GameModel: ObservableObject {
         guard isPlaying else { return }
         isPlaying = false
         isGameOver = true
+        prefersRoomDimming = false
     }
 }

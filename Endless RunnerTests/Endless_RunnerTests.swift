@@ -308,7 +308,7 @@ final class Endless_RunnerTests: XCTestCase {
         XCTAssertGreaterThan(ghost.palette.wallTint.r, 0.9)
         XCTAssertGreaterThan(ghost.palette.wallTint.g, 0.9)
         XCTAssertGreaterThan(ghost.palette.wallTint.b, 0.9)
-        // Transparency only — no fog volumes outside Fog Hollow.
+        // No room-dimming flag outside Fog Hollow.
         XCTAssertEqual(ghost.palette.fogDensity, 0)
     }
 
@@ -316,11 +316,19 @@ final class Endless_RunnerTests: XCTestCase {
         for id in EnvironmentID.allCases {
             let density = EnvironmentCatalog.profile(for: id).palette.fogDensity
             if id == .fogHollow {
+                // Fog Hollow dims passthrough; density is the biome flag (no fog boxes).
                 XCTAssertGreaterThan(density, 0)
             } else {
                 XCTAssertEqual(density, 0, "Unexpected fog on \(id.displayName)")
             }
         }
+    }
+
+    func testFogHollowWallsAreMoreOpaqueThanGhostGlass() {
+        let fog = EnvironmentCatalog.profile(for: .fogHollow).palette
+        let ghost = EnvironmentCatalog.profile(for: .ghostGlass)
+        XCTAssertGreaterThan(fog.wallOpacity, 0.25)
+        XCTAssertGreaterThan(fog.wallOpacity, ghost.ghostWallOpacity)
     }
 
     func testAdjacentDoubleLaneWallsSpreadApartSlightly() {

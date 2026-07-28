@@ -45,12 +45,6 @@ enum EnvironmentMaterials {
         simple(tint, metallic: true, roughness: 0.25)
     }
 
-    /// Cheap unlit fog card for Fog Hollow (avoid heavy transparent PBR volumes).
-    static func fogPlane(_ tint: TintColor) -> UnlitMaterial {
-        let alpha = max(0.04, min(0.24, tint.a))
-        return UnlitMaterial(color: uiColor(TintColor(r: tint.r, g: tint.g, b: tint.b, a: alpha)))
-    }
-
     static func crystalHalf(type: CrystalHalfType, charged: Bool) -> PhysicallyBasedMaterial {
         let tint = CrystalCombine.tint(for: type, charged: charged)
         var material = PhysicallyBasedMaterial()

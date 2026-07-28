@@ -197,7 +197,6 @@ final class GameWorld {
     )
     private let hudAnchor = Entity()
     private let trackRoot = Entity()
-    private let fogRoot = Entity()
     /// Holds the portal plane + neon rim in playfield space (always visible).
     private let portalRoot = Entity()
     private let portalEntity = Entity()
@@ -223,8 +222,6 @@ final class GameWorld {
     /// Where obstacles / coins appear (just in front of the portal).
     private var activeSpawnZ: Float = GameWorld.defaultPortalZ + GameWorld.spawnInFrontOfPortal
     private var lastBuiltPortalZ: Float = .greatestFiniteMagnitude
-    private var lastFogActive = false
-    private var lastFogLayoutPortalZ: Float = .greatestFiniteMagnitude
     private var updateSubscription: EventSubscription?
     private var activeRunID: Int = -1
     /// After Start, playfield pose no longer follows the player.
@@ -329,18 +326,14 @@ final class GameWorld {
         portalZ = GameWorld.defaultPortalZ
         activeSpawnZ = GameWorld.defaultPortalZ + GameWorld.spawnInFrontOfPortal
         lastBuiltPortalZ = .greatestFiniteMagnitude
-        lastFogActive = false
-        lastFogLayoutPortalZ = .greatestFiniteMagnitude
         clearDynamicContent()
         dropHeldHalves()
+        gameModel?.prefersRoomDimming = false
         GameMusic.shared.stop()
         for child in hudAnchor.children {
             child.removeFromParent()
         }
         for child in trackRoot.children {
-            child.removeFromParent()
-        }
-        for child in fogRoot.children {
             child.removeFromParent()
         }
         for child in portalRoot.children {
@@ -351,7 +344,6 @@ final class GameWorld {
         }
         portalRoot.removeFromParent()
         portalWorld.removeFromParent()
-        fogRoot.removeFromParent()
         for child in root.children {
             child.removeFromParent()
         }
@@ -369,16 +361,11 @@ final class GameWorld {
 
     private func buildStaticEnvironment() {
         trackRoot.name = "trackRoot"
-        fogRoot.name = "fogRoot"
         if trackRoot.parent !== root {
             root.addChild(trackRoot)
         }
-        if fogRoot.parent !== root {
-            root.addChild(fogRoot)
-        }
         rebuildFixedTrack(force: true)
         buildStartMarker()
-        updateFog(density: 0, color: .clear)
     }
 
     /// One static floor slab from the stand line to the portal — never scrolls.
@@ -616,7 +603,7 @@ final class GameWorld {
         GameMusic.shared.prepare()
     }
 
-    // MARK: - Palette / fog
+    // MARK: - Palette / room dimming
 
     private func applyPalette(_ palette: EnvironmentPalette, telegraph: Float) {
         for child in trackRoot.children {
@@ -660,70 +647,17 @@ final class GameWorld {
             }
         }
 
-        updateFog(density: palette.fogDensity, color: palette.fogColor)
+        syncRoomDimming()
     }
 
-    /// Lightweight Fog Hollow mist: a few unlit planes (not dozens of overlapping
-    /// PBR boxes). Rebuild only when fog turns on/off or portal depth jumps.
-    private func updateFog(density: Float, color: TintColor) {
-        let wantsFog = density > 0.02
-        if !wantsFog {
-            if lastFogActive {
-                for child in fogRoot.children {
-                    child.removeFromParent()
-                }
-                lastFogActive = false
-            }
-            return
-        }
-
-        let layoutChanged = !lastFogActive
-            || fogRoot.children.isEmpty
-            || abs(portalZ - lastFogLayoutPortalZ) > 0.35
-        if layoutChanged {
-            rebuildFogPlanes(density: density, color: color)
-            lastFogLayoutPortalZ = portalZ
-            lastFogActive = true
-            return
-        }
-
-        // Cheap path: retint existing planes while the palette lerps.
-        let planes = fogRoot.children.compactMap { $0 as? ModelEntity }
-        for (index, plane) in planes.enumerated() {
-            let t = planes.count <= 1 ? 1 : Float(index) / Float(planes.count - 1)
-            let ramp = t * t * (3 - 2 * t)
-            let alpha = min(0.22, 0.06 + 0.14 * density * (0.35 + 0.65 * ramp))
-            let mist = TintColor(r: color.r, g: color.g, b: color.b, a: alpha)
-            plane.model?.materials = [EnvironmentMaterials.fogPlane(mist)]
-        }
-    }
-
-    private func rebuildFogPlanes(density: Float, color: TintColor) {
-        for child in fogRoot.children {
-            child.removeFromParent()
-        }
-
-        // Stand line stays mostly clear; haze sits mid-track → portal.
-        let nearZ: Float = -2.4
-        let farZ = min(portalZ + 0.5, -3.2)
-        guard farZ < nearZ - 0.5 else { return }
-
-        // Three planes is enough for a soft ramp without heavy transparent overdraw.
-        let layerCount = 3
-        for index in 0..<layerCount {
-            let t = Float(index) / Float(layerCount - 1)
-            let ramp = t * t * (3 - 2 * t)
-            let z = nearZ + (farZ - nearZ) * t
-            let alpha = min(0.22, 0.06 + 0.14 * density * (0.35 + 0.65 * ramp))
-            let mist = TintColor(r: color.r, g: color.g, b: color.b, a: alpha)
-            let mesh = MeshResource.generatePlane(width: 3.5, height: 2.3)
-            let plane = ModelEntity(
-                mesh: mesh,
-                materials: [EnvironmentMaterials.fogPlane(mist)]
-            )
-            plane.name = "fogPlane"
-            plane.position = SIMD3(0, 1.2, z)
-            fogRoot.addChild(plane)
+    /// Fog Hollow dims the real room via preferredSurroundingsEffect (no fog geometry).
+    private func syncRoomDimming() {
+        guard let gameModel else { return }
+        let wants = gameModel.isPlaying
+            && !gameModel.isGameOver
+            && activeSpawnProfile.twist == .fogVisibility
+        if gameModel.prefersRoomDimming != wants {
+            gameModel.prefersRoomDimming = wants
         }
     }
 
@@ -977,9 +911,15 @@ final class GameWorld {
             environmentDirector.applyDebugMode(gameModel.environmentDebugMode)
             activeSpawnProfile = environmentDirector.currentProfile
             dropHeldHalves()
+            syncRoomDimming()
         }
 
-        guard gameModel.isPlaying, !gameModel.isGameOver else { return }
+        guard gameModel.isPlaying, !gameModel.isGameOver else {
+            if gameModel.prefersRoomDimming {
+                gameModel.prefersRoomDimming = false
+            }
+            return
+        }
         guard deltaTime > 0, deltaTime < 0.25 else { return }
 
         let frame = environmentDirector.update(deltaTime: deltaTime)
