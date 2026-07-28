@@ -148,7 +148,10 @@ final class GameWorld {
     // Storm Pass wind.
     private static let windMinInterval: Float = 2.4
     private static let windMaxInterval: Float = 4.8
-    private static let windDuration: Float = 0.9
+    /// Visual/audio warning before boxes start drifting.
+    private static let windTelegraphSeconds: Float = 1.45
+    /// How long the boxes take to finish the shove (slower = easier to correct).
+    private static let windDuration: Float = 2.0
     private static let windMagnitude: Float = 0.55
     /// Only skip a shove when a wall is already in this near danger band.
     private static let windDangerMinZ: Float = -1.1
