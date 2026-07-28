@@ -134,7 +134,7 @@ final class GameWorld {
     /// Duck gates use a deeper kill volume so fast approach cannot skip the head.
     private static let duckHitHalfDepth: Float = 0.4
     /// Low Crawl coins sit under the hanging ceiling, but high enough to grab comfortably.
-    private static let lowCrawlCoinHeight: Float = duckClearanceY * 0.72
+    private static let lowCrawlCoinHeight: Float = duckClearanceY * 0.65
 
     // Synth Riders-style portal aperture (always visible at the track end).
     private static let portalWidth: Float = 3.6
