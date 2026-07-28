@@ -9,6 +9,7 @@ import SwiftUI
 
 struct PlayHUDView: View {
     @EnvironmentObject private var gameModel: GameModel
+    @State private var isEnvironmentMenuOpen = false
 
     var body: some View {
         VStack(spacing: 28) {
@@ -66,22 +67,87 @@ struct PlayHUDView: View {
     }
 
     /// Temporary test control — remove once biome QA is done.
+    /// Uses an expandable button list instead of `.menu` so open options stay readable
+    /// on the world-anchored HUD (system menu text was tiny).
     private var debugEnvironmentPicker: some View {
-        VStack(spacing: 10) {
+        VStack(alignment: .leading, spacing: 16) {
             Text("Debug Environment")
-                .font(.caption.weight(.semibold))
+                .font(.system(size: 28, weight: .semibold))
                 .foregroundStyle(.secondary)
 
-            Picker("Environment Mode", selection: debugModeBinding) {
-                Text("Normal (random)").tag(DebugPickerValue.normal)
-                ForEach(EnvironmentID.allCases) { id in
-                    Text("Force: \(id.displayName)").tag(DebugPickerValue.force(id))
+            Button {
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    isEnvironmentMenuOpen.toggle()
                 }
+            } label: {
+                HStack(spacing: 16) {
+                    Text(currentEnvironmentLabel)
+                        .font(.system(size: 40, weight: .semibold))
+                        .multilineTextAlignment(.leading)
+                    Spacer(minLength: 12)
+                    Image(systemName: isEnvironmentMenuOpen ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 28, weight: .semibold))
+                }
+                .padding(.horizontal, 22)
+                .padding(.vertical, 18)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
             }
-            .pickerStyle(.menu)
-            .font(.title3)
+            .buttonStyle(.bordered)
+            .controlSize(.large)
+
+            if isEnvironmentMenuOpen {
+                VStack(spacing: 12) {
+                    environmentOptionButton(title: "Normal (random)", value: .normal)
+                    ForEach(EnvironmentID.allCases) { id in
+                        environmentOptionButton(
+                            title: "Force: \(id.displayName)",
+                            value: .force(id)
+                        )
+                    }
+                }
+                .padding(.top, 4)
+            }
         }
         .padding(.top, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func environmentOptionButton(title: String, value: DebugPickerValue) -> some View {
+        let selected = debugModeBinding.wrappedValue == value
+        return Button {
+            debugModeBinding.wrappedValue = value
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isEnvironmentMenuOpen = false
+            }
+        } label: {
+            HStack(spacing: 16) {
+                Text(title)
+                    .font(.system(size: 54, weight: selected ? .bold : .medium))
+                    .multilineTextAlignment(.leading)
+                Spacer(minLength: 8)
+                if selected {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 36, weight: .bold))
+                }
+            }
+            .padding(.horizontal, 22)
+            .padding(.vertical, 20)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.borderedProminent)
+        .tint(selected ? Color.accentColor : Color.secondary.opacity(0.35))
+        .controlSize(.large)
+    }
+
+    private var currentEnvironmentLabel: String {
+        switch gameModel.environmentDebugMode {
+        case .normal:
+            return "Normal (random)"
+        case .force(let id):
+            return "Force: \(id.displayName)"
+        }
     }
 
     private var debugModeBinding: Binding<DebugPickerValue> {
