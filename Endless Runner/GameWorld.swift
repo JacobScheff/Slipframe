@@ -125,6 +125,8 @@ final class GameWorld {
     private static let duckSlabWidth: Float = 2.5
     /// Duck gates use a deeper kill volume so fast approach cannot skip the head.
     private static let duckHitHalfDepth: Float = 0.4
+    /// Low Crawl coins sit halfway between the floor and the low ceiling.
+    private static let lowCrawlCoinHeight: Float = duckClearanceY * 0.5
 
     // Synth Riders-style portal aperture (always visible at the track end).
     private static let portalWidth: Float = 3.6
@@ -1195,16 +1197,26 @@ final class GameWorld {
         if environmentDirector.isTeachingLowCrawl {
             spawnDuckWall()
             environmentDirector.noteDuckGateSpawned()
+            // Low coins stay under the hanging ceiling so ducking still rewards grabs.
+            if Float.random(in: 0...1) < 0.7, let lane = Lane.allCases.randomElement() {
+                spawnCoin(in: lane)
+            }
             return
         }
 
         if Float.random(in: 0...1) < profile.duckHazardChance {
             // Occasional duck + simple single side wall, otherwise duck alone.
+            var blocked: Set<Lane> = []
             if Float.random(in: 0...1) < 0.35 {
                 let side: Set<Lane> = Bool.random() ? [.left] : [.right]
+                blocked = side
                 spawnWall(blocking: side, kind: .standard, profile: profile)
             }
             spawnDuckWall()
+            let coinLanes = Lane.allCases.filter { !blocked.contains($0) }
+            if Float.random(in: 0...1) < 0.7, let lane = coinLanes.randomElement() {
+                spawnCoin(in: lane)
+            }
         } else {
             spawnStandardPattern(preferFairFog: false)
         }
@@ -1354,7 +1366,10 @@ final class GameWorld {
         let material = EnvironmentMaterials.coin(activeSpawnProfile.palette.coinTint)
         let coin = ModelEntity(mesh: mesh, materials: [material])
         let outward: Float = lane == .center ? 0 : (lane.x > 0 ? GameWorld.coinOutwardOffset : -GameWorld.coinOutwardOffset)
-        coin.position = SIMD3(lane.x + outward + windCurrentX, GameWorld.coinHeight, activeSpawnZ)
+        let height = activeSpawnProfile.twist == .lowCrawl
+            ? GameWorld.lowCrawlCoinHeight
+            : GameWorld.coinHeight
+        coin.position = SIMD3(lane.x + outward + windCurrentX, height, activeSpawnZ)
         coin.name = "coin"
         root.addChild(coin)
         coins.append(CoinItem(entity: coin))
