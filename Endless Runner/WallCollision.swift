@@ -14,6 +14,24 @@ enum WallKind: Equatable {
     case duck
 }
 
+enum ObstacleLayout {
+    /// Local X for a lane slab. Adjacent double-lane blocks get a slight extra gap.
+    static func slabLocalX(
+        laneRaw: Int,
+        blockingLaneRaws: Set<Int>,
+        laneSpacing: Float,
+        adjacentSpread: Float
+    ) -> Float {
+        var x = Float(laneRaw) * laneSpacing
+        guard blockingLaneRaws.count == 2 else { return x }
+        let ordered = blockingLaneRaws.sorted()
+        guard let first = ordered.first, let last = ordered.last, last - first == 1 else { return x }
+        if laneRaw == first { x -= adjacentSpread }
+        if laneRaw == last { x += adjacentSpread }
+        return x
+    }
+}
+
 enum WallCollision {
     /// Visual walls are thick for readability; the kill volume stays thinner so
     /// a slab does not register a hit while it still looks ~0.5 m away.

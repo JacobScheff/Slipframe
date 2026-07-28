@@ -17,7 +17,7 @@ enum CrystalCombine {
     /// ~1% of spawned halves are charged.
     static let chargedSpawnChance: Float = 0.01
     /// Hands must be within this distance to merge (meters).
-    static let combineDistance: Float = 0.18
+    static let combineDistance: Float = 0.22
 
     static func canMerge(left: CrystalHalfType, right: CrystalHalfType) -> Bool {
         left != right

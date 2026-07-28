@@ -291,6 +291,43 @@ final class Endless_RunnerTests: XCTestCase {
         }
     }
 
+    func testAdjacentDoubleLaneWallsSpreadApartSlightly() {
+        let spacing: Float = 0.75
+        let spread: Float = 0.09
+        let leftCenter = Set([-1, 0])
+        let leftX = ObstacleLayout.slabLocalX(
+            laneRaw: -1,
+            blockingLaneRaws: leftCenter,
+            laneSpacing: spacing,
+            adjacentSpread: spread
+        )
+        let centerX = ObstacleLayout.slabLocalX(
+            laneRaw: 0,
+            blockingLaneRaws: leftCenter,
+            laneSpacing: spacing,
+            adjacentSpread: spread
+        )
+        XCTAssertEqual(leftX, -0.75 - spread, accuracy: 0.0001)
+        XCTAssertEqual(centerX, 0 + spread, accuracy: 0.0001)
+
+        // Non-adjacent left+right stays on lane centers.
+        let leftRight = Set([-1, 1])
+        XCTAssertEqual(
+            ObstacleLayout.slabLocalX(
+                laneRaw: -1,
+                blockingLaneRaws: leftRight,
+                laneSpacing: spacing,
+                adjacentSpread: spread
+            ),
+            -0.75,
+            accuracy: 0.0001
+        )
+    }
+
+    func testLowCrawlSpawnGapIsWiderThanDefault() {
+        XCTAssertGreaterThan(3.3, 2.9) // low-crawl min above default max
+    }
+
     func testLowCrawlTeachCountIsPositive() {
         let crawl = EnvironmentCatalog.profile(for: .lowCrawl)
         XCTAssertEqual(crawl.twist, .lowCrawl)

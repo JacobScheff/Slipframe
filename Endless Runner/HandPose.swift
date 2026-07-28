@@ -11,7 +11,12 @@ import simd
 
 enum HandPose {
     /// Average fingertip-to-wrist distance below this ⇒ fist (meters).
-    static let fistTipDistance: Float = 0.095
+    /// Real closed hands often sit around 0.10–0.13 m; the old 0.095 was too strict.
+    static let fistTipToWristDistance: Float = 0.135
+    /// Tip near its knuckle means that finger is curled.
+    static let curledTipToKnuckleDistance: Float = 0.065
+    /// Need at least this many curled fingers (excluding thumb).
+    static let minCurledFingers = 3
 
     static func isFist(anchor: HandAnchor) -> Bool {
         guard anchor.isTracked, let skeleton = anchor.handSkeleton else { return false }
@@ -21,24 +26,38 @@ enum HandPose {
         guard wrist.isTracked else { return false }
         let wristWorld = worldPosition(origin: origin, joint: wrist)
 
-        let tipNames: [HandSkeleton.JointName] = [
-            .indexFingerTip,
-            .middleFingerTip,
-            .ringFingerTip,
-            .littleFingerTip
+        let fingers: [(tip: HandSkeleton.JointName, knuckle: HandSkeleton.JointName)] = [
+            (.indexFingerTip, .indexFingerKnuckle),
+            (.middleFingerTip, .middleFingerKnuckle),
+            (.ringFingerTip, .ringFingerKnuckle),
+            (.littleFingerTip, .littleFingerKnuckle)
         ]
 
-        var distances: [Float] = []
-        for name in tipNames {
-            let tip = skeleton.joint(name)
+        var tipToWrist: [Float] = []
+        var curledCount = 0
+
+        for finger in fingers {
+            let tip = skeleton.joint(finger.tip)
             guard tip.isTracked else { continue }
             let tipWorld = worldPosition(origin: origin, joint: tip)
-            distances.append(simd_distance(tipWorld, wristWorld))
-        }
-        guard distances.count >= 3 else { return false }
+            tipToWrist.append(simd_distance(tipWorld, wristWorld))
 
-        let average = distances.reduce(0, +) / Float(distances.count)
-        return average <= fistTipDistance
+            let knuckle = skeleton.joint(finger.knuckle)
+            if knuckle.isTracked {
+                let knuckleWorld = worldPosition(origin: origin, joint: knuckle)
+                if simd_distance(tipWorld, knuckleWorld) <= curledTipToKnuckleDistance {
+                    curledCount += 1
+                }
+            }
+        }
+
+        guard tipToWrist.count >= 3 else { return false }
+
+        let averageTipToWrist = tipToWrist.reduce(0, +) / Float(tipToWrist.count)
+        if averageTipToWrist <= fistTipToWristDistance {
+            return true
+        }
+        return curledCount >= minCurledFingers
     }
 
     private static func worldPosition(

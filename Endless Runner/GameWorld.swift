@@ -95,12 +95,19 @@ final class GameWorld {
     private static let headHitMinY: Float = 0.4
     private static let headHitMaxY: Float = wallHeight + 0.35
     private static let collectDistance: Float = 0.24
+    /// Crystal halves use a slightly larger grab radius than coins.
+    private static let crystalCollectDistance: Float = 0.34
     private static let baseSpeed: Float = 3.0
     private static let maxSpeed: Float = 7.0
     private static let speedRampPerSecond: Float = 0.055
     /// Continuous obstacle stream with a bit of breathing room between beats.
     private static let spawnGapMin: Float = 2.2
     private static let spawnGapMax: Float = 2.9
+    /// Low Crawl needs extra reaction time for duck gates.
+    private static let lowCrawlSpawnGapMin: Float = 3.3
+    private static let lowCrawlSpawnGapMax: Float = 4.2
+    /// Nudge adjacent double-lane slabs slightly farther apart (meters each side).
+    private static let adjacentPairSpread: Float = 0.09
     private static let coinPoints = CrystalCombine.baseCoinPoints
     /// HUD sits above the corridor, further down the track, clear of the play volume.
     private static let hudPosition = SIMD3<Float>(0, 2.45, -3.2)
@@ -133,11 +140,13 @@ final class GameWorld {
     private static let fallbackEyeHeight: Float = 1.55
 
     // Storm Pass wind.
-    private static let windMinInterval: Float = 3.5
-    private static let windMaxInterval: Float = 6.5
-    private static let windDuration: Float = 0.85
-    private static let windMagnitude: Float = 0.42
-    private static let windSafeDistance: Float = 2.2
+    private static let windMinInterval: Float = 2.4
+    private static let windMaxInterval: Float = 4.8
+    private static let windDuration: Float = 0.9
+    private static let windMagnitude: Float = 0.55
+    /// Only skip a shove when a wall is already in this near danger band.
+    private static let windDangerMinZ: Float = -1.1
+    private static let windDangerMaxZ: Float = 0.7
 
     /// Playfield origin: floor at y=0, stand line at z=0, track extends along −Z.
     let root = Entity()
@@ -212,6 +221,10 @@ final class GameWorld {
     private var rightHandPalmWorld: SIMD3<Float>?
     private var leftIsFist = false
     private var rightIsFist = false
+    /// Brief latch so fist flicker does not drop a held crystal instantly.
+    private var leftFistLatch: Float = 0
+    private var rightFistLatch: Float = 0
+    private static let fistLatchSeconds: Float = 0.22
 
     func attach(to content: RealityViewContent, gameModel: GameModel) {
         self.gameModel = gameModel
@@ -548,6 +561,11 @@ final class GameWorld {
         resetWind()
         environmentDirector.beginRun(debugMode: gameModel?.environmentDebugMode ?? .normal)
         activeSpawnProfile = environmentDirector.currentProfile
+        if activeSpawnProfile.twist == .windShove {
+            timeUntilWind = Float.random(in: 1.0...2.0)
+        }
+        leftFistLatch = 0
+        rightFistLatch = 0
         rebuildFixedTrack(force: true)
         buildPortalRim()
         buildPortalInterior()
@@ -854,18 +872,42 @@ final class GameWorld {
         }
 
         advanceEntities(by: travel)
+        updateFistLatches(deltaTime: deltaTime)
         updateWind(deltaTime: deltaTime)
         updateHeldHalves()
 
         distanceUntilSpawn -= travel
         if distanceUntilSpawn <= 0 {
             spawnNextPattern()
-            distanceUntilSpawn = Float.random(in: GameWorld.spawnGapMin...GameWorld.spawnGapMax)
+            distanceUntilSpawn = Self.spawnGap(for: activeSpawnProfile)
         }
 
         resolveCollisions(gameModel: gameModel)
         pruneEntities()
     }
+
+    private static func spawnGap(for profile: EnvironmentProfile) -> Float {
+        if profile.twist == .lowCrawl {
+            return Float.random(in: lowCrawlSpawnGapMin...lowCrawlSpawnGapMax)
+        }
+        return Float.random(in: spawnGapMin...spawnGapMax)
+    }
+
+    private func updateFistLatches(deltaTime: Float) {
+        if leftIsFist {
+            leftFistLatch = GameWorld.fistLatchSeconds
+        } else {
+            leftFistLatch = max(0, leftFistLatch - deltaTime)
+        }
+        if rightIsFist {
+            rightFistLatch = GameWorld.fistLatchSeconds
+        } else {
+            rightFistLatch = max(0, rightFistLatch - deltaTime)
+        }
+    }
+
+    private var leftFistActive: Bool { leftIsFist || leftFistLatch > 0 }
+    private var rightFistActive: Bool { rightIsFist || rightFistLatch > 0 }
 
     private func advanceEntities(by travel: Float) {
         for wall in walls {
@@ -921,20 +963,39 @@ final class GameWorld {
     }
 
     private func beginWindShove() {
-        // Don't shove when a wall is already on top of the player.
-        let imminent = walls.contains { abs($0.entity.position.z) < GameWorld.windSafeDistance }
+        // Only defer when a wall is already in the near hit band (not merely "on screen").
+        let imminent = walls.contains {
+            $0.entity.position.z > GameWorld.windDangerMinZ
+                && $0.entity.position.z < GameWorld.windDangerMaxZ
+        }
         if imminent {
-            timeUntilWind = 0.75
+            timeUntilWind = 0.35
             return
         }
 
-        let direction: Float = Bool.random() ? 1 : -1
+        // Prefer shoving toward the current safe gap when one is readable ahead.
+        let direction = windDirectionPreferringSafeGap()
         windFromX = windCurrentX
         windToX = windCurrentX + direction * GameWorld.windMagnitude
         windElapsed = 0
         windDurationActive = GameWorld.windDuration
         spawnGustVisual(direction: direction)
         GameSFX.shared.playWindWhoosh()
+    }
+
+    private func windDirectionPreferringSafeGap() -> Float {
+        // Look at the nearest upcoming wall and shove away from its blocked center when possible.
+        let ahead = walls
+            .filter { $0.entity.position.z < -1.2 && $0.kind != .duck }
+            .sorted { $0.entity.position.z > $1.entity.position.z }
+        if let nearest = ahead.first {
+            let xs = nearest.worldSlabXs()
+            let blockedCenter = xs.reduce(0, +) / Float(xs.count)
+            if abs(blockedCenter) > 0.05 {
+                return blockedCenter > 0 ? -1 : 1
+            }
+        }
+        return Bool.random() ? 1 : -1
     }
 
     private func shiftDynamicBoxes(by deltaX: Float) {
@@ -1075,14 +1136,25 @@ final class GameWorld {
 
         var slabXs: [Float] = []
         for lane in lanes {
+            let x = Self.slabX(for: lane, blocking: lanes)
             let slab = makeWallSlab(kind: kind, profile: profile)
-            slab.position = SIMD3(lane.x, 0, 0)
+            slab.position = SIMD3(x, 0, 0)
             parent.addChild(slab)
-            slabXs.append(lane.x)
+            slabXs.append(x)
         }
 
         root.addChild(parent)
         walls.append(WallItem(entity: parent, localSlabXs: slabXs, kind: kind))
+    }
+
+    /// Adjacent double-lane blocks get a slight extra gap so they don't read as one slab.
+    private static func slabX(for lane: Lane, blocking: Set<Lane>) -> Float {
+        ObstacleLayout.slabLocalX(
+            laneRaw: lane.rawValue,
+            blockingLaneRaws: Set(blocking.map(\.rawValue)),
+            laneSpacing: laneSpacing,
+            adjacentSpread: adjacentPairSpread
+        )
     }
 
     private func spawnDuckWall() {
@@ -1200,7 +1272,7 @@ final class GameWorld {
 
     private func updateHeldHalves() {
         if let held = heldLeft {
-            if !leftIsFist {
+            if !leftFistActive {
                 held.entity.removeFromParent()
                 heldLeft = nil
             } else if let palm = leftHandPalmWorld {
@@ -1208,7 +1280,7 @@ final class GameWorld {
             }
         }
         if let held = heldRight {
-            if !rightIsFist {
+            if !rightFistActive {
                 held.entity.removeFromParent()
                 heldRight = nil
             } else if let palm = rightHandPalmWorld {
@@ -1238,29 +1310,47 @@ final class GameWorld {
     private func tryGrabHalves() {
         guard activeSpawnProfile.twist == .crystalHalves else { return }
 
-        if heldLeft == nil, leftIsFist, let palmWorld = leftHandPalmWorld {
-            let palm = root.convert(position: palmWorld, from: nil)
-            if let index = nearestHalfIndex(to: palm) {
+        if heldLeft == nil, leftFistActive {
+            let points = handPointsInRoot(leftHandContactsWorld, palmWorld: leftHandPalmWorld)
+            if let index = nearestHalfIndex(toAnyOf: points) {
                 grabHalf(at: index, left: true)
             }
         }
-        if heldRight == nil, rightIsFist, let palmWorld = rightHandPalmWorld {
-            let palm = root.convert(position: palmWorld, from: nil)
-            if let index = nearestHalfIndex(to: palm) {
+        if heldRight == nil, rightFistActive {
+            let points = handPointsInRoot(rightHandContactsWorld, palmWorld: rightHandPalmWorld)
+            if let index = nearestHalfIndex(toAnyOf: points) {
                 grabHalf(at: index, left: false)
             }
         }
     }
 
-    private func nearestHalfIndex(to point: SIMD3<Float>) -> Int? {
+    private func handPointsInRoot(
+        _ contactsWorld: [SIMD3<Float>],
+        palmWorld: SIMD3<Float>?
+    ) -> [SIMD3<Float>] {
+        var points = contactsWorld.map { root.convert(position: $0, from: nil) }
+        if let palmWorld {
+            let palm = root.convert(position: palmWorld, from: nil)
+            if !points.contains(where: { distance($0, palm) < 0.01 }) {
+                points.append(palm)
+            }
+        }
+        return points
+    }
+
+    private func nearestHalfIndex(toAnyOf points: [SIMD3<Float>]) -> Int? {
+        guard !points.isEmpty else { return nil }
         var bestIndex: Int?
-        var bestDistance = GameWorld.collectDistance
+        var bestDistance = GameWorld.crystalCollectDistance
         for (index, half) in halves.enumerated() {
             guard !half.collected else { continue }
-            let d = distance(point, half.entity.position(relativeTo: root))
-            if d <= bestDistance {
-                bestDistance = d
-                bestIndex = index
+            let halfPos = half.entity.position(relativeTo: root)
+            for point in points {
+                let d = distance(point, halfPos)
+                if d <= bestDistance {
+                    bestDistance = d
+                    bestIndex = index
+                }
             }
         }
         return bestIndex
