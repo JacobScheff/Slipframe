@@ -86,10 +86,11 @@ final class GameWorld {
     private static let hudScale: Float = 3.0
 
     // Synth Riders-style portal aperture (always visible at the track end).
-    private static let portalWidth: Float = 3.8
-    private static let portalHeight: Float = 2.7
-    private static let portalCornerRadius: Float = 1.15
-    private static let portalRimThickness: Float = 0.14
+    private static let portalWidth: Float = 3.6
+    private static let portalHeight: Float = 2.5
+    private static let portalCornerRadius: Float = 0.85
+    /// Neon halo that peeks out around the portal mesh.
+    private static let portalRimThickness: Float = 0.11
     /// Prefer snapping the portal onto a real wall in this band.
     private static let portalMinDistance: Float = 3.5
     private static let portalMaxDistance: Float = 10.0
@@ -329,44 +330,32 @@ final class GameWorld {
     }
 
     private func buildPortalRim() {
-        if portalRoot.children.contains(where: { $0.name == "portalRim" }) { return }
+        if let existing = portalRoot.children.first(where: { $0.name == "portalRim" }) {
+            existing.removeFromParent()
+        }
 
         let rim = Entity()
         rim.name = "portalRim"
         let t = GameWorld.portalRimThickness
-        let outerW = GameWorld.portalWidth + t * 2
-        let outerH = GameWorld.portalHeight + t * 2
-        let cyan = UnlitMaterial(color: UIColor(red: 0.25, green: 0.95, blue: 1.0, alpha: 1))
-        let magenta = UnlitMaterial(color: UIColor(red: 1.0, green: 0.25, blue: 0.75, alpha: 1))
 
-        func addBar(width: Float, height: Float, x: Float, y: Float, material: UnlitMaterial) {
-            let mesh = MeshResource.generateBox(width: width, height: height, depth: 0.08)
-            let bar = ModelEntity(mesh: mesh, materials: [material])
-            bar.position = SIMD3(x, y, 0.04)
-            rim.addChild(bar)
-        }
-
-        // Rounded look approximated with thick neon bars + corner blocks.
-        addBar(width: outerW, height: t, x: 0, y: (GameWorld.portalHeight + t) * 0.5, material: cyan)
-        addBar(width: outerW, height: t, x: 0, y: -(GameWorld.portalHeight + t) * 0.5, material: magenta)
-        addBar(width: t, height: GameWorld.portalHeight, x: (GameWorld.portalWidth + t) * 0.5, y: 0, material: cyan)
-        addBar(width: t, height: GameWorld.portalHeight, x: -(GameWorld.portalWidth + t) * 0.5, y: 0, material: magenta)
-
-        // Soft outer glow plates (slightly larger, behind the rim).
-        let glowMesh = MeshResource.generatePlane(
-            width: outerW + 0.25,
-            height: outerH + 0.25,
-            cornerRadius: GameWorld.portalCornerRadius + 0.15
+        // One rounded neon halo behind the aperture — reads as a clean glowing border.
+        let haloMesh = MeshResource.generatePlane(
+            width: GameWorld.portalWidth + t * 2,
+            height: GameWorld.portalHeight + t * 2,
+            cornerRadius: GameWorld.portalCornerRadius + t * 0.4
         )
-        let glowMaterial = UnlitMaterial(color: UIColor(red: 0.4, green: 0.2, blue: 0.9, alpha: 0.35))
-        let glow = ModelEntity(mesh: glowMesh, materials: [glowMaterial])
-        glow.position = SIMD3(0, 0, -0.02)
-        rim.addChild(glow)
+        let halo = ModelEntity(
+            mesh: haloMesh,
+            materials: [UnlitMaterial(color: UIColor(red: 0.35, green: 0.95, blue: 1.0, alpha: 1))]
+        )
+        // Sit just behind the portal plane so only the border peeks out.
+        halo.position = SIMD3(0, 0, -0.015)
+        rim.addChild(halo)
 
         portalRoot.addChild(rim)
     }
 
-    /// Neon tunnel visible only through the portal — blocks passthrough like Synth Riders.
+    /// Dark tunnel visible only through the portal — blocks passthrough cleanly.
     private func buildPortalInterior() {
         for child in portalWorld.children {
             child.removeFromParent()
@@ -374,72 +363,64 @@ final class GameWorld {
 
         let interior = Entity()
         interior.name = "portalInterior"
-        // Behind the portal plane (away from the player).
-        interior.position = SIMD3(0, 0, -0.08)
+        interior.position = SIMD3(0, 0, -0.05)
 
-        let deep = UnlitMaterial(color: UIColor(red: 0.04, green: 0.02, blue: 0.1, alpha: 1))
-        let cyan = UnlitMaterial(color: UIColor(red: 0.2, green: 0.95, blue: 1.0, alpha: 1))
-        let magenta = UnlitMaterial(color: UIColor(red: 1.0, green: 0.2, blue: 0.7, alpha: 1))
+        let voidColor = UIColor(red: 0.03, green: 0.04, blue: 0.08, alpha: 1)
+        let voidMat = UnlitMaterial(color: voidColor)
+        let railMat = UnlitMaterial(color: UIColor(red: 0.25, green: 0.9, blue: 1.0, alpha: 1))
+        let accentMat = UnlitMaterial(color: UIColor(red: 0.15, green: 0.55, blue: 0.75, alpha: 1))
 
-        // Inward-facing sky dome so the aperture always reads as a solid other-world.
-        let dome = ModelEntity(
-            mesh: MeshResource.generateSphere(radius: 9),
-            materials: [deep]
-        )
-        dome.scale = SIMD3(-1, 1, 1)
-        dome.position = SIMD3(0, 0, -4)
-        interior.addChild(dome)
+        let tunnelW: Float = 4.4
+        let tunnelH = GameWorld.portalHeight + 0.4
+        let tunnelDepth: Float = 10
 
+        // Closed box so the aperture is a solid window into another space.
         let floor = ModelEntity(
-            mesh: MeshResource.generateBox(width: 5, height: 0.05, depth: 12),
-            materials: [UnlitMaterial(color: UIColor(red: 0.08, green: 0.05, blue: 0.16, alpha: 1))]
+            mesh: MeshResource.generateBox(width: tunnelW, height: 0.06, depth: tunnelDepth),
+            materials: [voidMat]
         )
-        floor.position = SIMD3(0, -GameWorld.portalHeight * 0.5 + 0.02, -6)
+        floor.position = SIMD3(0, -tunnelH * 0.5, -tunnelDepth * 0.5)
         interior.addChild(floor)
 
-        // Receding neon frames (open rectangles) for depth, Synth Riders-style.
-        for i in 0..<5 {
-            let z = Float(-1.0 - Float(i) * 1.6)
-            let scale = 1.0 - Float(i) * 0.06
-            let w = GameWorld.portalWidth * scale
-            let h = GameWorld.portalHeight * scale
-            let mat = i % 2 == 0 ? cyan : magenta
-            let frame = Entity()
-            frame.position = SIMD3(0, 0, z)
-
-            let top = ModelEntity(
-                mesh: MeshResource.generateBox(width: w, height: 0.05, depth: 0.05),
-                materials: [mat]
-            )
-            top.position = SIMD3(0, h * 0.5, 0)
-            frame.addChild(top)
-
-            let bottom = ModelEntity(
-                mesh: MeshResource.generateBox(width: w, height: 0.05, depth: 0.05),
-                materials: [mat]
-            )
-            bottom.position = SIMD3(0, -h * 0.5, 0)
-            frame.addChild(bottom)
-
-            for sign: Float in [-1, 1] {
-                let side = ModelEntity(
-                    mesh: MeshResource.generateBox(width: 0.05, height: h, depth: 0.05),
-                    materials: [mat]
-                )
-                side.position = SIMD3(sign * w * 0.5, 0, 0)
-                frame.addChild(side)
-            }
-            interior.addChild(frame)
-        }
+        let ceiling = ModelEntity(
+            mesh: MeshResource.generateBox(width: tunnelW, height: 0.06, depth: tunnelDepth),
+            materials: [voidMat]
+        )
+        ceiling.position = SIMD3(0, tunnelH * 0.5, -tunnelDepth * 0.5)
+        interior.addChild(ceiling)
 
         for sign: Float in [-1, 1] {
-            let rail = ModelEntity(
-                mesh: MeshResource.generateBox(width: 0.06, height: 0.06, depth: 12),
-                materials: [sign < 0 ? cyan : magenta]
+            let wall = ModelEntity(
+                mesh: MeshResource.generateBox(width: 0.06, height: tunnelH, depth: tunnelDepth),
+                materials: [voidMat]
             )
-            rail.position = SIMD3(sign * 1.55, -GameWorld.portalHeight * 0.35, -6)
+            wall.position = SIMD3(sign * tunnelW * 0.5, 0, -tunnelDepth * 0.5)
+            interior.addChild(wall)
+        }
+
+        let back = ModelEntity(
+            mesh: MeshResource.generateBox(width: tunnelW, height: tunnelH, depth: 0.08),
+            materials: [voidMat]
+        )
+        back.position = SIMD3(0, 0, -tunnelDepth)
+        interior.addChild(back)
+
+        // Quiet depth cues — thin floor rails + a soft far glow (no stacked frames).
+        for sign: Float in [-1, 1] {
+            let rail = ModelEntity(
+                mesh: MeshResource.generateBox(width: 0.05, height: 0.05, depth: tunnelDepth - 0.5),
+                materials: [railMat]
+            )
+            rail.position = SIMD3(sign * 1.35, -tunnelH * 0.5 + 0.08, -tunnelDepth * 0.5)
             interior.addChild(rail)
         }
+
+        let farGlow = ModelEntity(
+            mesh: MeshResource.generateSphere(radius: 0.45),
+            materials: [accentMat]
+        )
+        farGlow.position = SIMD3(0, -0.15, -tunnelDepth + 1.2)
+        interior.addChild(farGlow)
 
         portalWorld.addChild(interior)
     }
