@@ -107,6 +107,9 @@ final class GameWorld {
     /// Continuous obstacle stream with a bit of breathing room between beats.
     private static let spawnGapMin: Float = 2.2
     private static let spawnGapMax: Float = 2.9
+    /// Ember Run gets a touch more room than the denser biomes.
+    private static let emberSpawnGapMin: Float = 2.55
+    private static let emberSpawnGapMax: Float = 3.25
     /// Low Crawl needs extra reaction time for duck gates.
     private static let lowCrawlSpawnGapMin: Float = 3.3
     private static let lowCrawlSpawnGapMax: Float = 4.2
@@ -977,10 +980,14 @@ final class GameWorld {
     }
 
     private static func spawnGap(for profile: EnvironmentProfile) -> Float {
-        if profile.twist == .lowCrawl {
+        switch profile.twist {
+        case .lowCrawl:
             return Float.random(in: lowCrawlSpawnGapMin...lowCrawlSpawnGapMax)
+        case .baseline:
+            return Float.random(in: emberSpawnGapMin...emberSpawnGapMax)
+        default:
+            return Float.random(in: spawnGapMin...spawnGapMax)
         }
-        return Float.random(in: spawnGapMin...spawnGapMax)
     }
 
     private func updateFistLatches(deltaTime: Float) {
