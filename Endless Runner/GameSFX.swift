@@ -38,8 +38,8 @@ final class GameSFX {
         )
         windPlayer = Self.makePlayer(
             frequencies: [220, 160], // airy whoosh bed
-            duration: 0.45,
-            volume: 0.4,
+            duration: 1.2, // covers most of the storm telegraph window
+            volume: 0.45,
             noiseAmount: 0.65
         )
     }

@@ -211,6 +211,8 @@ final class GameWorld {
     private var windToX: Float = 0
     private var windElapsed: Float = 0
     private var windDurationActive: Float = 0
+    private var windTelegraphRemaining: Float = 0
+    private var pendingWindDirection: Float = 0
     private var timeUntilWind: Float = GameWorld.windMinInterval
     private var gustEntity: Entity?
 
@@ -938,6 +940,8 @@ final class GameWorld {
         windToX = 0
         windElapsed = 0
         windDurationActive = 0
+        windTelegraphRemaining = 0
+        pendingWindDirection = 0
         timeUntilWind = Float.random(in: GameWorld.windMinInterval...GameWorld.windMaxInterval)
         gustEntity?.removeFromParent()
         gustEntity = nil
@@ -945,6 +949,17 @@ final class GameWorld {
 
     private func updateWind(deltaTime: Float) {
         guard activeSpawnProfile.twist == .windShove else { return }
+
+        // Warning phase: show gust + whoosh, boxes stay still.
+        if windTelegraphRemaining > 0 {
+            windTelegraphRemaining = max(0, windTelegraphRemaining - deltaTime)
+            let warnProgress = 1 - (windTelegraphRemaining / GameWorld.windTelegraphSeconds)
+            updateGustVisual(progress: warnProgress, telegraph: true)
+            if windTelegraphRemaining <= 0 {
+                startWindDrift()
+            }
+            return
+        }
 
         if windDurationActive > 0 {
             windElapsed += deltaTime
@@ -955,7 +970,7 @@ final class GameWorld {
             let deltaX = newX - windCurrentX
             windCurrentX = newX
             shiftDynamicBoxes(by: deltaX)
-            updateGustVisual(progress: t)
+            updateGustVisual(progress: t, telegraph: false)
             if t >= 1 {
                 windDurationActive = 0
                 gustEntity?.removeFromParent()
@@ -967,11 +982,11 @@ final class GameWorld {
 
         timeUntilWind -= deltaTime
         if timeUntilWind <= 0 {
-            beginWindShove()
+            beginWindTelegraph()
         }
     }
 
-    private func beginWindShove() {
+    private func beginWindTelegraph() {
         // Only defer when a wall is already in the near hit band (not merely "on screen").
         let imminent = walls.contains {
             $0.entity.position.z > GameWorld.windDangerMinZ
@@ -982,14 +997,17 @@ final class GameWorld {
             return
         }
 
-        // Prefer shoving toward the current safe gap when one is readable ahead.
-        let direction = windDirectionPreferringSafeGap()
+        pendingWindDirection = windDirectionPreferringSafeGap()
+        windTelegraphRemaining = GameWorld.windTelegraphSeconds
+        spawnGustVisual(direction: pendingWindDirection)
+        GameSFX.shared.playWindWhoosh()
+    }
+
+    private func startWindDrift() {
         windFromX = windCurrentX
-        windToX = windCurrentX + direction * GameWorld.windMagnitude
+        windToX = windCurrentX + pendingWindDirection * GameWorld.windMagnitude
         windElapsed = 0
         windDurationActive = GameWorld.windDuration
-        spawnGustVisual(direction: direction)
-        GameSFX.shared.playWindWhoosh()
     }
 
     private func windDirectionPreferringSafeGap() -> Float {
@@ -1024,23 +1042,34 @@ final class GameWorld {
         gustEntity?.removeFromParent()
         let gust = Entity()
         gust.name = "windGust"
-        let mesh = MeshResource.generateBox(width: 2.8, height: 0.08, depth: 0.35)
-        let mat = UnlitMaterial(color: UIColor(red: 0.55, green: 0.75, blue: 1.0, alpha: 0.35))
+        let mesh = MeshResource.generateBox(width: 2.8, height: 0.1, depth: 0.4)
+        let mat = UnlitMaterial(color: UIColor(red: 0.55, green: 0.75, blue: 1.0, alpha: 0.45))
         let model = ModelEntity(mesh: mesh, materials: [mat])
-        model.position = SIMD3(direction * 0.2, 1.2, -1.5)
+        model.position = SIMD3(direction * 0.25, 1.25, -1.4)
         gust.addChild(model)
         root.addChild(gust)
         gustEntity = gust
     }
 
-    private func updateGustVisual(progress: Float) {
+    private func updateGustVisual(progress: Float, telegraph: Bool) {
         guard let gust = gustEntity else { return }
-        let fade = max(0, 1 - abs(progress - 0.45) * 2)
-        gust.position.z += speed * 0.016
         if let model = gust.children.first as? ModelEntity {
+            let alpha: CGFloat
+            if telegraph {
+                // Pulse brighter as the warning counts down.
+                let pulse = 0.5 + 0.5 * sin(Double(progress) * .pi * 4)
+                alpha = 0.35 + 0.45 * pulse
+            } else {
+                let fade = max(0, 1 - progress)
+                alpha = 0.2 + 0.35 * CGFloat(fade)
+            }
             model.model?.materials = [
-                UnlitMaterial(color: UIColor(red: 0.55, green: 0.75, blue: 1.0, alpha: CGFloat(0.15 + 0.35 * fade)))
+                UnlitMaterial(color: UIColor(red: 0.55, green: 0.8, blue: 1.0, alpha: alpha))
             ]
+            // Nudge the streak in the shove direction during the warning.
+            if telegraph {
+                model.position.x = pendingWindDirection * (0.25 + progress * 0.2)
+            }
         }
     }
 
