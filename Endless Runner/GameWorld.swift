@@ -98,8 +98,8 @@ final class GameWorld {
     private static let headHitMinY: Float = 0.4
     private static let headHitMaxY: Float = wallHeight + 0.35
     private static let collectDistance: Float = 0.24
-    /// Crystal halves use a slightly larger grab radius than coins.
-    private static let crystalCollectDistance: Float = 0.34
+    /// Crystal halves use a generous grab radius so fist + reach stays fair.
+    private static let crystalCollectDistance: Float = 0.45
     private static let baseSpeed: Float = 3.0
     private static let maxSpeed: Float = 7.0
     private static let speedRampPerSecond: Float = 0.055
@@ -232,10 +232,10 @@ final class GameWorld {
     private var rightHandPalmWorld: SIMD3<Float>?
     private var leftIsFist = false
     private var rightIsFist = false
-    /// Brief latch so fist flicker does not drop a held crystal instantly.
+    /// Brief latch so grab-pose flicker does not drop a held crystal instantly.
     private var leftFistLatch: Float = 0
     private var rightFistLatch: Float = 0
-    private static let fistLatchSeconds: Float = 0.22
+    private static let fistLatchSeconds: Float = 0.45
 
     func attach(to content: RealityViewContent, gameModel: GameModel) {
         self.gameModel = gameModel
@@ -796,16 +796,16 @@ final class GameWorld {
                     }
                     let contacts = Self.contactPoints(from: anchor)
                     let palm = Self.palmPoint(from: anchor)
-                    let fist = HandPose.isFist(anchor: anchor)
+                    let grabPose = HandPose.isGrabPose(anchor: anchor)
                     switch anchor.chirality {
                     case .left:
                         leftHandContactsWorld = contacts
                         leftHandPalmWorld = palm
-                        leftIsFist = fist
+                        leftIsFist = grabPose
                     case .right:
                         rightHandContactsWorld = contacts
                         rightHandPalmWorld = palm
-                        rightIsFist = fist
+                        rightIsFist = grabPose
                     @unknown default:
                         break
                     }
@@ -887,6 +887,10 @@ final class GameWorld {
         advanceEntities(by: travel)
         updateFistLatches(deltaTime: deltaTime)
         updateWind(deltaTime: deltaTime)
+        // Grab before hold-update so a newly closed hand can pick up this frame.
+        if activeSpawnProfile.twist == .crystalHalves {
+            tryGrabHalves()
+        }
         updateHeldHalves()
 
         distanceUntilSpawn -= travel
@@ -907,12 +911,14 @@ final class GameWorld {
     }
 
     private func updateFistLatches(deltaTime: Float) {
-        if leftIsFist {
+        // While a half is held, keep the latch alive if the hand is still tracked
+        // so flaky "open hand" readings don't instantly delete it mid-combine.
+        if leftIsFist || (heldLeft != nil && (leftHandPalmWorld != nil || !leftHandContactsWorld.isEmpty)) {
             leftFistLatch = GameWorld.fistLatchSeconds
         } else {
             leftFistLatch = max(0, leftFistLatch - deltaTime)
         }
-        if rightIsFist {
+        if rightIsFist || (heldRight != nil && (rightHandPalmWorld != nil || !rightHandContactsWorld.isEmpty)) {
             rightFistLatch = GameWorld.fistLatchSeconds
         } else {
             rightFistLatch = max(0, rightFistLatch - deltaTime)
@@ -1313,19 +1319,28 @@ final class GameWorld {
 
     private func updateHeldHalves() {
         if let held = heldLeft {
-            if !leftFistActive {
+            let tracked = leftHandPalmWorld != nil || !leftHandContactsWorld.isEmpty
+            // Drop if the hand is gone, or clearly open after the grab latch expires.
+            let releasedOpen = tracked && !leftFistActive && !leftIsFist && leftFistLatch <= 0
+            if !tracked || releasedOpen {
                 held.entity.removeFromParent()
                 heldLeft = nil
             } else if let palm = leftHandPalmWorld {
                 held.entity.position = root.convert(position: palm, from: nil)
+            } else if let tip = leftHandContactsWorld.first {
+                held.entity.position = root.convert(position: tip, from: nil)
             }
         }
         if let held = heldRight {
-            if !rightFistActive {
+            let tracked = rightHandPalmWorld != nil || !rightHandContactsWorld.isEmpty
+            let releasedOpen = tracked && !rightFistActive && !rightIsFist && rightFistLatch <= 0
+            if !tracked || releasedOpen {
                 held.entity.removeFromParent()
                 heldRight = nil
             } else if let palm = rightHandPalmWorld {
                 held.entity.position = root.convert(position: palm, from: nil)
+            } else if let tip = rightHandContactsWorld.first {
+                held.entity.position = root.convert(position: tip, from: nil)
             }
         }
 
@@ -1351,16 +1366,21 @@ final class GameWorld {
     private func tryGrabHalves() {
         guard activeSpawnProfile.twist == .crystalHalves else { return }
 
-        if heldLeft == nil, leftFistActive {
+        // Pickup is proximity-based (same contact points as coins). Closed/pinch
+        // pose still refreshes the hold latch; if pose data is flaky, the latch
+        // from grab keeps the half stuck to the hand long enough to merge.
+        if heldLeft == nil {
             let points = handPointsInRoot(leftHandContactsWorld, palmWorld: leftHandPalmWorld)
             if let index = nearestHalfIndex(toAnyOf: points) {
                 grabHalf(at: index, left: true)
+                leftFistLatch = max(leftFistLatch, GameWorld.fistLatchSeconds)
             }
         }
-        if heldRight == nil, rightFistActive {
+        if heldRight == nil {
             let points = handPointsInRoot(rightHandContactsWorld, palmWorld: rightHandPalmWorld)
             if let index = nearestHalfIndex(toAnyOf: points) {
                 grabHalf(at: index, left: false)
+                rightFistLatch = max(rightFistLatch, GameWorld.fistLatchSeconds)
             }
         }
     }
@@ -1514,8 +1534,8 @@ final class GameWorld {
             }
         }
 
+        // Crystal grabs run in tick(); coins only apply outside Crystal Cave.
         if activeSpawnProfile.twist == .crystalHalves {
-            tryGrabHalves()
             return
         }
 
