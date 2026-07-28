@@ -76,9 +76,9 @@ final class GameWorld {
     private static let baseSpeed: Float = 3.0
     private static let maxSpeed: Float = 7.0
     private static let speedRampPerSecond: Float = 0.055
-    /// Tight spacing — continuous obstacle stream, no empty stretches.
-    private static let spawnGapMin: Float = 1.7
-    private static let spawnGapMax: Float = 2.3
+    /// Continuous obstacle stream with a bit of breathing room between beats.
+    private static let spawnGapMin: Float = 2.2
+    private static let spawnGapMax: Float = 2.9
     private static let coinPoints = 10
     /// HUD sits above the corridor, further down the track, clear of the play volume.
     private static let hudPosition = SIMD3<Float>(0, 2.45, -3.2)
@@ -397,19 +397,39 @@ final class GameWorld {
         floor.position = SIMD3(0, -GameWorld.portalHeight * 0.5 + 0.02, -6)
         interior.addChild(floor)
 
-        // Receding neon light rings / rails.
-        for i in 0..<6 {
-            let z = Float(-1.2 - Float(i) * 1.4)
-            let ring = ModelEntity(
-                mesh: MeshResource.generatePlane(
-                    width: GameWorld.portalWidth * (0.9 - Float(i) * 0.05),
-                    height: GameWorld.portalHeight * (0.9 - Float(i) * 0.05),
-                    cornerRadius: GameWorld.portalCornerRadius * 0.85
-                ),
-                materials: [i % 2 == 0 ? cyan : magenta]
+        // Receding neon frames (open rectangles) for depth, Synth Riders-style.
+        for i in 0..<5 {
+            let z = Float(-1.0 - Float(i) * 1.6)
+            let scale = 1.0 - Float(i) * 0.06
+            let w = GameWorld.portalWidth * scale
+            let h = GameWorld.portalHeight * scale
+            let mat = i % 2 == 0 ? cyan : magenta
+            let frame = Entity()
+            frame.position = SIMD3(0, 0, z)
+
+            let top = ModelEntity(
+                mesh: MeshResource.generateBox(width: w, height: 0.05, depth: 0.05),
+                materials: [mat]
             )
-            ring.position = SIMD3(0, 0, z)
-            interior.addChild(ring)
+            top.position = SIMD3(0, h * 0.5, 0)
+            frame.addChild(top)
+
+            let bottom = ModelEntity(
+                mesh: MeshResource.generateBox(width: w, height: 0.05, depth: 0.05),
+                materials: [mat]
+            )
+            bottom.position = SIMD3(0, -h * 0.5, 0)
+            frame.addChild(bottom)
+
+            for sign: Float in [-1, 1] {
+                let side = ModelEntity(
+                    mesh: MeshResource.generateBox(width: 0.05, height: h, depth: 0.05),
+                    materials: [mat]
+                )
+                side.position = SIMD3(sign * w * 0.5, 0, 0)
+                frame.addChild(side)
+            }
+            interior.addChild(frame)
         }
 
         for sign: Float in [-1, 1] {
