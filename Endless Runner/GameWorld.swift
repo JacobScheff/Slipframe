@@ -259,9 +259,11 @@ final class GameWorld {
     /// Brief latch so fist-classifier flicker does not drop after a confirmed grip.
     private var leftFistLatch: Float = 0
     private var rightFistLatch: Float = 0
-    private static let fistLatchSeconds: Float = 0.45
+    private static let fistLatchSeconds: Float = 0.7
     /// After a proximity grab, must fist quickly or the half drops.
     private static let crystalGrabConfirmWindow: Float = 0.35
+    /// Crystal Cave half spawn chance per beat (was 0.8; cut ~75%).
+    private static let crystalHalfSpawnChance: Float = 0.2
     /// Held shards sit this far past the knuckle plane toward the fingertips (meters).
     private static let crystalGripFingerBias: Float = 0.04
     /// Lift shards slightly off the knuckle plane so they sit in/on the fingers.
@@ -1059,20 +1061,20 @@ final class GameWorld {
 
     private func updateFistLatches(deltaTime: Float) {
         // Fist refreshes the hold latch. Confident open clears it immediately.
-        // Unknown drains slowly so brief occlusion doesn't drop, but mid-poses don't stick forever.
+        // Unknown drains slowly — full fists often lose tip tracking for a beat.
         if leftIsFist {
             leftFistLatch = GameWorld.fistLatchSeconds
         } else if leftIsOpen {
             leftFistLatch = 0
         } else {
-            leftFistLatch = max(0, leftFistLatch - deltaTime)
+            leftFistLatch = max(0, leftFistLatch - deltaTime * 0.65)
         }
         if rightIsFist {
             rightFistLatch = GameWorld.fistLatchSeconds
         } else if rightIsOpen {
             rightFistLatch = 0
         } else {
-            rightFistLatch = max(0, rightFistLatch - deltaTime)
+            rightFistLatch = max(0, rightFistLatch - deltaTime * 0.65)
         }
     }
 
@@ -1366,7 +1368,8 @@ final class GameWorld {
         spawnWall(blocking: blocking, kind: .standard, profile: activeSpawnProfile)
 
         let safeLanes = Lane.allCases.filter { !blocking.contains($0) }
-        if let lane = safeLanes.randomElement(), Float.random(in: 0...1) < 0.8 {
+        if let lane = safeLanes.randomElement(),
+           Float.random(in: 0...1) < GameWorld.crystalHalfSpawnChance {
             spawnHalfCrystal(in: lane)
         }
     }
