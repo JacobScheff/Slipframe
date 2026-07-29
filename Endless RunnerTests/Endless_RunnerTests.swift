@@ -428,6 +428,37 @@ final class Endless_RunnerTests: XCTestCase {
         XCTAssertLessThan(midShrink, 1)
         XCTAssertEqual(StormWind.gustExpandAmount(progress: 1, expandFinishAt: finish), 0, accuracy: 0.001)
     }
+
+    func testStormShoveForbidsWallsOnShiftSide() {
+        XCTAssertEqual(StormWind.forbiddenOuterLaneRaw(offsetStep: 0, pendingDirection: -1), -1)
+        XCTAssertEqual(StormWind.forbiddenOuterLaneRaw(offsetStep: 0, pendingDirection: 1), 1)
+        // Held off-center still keeps that outer lane clear between shoves.
+        XCTAssertEqual(StormWind.forbiddenOuterLaneRaw(offsetStep: -1, pendingDirection: 0), -1)
+        XCTAssertEqual(StormWind.forbiddenOuterLaneRaw(offsetStep: 1, pendingDirection: 0), 1)
+        // Pending shove wins over the held offset (return shove bans the return side).
+        XCTAssertEqual(StormWind.forbiddenOuterLaneRaw(offsetStep: -1, pendingDirection: 1), 1)
+        XCTAssertNil(StormWind.forbiddenOuterLaneRaw(offsetStep: 0, pendingDirection: 0))
+
+        let patterns: [[Int]] = [
+            [-1], [0], [1],
+            [-1, 0], [0, 1], [-1, 1]
+        ]
+        for _ in 0..<40 {
+            let leftShift = StormWind.chooseWallLanes(
+                from: patterns,
+                offsetStep: 0,
+                pendingDirection: -1
+            )
+            XCTAssertFalse(leftShift.contains(-1), "Left shove must not spawn a left wall: \(leftShift)")
+
+            let rightShift = StormWind.chooseWallLanes(
+                from: patterns,
+                offsetStep: 0,
+                pendingDirection: 1
+            )
+            XCTAssertFalse(rightShift.contains(1), "Right shove must not spawn a right wall: \(rightShift)")
+        }
+    }
 }
 
 /// Deterministic RNG for spawn-rate tests.

@@ -38,4 +38,32 @@ enum StormWind {
         let delta = direction >= 0 ? 1 : -1
         return max(-1, min(1, offsetStep + delta))
     }
+
+    /// Outer lane that must stay empty while shifting / held off-center.
+    /// `-1` = left, `+1` = right. Pending shove wins over the held offset.
+    static func forbiddenOuterLaneRaw(offsetStep: Int, pendingDirection: Float) -> Int? {
+        if pendingDirection < -0.01 { return -1 }
+        if pendingDirection > 0.01 { return 1 }
+        if offsetStep < 0 { return -1 }
+        if offsetStep > 0 { return 1 }
+        return nil
+    }
+
+    /// Pick a wall lane pattern that never blocks the forbidden outer lane.
+    /// Pattern entries use lane raw values: -1 left, 0 center, +1 right.
+    static func chooseWallLanes(
+        from patterns: [[Int]],
+        offsetStep: Int,
+        pendingDirection: Float
+    ) -> [Int] {
+        let forbidden = forbiddenOuterLaneRaw(
+            offsetStep: offsetStep,
+            pendingDirection: pendingDirection
+        )
+        let allowed = patterns.filter { pattern in
+            guard let forbidden else { return true }
+            return !pattern.contains(forbidden)
+        }
+        return allowed.randomElement() ?? [0]
+    }
 }

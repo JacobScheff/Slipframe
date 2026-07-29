@@ -1263,7 +1263,9 @@ final class GameWorld {
             spawnCrystalCavePattern()
         case .ghostWalls:
             spawnGhostGlassPattern(profile: profile)
-        case .fogVisibility, .baseline, .windShove:
+        case .windShove:
+            spawnStormPattern(profile: profile)
+        case .fogVisibility, .baseline:
             spawnStandardPattern(preferFairFog: profile.twist == .fogVisibility)
         }
     }
@@ -1271,6 +1273,23 @@ final class GameWorld {
     private func spawnStandardPattern(preferFairFog: Bool) {
         let blocking = preferFairFog ? Self.fairFogWallLanes() : Self.randomWallLanes()
         spawnWall(blocking: blocking, kind: .standard, profile: activeSpawnProfile)
+
+        let safeLanes = Lane.allCases.filter { !blocking.contains($0) }
+        if let coinLane = safeLanes.randomElement(), Float.random(in: 0...1) < 0.7 {
+            spawnCoin(in: coinLane)
+        }
+    }
+
+    /// Storm Pass: never spawn a wall in the lane the wind is shoving toward.
+    private func spawnStormPattern(profile: EnvironmentProfile) {
+        let rawPatterns = Self.stormWallLaneRawPatterns()
+        let chosen = StormWind.chooseWallLanes(
+            from: rawPatterns,
+            offsetStep: windOffsetStep,
+            pendingDirection: pendingWindDirection
+        )
+        let blocking = Set(chosen.compactMap { Lane(rawValue: $0) })
+        spawnWall(blocking: blocking, kind: .standard, profile: profile)
 
         let safeLanes = Lane.allCases.filter { !blocking.contains($0) }
         if let coinLane = safeLanes.randomElement(), Float.random(in: 0...1) < 0.7 {
@@ -1354,6 +1373,17 @@ final class GameWorld {
             [.left, .right], [.left, .center], [.center, .right]
         ]
         return patterns.randomElement() ?? [.center]
+    }
+
+    /// Lane raw patterns for Storm (-1 left, 0 center, +1 right).
+    private static func stormWallLaneRawPatterns() -> [[Int]] {
+        [
+            [-1], [0], [1],
+            [-1], [0], [1],
+            [-1], [1],
+            [-1, 0], [0, 1], [-1, 1],
+            [-1, 1], [-1, 0], [0, 1]
+        ]
     }
 
     private func spawnWall(blocking lanes: Set<Lane>, kind: WallKind, profile: EnvironmentProfile) {
