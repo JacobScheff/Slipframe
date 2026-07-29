@@ -44,18 +44,18 @@ enum EnvironmentMaterials {
         return material
     }
 
-    /// Near-invisible glass for Ghost Glass — tiny fill, almost no glow.
-    /// Uses its own opacity floor (below normal walls) and back-face culling so
-    /// thick slabs don't stack front+back alpha into a solid white sheet.
+    /// Near-invisible glass for Ghost Glass — as transparent as the material allows.
+    /// Back-face culling avoids front+back alpha stacking on thick slabs.
     static func ghostWallBody(opacity: Float) -> PhysicallyBasedMaterial {
         var material = PhysicallyBasedMaterial()
-        let clampedOpacity = max(0.004, min(0.05, opacity))
+        let clampedOpacity = max(0.001, min(0.02, opacity))
         let body = TintColor(r: 0.95, g: 0.97, b: 1.0, a: clampedOpacity)
         material.baseColor = .init(tint: uiColor(body))
-        material.roughness = .init(floatLiteral: 0.15)
+        material.roughness = .init(floatLiteral: 0.12)
         material.metallic = .init(floatLiteral: 0.0)
-        material.emissiveColor = .init(color: uiColor(TintColor(r: 0.85, g: 0.92, b: 1.0, a: 1)))
-        material.emissiveIntensity = 0.015
+        // No emissive — glow was making slabs read solid even at tiny alpha.
+        material.emissiveColor = .init(color: uiColor(TintColor(r: 1, g: 1, b: 1, a: 1)))
+        material.emissiveIntensity = 0
         material.blending = .transparent(opacity: .init(floatLiteral: clampedOpacity))
         material.faceCulling = .back
         return material
