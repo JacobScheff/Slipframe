@@ -259,9 +259,9 @@ final class GameWorld {
     /// Brief latch so fist-classifier flicker does not drop after a confirmed grip.
     private var leftFistLatch: Float = 0
     private var rightFistLatch: Float = 0
-    private static let fistLatchSeconds: Float = 0.55
-    /// After a proximity grab, the player must fist within this window or the half drops.
-    private static let crystalGrabConfirmWindow: Float = 1.25
+    private static let fistLatchSeconds: Float = 0.45
+    /// After a proximity grab, must fist quickly or the half drops.
+    private static let crystalGrabConfirmWindow: Float = 0.35
     /// Held shards sit this far past the knuckle plane toward the fingertips (meters).
     private static let crystalGripFingerBias: Float = 0.04
     /// Lift shards slightly off the knuckle plane so they sit in/on the fingers.

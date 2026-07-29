@@ -16,27 +16,30 @@ enum HandPose {
         case unknown
     }
 
-    /// Average tip→wrist below this ⇒ closed fist (meters).
-    static let fistMaxTipToWrist: Float = 0.12
-    /// Average tip→wrist above this ⇒ open hand.
-    static let openMinTipToWrist: Float = 0.155
+    /// Tip→wrist average below this supports a closed hand (meters).
+    static let fistMaxTipToWrist: Float = 0.145
+    /// Tip→wrist average above this supports an open hand.
+    static let openMinTipToWrist: Float = 0.165
 
-    /// Tip near knuckle ⇒ curled finger.
-    static let fistTipToKnuckle: Float = 0.055
-    /// Tip clearly away from knuckle ⇒ extended finger.
-    static let openTipToKnuckle: Float = 0.095
+    /// Tip not much past the knuckle ⇒ curled (relative, works across hand sizes).
+    static let fistTipPastKnuckle: Float = 0.035
+    /// Tip clearly past the knuckle ⇒ extended.
+    static let openTipPastKnuckle: Float = 0.07
 
-    /// Intermediate tip folded in (used when fingertip tracking drops in a fist).
-    static let fistIntermediateToKnuckle: Float = 0.048
+    /// Absolute tip→knuckle fallback when relative measure is unavailable.
+    static let fistTipToKnuckle: Float = 0.075
+    static let openTipToKnuckle: Float = 0.105
 
-    static let fistMinCurledFingers = 3
+    /// Intermediate tip folded in (fingertips often occlude in a fist).
+    static let fistIntermediateToKnuckle: Float = 0.06
+
+    static let fistMinCurledFingers = 2
     static let openMinExtendedFingers = 3
-    static let minMeasuredFingers = 3
+    static let minMeasuredFingers = 2
 
     /// Thumb tip near index tip ⇒ pinch/grab.
-    static let pinchDistance: Float = 0.038
+    static let pinchDistance: Float = 0.05
 
-    /// True only with positive closed-hand evidence — never defaults to grab.
     static func isGrabPose(anchor: HandAnchor) -> Bool {
         classify(anchor: anchor) == .fist
     }
@@ -45,13 +48,12 @@ enum HandPose {
         classify(anchor: anchor) == .open
     }
 
-    /// Kept for call sites / tests that still say "fist".
     static func isFist(anchor: HandAnchor) -> Bool {
         isGrabPose(anchor: anchor)
     }
 
-    /// Classifies the hand with a dead-band between fist and open so noisy frames
-    /// stay `.unknown` instead of flipping arbitrarily.
+    /// Fist / open / unknown with a dead-band so open hands don't count as fists,
+    /// while real closed hands still register via tip reach or knuckle-relative curl.
     static func classify(anchor: HandAnchor) -> Pose {
         guard anchor.isTracked else { return .unknown }
         guard let skeleton = anchor.handSkeleton else { return .unknown }
@@ -61,7 +63,7 @@ enum HandPose {
         guard wrist.isTracked else { return .unknown }
         let wristWorld = worldPosition(origin: origin, joint: wrist)
 
-        // Pinch is a clear, intentional grab.
+        // Pinch is a clear grab.
         let thumb = skeleton.joint(.thumbTip)
         let indexTip = skeleton.joint(.indexFingerTip)
         if thumb.isTracked, indexTip.isTracked {
@@ -89,27 +91,36 @@ enum HandPose {
 
         for finger in fingers {
             let knuckle = skeleton.joint(finger.knuckle)
-            guard knuckle.isTracked else { continue }
-            let knuckleWorld = worldPosition(origin: origin, joint: knuckle)
+            let knuckleWorld: SIMD3<Float>? = knuckle.isTracked
+                ? worldPosition(origin: origin, joint: knuckle)
+                : nil
 
             let tip = skeleton.joint(finger.tip)
             if tip.isTracked {
                 let tipWorld = worldPosition(origin: origin, joint: tip)
                 let toWrist = simd_distance(tipWorld, wristWorld)
-                let toKnuckle = simd_distance(tipWorld, knuckleWorld)
                 tipToWrist.append(toWrist)
 
-                if toKnuckle <= fistTipToKnuckle {
+                if let knuckleWorld {
+                    let knuckleToWrist = simd_distance(knuckleWorld, wristWorld)
+                    let tipPastKnuckle = toWrist - knuckleToWrist
+                    let tipToKnuckle = simd_distance(tipWorld, knuckleWorld)
+
+                    // Relative curl is stabler across hand sizes than absolute tip→knuckle.
+                    if tipPastKnuckle <= fistTipPastKnuckle || tipToKnuckle <= fistTipToKnuckle {
+                        curledCount += 1
+                    } else if tipPastKnuckle >= openTipPastKnuckle && tipToKnuckle >= openTipToKnuckle {
+                        extendedCount += 1
+                    }
+                } else if toWrist <= fistMaxTipToWrist {
                     curledCount += 1
-                } else if toKnuckle >= openTipToKnuckle && toWrist >= openMinTipToWrist * 0.85 {
-                    extendedCount += 1
                 }
                 continue
             }
 
-            // Fingertips often vanish inside a real fist — intermediates still track.
+            // Tips often vanish in a fist — intermediates still track.
             let intermediate = skeleton.joint(finger.intermediate)
-            if intermediate.isTracked {
+            if intermediate.isTracked, let knuckleWorld {
                 let midWorld = worldPosition(origin: origin, joint: intermediate)
                 if simd_distance(midWorld, knuckleWorld) <= fistIntermediateToKnuckle {
                     curledCount += 1
@@ -126,19 +137,22 @@ enum HandPose {
             if average <= fistMaxTipToWrist {
                 return .fist
             }
+            // Open only with clear extension — dead-band in between stays unknown.
+            if average >= openMinTipToWrist && extendedCount >= 2 {
+                return .open
+            }
             if average >= openMinTipToWrist && extendedCount >= openMinExtendedFingers {
                 return .open
             }
-            if average >= openMinTipToWrist {
+            if average >= openMinTipToWrist && curledCount == 0 {
                 return .open
             }
         }
 
-        if extendedCount >= openMinExtendedFingers {
+        if extendedCount >= openMinExtendedFingers && curledCount == 0 {
             return .open
         }
 
-        // Not enough evidence either way — keep prior latch state in GameWorld.
         return .unknown
     }
 
