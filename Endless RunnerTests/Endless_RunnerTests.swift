@@ -402,6 +402,32 @@ final class Endless_RunnerTests: XCTestCase {
         )
         XCTAssertEqual(director.currentSwitchInterval, expected, accuracy: 0.001)
     }
+
+    func testStormWindOscillatesWithinOneStepOfCenter() {
+        XCTAssertEqual(StormWind.nextDirection(offsetStep: 0, preferredFromGap: 1), 1, accuracy: 0.001)
+        XCTAssertEqual(StormWind.nextDirection(offsetStep: 0, preferredFromGap: -1), -1, accuracy: 0.001)
+        // After a left shove, next must return right — never left again.
+        XCTAssertEqual(StormWind.nextDirection(offsetStep: -1, preferredFromGap: -1), 1, accuracy: 0.001)
+        XCTAssertEqual(StormWind.nextDirection(offsetStep: 1, preferredFromGap: 1), -1, accuracy: 0.001)
+
+        XCTAssertEqual(StormWind.applyStep(offsetStep: 0, direction: -1), -1)
+        XCTAssertEqual(StormWind.applyStep(offsetStep: -1, direction: 1), 0)
+        XCTAssertEqual(StormWind.applyStep(offsetStep: 0, direction: 1), 1)
+        XCTAssertEqual(StormWind.applyStep(offsetStep: 1, direction: -1), 0)
+        // Clamp so stacked same-side shoves cannot exceed ±1.
+        XCTAssertEqual(StormWind.applyStep(offsetStep: -1, direction: -1), -1)
+        XCTAssertEqual(StormWind.applyStep(offsetStep: 1, direction: 1), 1)
+    }
+
+    func testStormGustBarExpandsThenShrinksToZero() {
+        let finish: Float = 0.42
+        XCTAssertEqual(StormWind.gustExpandAmount(progress: 0, expandFinishAt: finish), 0, accuracy: 0.001)
+        XCTAssertEqual(StormWind.gustExpandAmount(progress: finish, expandFinishAt: finish), 1, accuracy: 0.001)
+        let midShrink = StormWind.gustExpandAmount(progress: 0.7, expandFinishAt: finish)
+        XCTAssertGreaterThan(midShrink, 0)
+        XCTAssertLessThan(midShrink, 1)
+        XCTAssertEqual(StormWind.gustExpandAmount(progress: 1, expandFinishAt: finish), 0, accuracy: 0.001)
+    }
 }
 
 /// Deterministic RNG for spawn-rate tests.

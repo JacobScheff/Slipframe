@@ -160,10 +160,10 @@ final class GameWorld {
     // Storm Pass wind.
     private static let windMinInterval: Float = 2.4
     private static let windMaxInterval: Float = 4.8
-    /// Visual/audio warning before boxes start drifting.
-    private static let windTelegraphSeconds: Float = 1.45
-    /// How long the boxes take to finish the shove (slower = easier to correct).
-    private static let windDuration: Float = 2.0
+    /// Visual/audio warning before boxes start drifting (expand then shrink).
+    private static let windTelegraphSeconds: Float = 1.8
+    /// How long the boxes take to finish the shove (slow = easy to correct).
+    private static let windDuration: Float = 4.5
     private static let windMagnitude: Float = 0.55
     /// Only skip a shove when a wall is already in this near danger band.
     private static let windDangerMinZ: Float = -1.1
@@ -174,8 +174,8 @@ final class GameWorld {
     private static let gustBarDepth: Float = 0.35
     private static let gustBarY: Float = 1.25
     private static let gustBarZ: Float = -1.4
-    /// Fraction of the telegraph used to finish the expand animation.
-    private static let gustExpandFinishAt: Float = 0.7
+    /// Fraction of the telegraph used to finish the expand; remainder shrinks back.
+    private static let gustExpandFinishAt: Float = 0.42
 
     /// Playfield origin: floor at y=0, stand line at z=0, track extends along −Z.
     let root = Entity()
@@ -235,6 +235,8 @@ final class GameWorld {
     private var windDurationActive: Float = 0
     private var windTelegraphRemaining: Float = 0
     private var pendingWindDirection: Float = 0
+    /// Discrete lane offset from start: -1, 0, or +1. Never stacks same-side shoves.
+    private var windOffsetStep: Int = 0
     private var timeUntilWind: Float = GameWorld.windMinInterval
     private var gustEntity: Entity?
 
@@ -1084,6 +1086,7 @@ final class GameWorld {
         windDurationActive = 0
         windTelegraphRemaining = 0
         pendingWindDirection = 0
+        windOffsetStep = 0
         timeUntilWind = Float.random(in: GameWorld.windMinInterval...GameWorld.windMaxInterval)
         gustEntity?.removeFromParent()
         gustEntity = nil
@@ -1092,12 +1095,13 @@ final class GameWorld {
     private func updateWind(deltaTime: Float) {
         guard activeSpawnProfile.twist == .windShove else { return }
 
-        // Warning phase: show gust + whoosh, boxes stay still.
+        // Warning phase: expand then shrink; boxes stay still until the line is gone.
         if windTelegraphRemaining > 0 {
             windTelegraphRemaining = max(0, windTelegraphRemaining - deltaTime)
             let warnProgress = 1 - (windTelegraphRemaining / GameWorld.windTelegraphSeconds)
-            updateGustVisual(progress: warnProgress, telegraph: true)
+            updateGustVisual(progress: warnProgress)
             if windTelegraphRemaining <= 0 {
+                // Line fully retracted — shift starts immediately.
                 startWindDrift()
             }
             return
@@ -1112,11 +1116,13 @@ final class GameWorld {
             let deltaX = newX - windCurrentX
             windCurrentX = newX
             shiftDynamicBoxes(by: deltaX)
-            updateGustVisual(progress: t, telegraph: false)
             if t >= 1 {
                 windDurationActive = 0
-                gustEntity?.removeFromParent()
-                gustEntity = nil
+                windOffsetStep = StormWind.applyStep(
+                    offsetStep: windOffsetStep,
+                    direction: pendingWindDirection
+                )
+                pendingWindDirection = 0
                 timeUntilWind = Float.random(in: GameWorld.windMinInterval...GameWorld.windMaxInterval)
             }
             return
@@ -1139,17 +1145,31 @@ final class GameWorld {
             return
         }
 
-        pendingWindDirection = windDirectionPreferringSafeGap()
+        pendingWindDirection = nextWindDirection()
         windTelegraphRemaining = GameWorld.windTelegraphSeconds
         spawnGustVisual(direction: pendingWindDirection)
         GameSFX.shared.playWindWhoosh()
     }
 
     private func startWindDrift() {
+        // Warning line is gone — begin the slow shove with no leftover bar.
+        gustEntity?.removeFromParent()
+        gustEntity = nil
         windFromX = windCurrentX
         windToX = windCurrentX + pendingWindDirection * GameWorld.windMagnitude
         windElapsed = 0
         windDurationActive = GameWorld.windDuration
+    }
+
+    /// From center: left or right. From ±1: must return toward center (no left→left).
+    private func nextWindDirection() -> Float {
+        let preferred: Float?
+        if windOffsetStep == 0 {
+            preferred = windDirectionPreferringSafeGap()
+        } else {
+            preferred = nil
+        }
+        return StormWind.nextDirection(offsetStep: windOffsetStep, preferredFromGap: preferred)
     }
 
     private func windDirectionPreferringSafeGap() -> Float {
@@ -1186,7 +1206,7 @@ final class GameWorld {
         gust.name = "windGust"
         gust.position = SIMD3(0, GameWorld.gustBarY, GameWorld.gustBarZ)
 
-        // Unit-width bar; X scale + offset grow it in the shove direction.
+        // Unit-width bar; X scale + offset grow/shrink along the shove axis.
         let mesh = MeshResource.generateBox(
             width: 1,
             height: GameWorld.gustBarHeight,
@@ -1198,45 +1218,34 @@ final class GameWorld {
         gust.addChild(model)
         root.addChild(gust)
         gustEntity = gust
-        layoutGustBar(progress: 0, telegraph: true, direction: direction)
+        layoutGustBar(progress: 0, direction: direction)
     }
 
-    private func updateGustVisual(progress: Float, telegraph: Bool) {
-        layoutGustBar(progress: progress, telegraph: telegraph, direction: pendingWindDirection)
+    private func updateGustVisual(progress: Float) {
+        layoutGustBar(progress: progress, direction: pendingWindDirection)
     }
 
-    /// Grows the warning streak from the far edge toward the shove direction.
-    private func layoutGustBar(progress: Float, telegraph: Bool, direction: Float) {
+    /// Expands toward the shove direction, then shrinks back the same way as a countdown.
+    private func layoutGustBar(progress: Float, direction: Float) {
         guard let model = gustEntity?.children.first as? ModelEntity else { return }
 
         let dir: Float = direction >= 0 ? 1 : -1
         let fullWidth = GameWorld.gustBarWidth
+        let expand = StormWind.gustExpandAmount(
+            progress: progress,
+            expandFinishAt: GameWorld.gustExpandFinishAt
+        )
 
-        let expand: Float
-        if telegraph {
-            // Ease out so the line reads clearly before boxes move.
-            let t = min(1, max(0, progress) / GameWorld.gustExpandFinishAt)
-            expand = 1 - (1 - t) * (1 - t)
-        } else {
-            expand = 1
-        }
-
-        let width = max(0.05, fullWidth * expand)
+        let width = max(0.02, fullWidth * expand)
         model.scale = SIMD3(width, 1, 1)
 
-        // Keep the origin-side edge fixed; grow toward where walls will shove.
+        // Origin-side edge stays fixed; leading edge grows then retreats.
         let fixedEdgeX = -dir * (fullWidth * 0.5)
         model.position = SIMD3(fixedEdgeX + dir * (width * 0.5), 0, 0)
 
-        let alpha: CGFloat
-        if telegraph {
-            let settle = CGFloat(min(1, expand))
-            let pulse = 0.5 + 0.5 * sin(Double(progress) * .pi * 3)
-            alpha = (0.25 + 0.35 * settle) + 0.25 * pulse * settle
-        } else {
-            let fade = max(0, 1 - progress)
-            alpha = 0.15 + 0.35 * CGFloat(fade)
-        }
+        let settle = CGFloat(min(1, expand))
+        let pulse = 0.5 + 0.5 * sin(Double(progress) * .pi * 4)
+        let alpha = (0.2 + 0.4 * settle) + 0.2 * pulse * settle
         model.model?.materials = [
             UnlitMaterial(color: UIColor(red: 0.55, green: 0.8, blue: 1.0, alpha: alpha))
         ]
