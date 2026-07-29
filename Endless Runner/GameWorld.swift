@@ -259,7 +259,7 @@ final class GameWorld {
     /// Brief latch so fist-classifier flicker does not drop after a confirmed grip.
     private var leftFistLatch: Float = 0
     private var rightFistLatch: Float = 0
-    private static let fistLatchSeconds: Float = 0.4
+    private static let fistLatchSeconds: Float = 0.55
     /// After a proximity grab, the player must fist within this window or the half drops.
     private static let crystalGrabConfirmWindow: Float = 1.25
     /// Held shards sit this far past the knuckle plane toward the fingertips (meters).
@@ -1059,18 +1059,21 @@ final class GameWorld {
 
     private func updateFistLatches(deltaTime: Float) {
         // Fist refreshes the hold latch. Confident open clears it immediately.
-        // Unknown (noisy / occluded) keeps the current latch — no arbitrary flicker.
+        // Unknown drains slowly so brief occlusion doesn't drop, but mid-poses don't stick forever.
         if leftIsFist {
             leftFistLatch = GameWorld.fistLatchSeconds
         } else if leftIsOpen {
             leftFistLatch = 0
+        } else {
+            leftFistLatch = max(0, leftFistLatch - deltaTime)
         }
         if rightIsFist {
             rightFistLatch = GameWorld.fistLatchSeconds
         } else if rightIsOpen {
             rightFistLatch = 0
+        } else {
+            rightFistLatch = max(0, rightFistLatch - deltaTime)
         }
-        _ = deltaTime
     }
 
     private func advanceEntities(by travel: Float) {
