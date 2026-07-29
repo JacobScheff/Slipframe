@@ -254,10 +254,12 @@ final class GameWorld {
     private var rightHandGripWorld: SIMD3<Float>?
     private var leftIsFist = false
     private var rightIsFist = false
+    private var leftIsOpen = false
+    private var rightIsOpen = false
     /// Brief latch so fist-classifier flicker does not drop after a confirmed grip.
     private var leftFistLatch: Float = 0
     private var rightFistLatch: Float = 0
-    private static let fistLatchSeconds: Float = 0.35
+    private static let fistLatchSeconds: Float = 0.4
     /// After a proximity grab, the player must fist within this window or the half drops.
     private static let crystalGrabConfirmWindow: Float = 1.25
     /// Held shards sit this far past the knuckle plane toward the fingertips (meters).
@@ -327,6 +329,8 @@ final class GameWorld {
         rightHandGripWorld = nil
         leftIsFist = false
         rightIsFist = false
+        leftIsOpen = false
+        rightIsOpen = false
         updateSubscription = nil
         isPlayfieldLocked = false
         portalZ = GameWorld.defaultPortalZ
@@ -800,26 +804,30 @@ final class GameWorld {
                             leftHandContactsWorld = []
                             leftHandGripWorld = nil
                             leftIsFist = false
+                            leftIsOpen = false
                         case .right:
                             rightHandContactsWorld = []
                             rightHandGripWorld = nil
                             rightIsFist = false
+                            rightIsOpen = false
                         @unknown default: break
                         }
                         continue
                     }
                     let contacts = Self.contactPoints(from: anchor)
                     let grip = Self.gripPoint(from: anchor)
-                    let grabPose = HandPose.isGrabPose(anchor: anchor)
+                    let pose = HandPose.classify(anchor: anchor)
                     switch anchor.chirality {
                     case .left:
                         leftHandContactsWorld = contacts
                         leftHandGripWorld = grip
-                        leftIsFist = grabPose
+                        leftIsFist = pose == .fist
+                        leftIsOpen = pose == .open
                     case .right:
                         rightHandContactsWorld = contacts
                         rightHandGripWorld = grip
-                        rightIsFist = grabPose
+                        rightIsFist = pose == .fist
+                        rightIsOpen = pose == .open
                     @unknown default:
                         break
                     }
@@ -1050,17 +1058,19 @@ final class GameWorld {
     }
 
     private func updateFistLatches(deltaTime: Float) {
-        // Only refresh on a real fist. Open hand drains the latch so reopening drops.
+        // Fist refreshes the hold latch. Confident open clears it immediately.
+        // Unknown (noisy / occluded) keeps the current latch — no arbitrary flicker.
         if leftIsFist {
             leftFistLatch = GameWorld.fistLatchSeconds
-        } else {
-            leftFistLatch = max(0, leftFistLatch - deltaTime)
+        } else if leftIsOpen {
+            leftFistLatch = 0
         }
         if rightIsFist {
             rightFistLatch = GameWorld.fistLatchSeconds
-        } else {
-            rightFistLatch = max(0, rightFistLatch - deltaTime)
+        } else if rightIsOpen {
+            rightFistLatch = 0
         }
+        _ = deltaTime
     }
 
     private func advanceEntities(by travel: Float) {
@@ -1518,11 +1528,11 @@ final class GameWorld {
             if !tracked {
                 mustDrop = true
             } else if !held.confirmedFist {
-                // Proximity grab — fist within one second or drop.
+                // Proximity grab — need a real fist within the confirm window.
                 mustDrop = held.timeSinceGrab >= GameWorld.crystalGrabConfirmWindow
             } else {
-                // Reopening the fist drops (short latch only for classifier flicker).
-                mustDrop = !leftIsFist && leftFistLatch <= 0
+                // Drop only on a confident open, or after the fist latch expires.
+                mustDrop = leftIsOpen || (!leftIsFist && leftFistLatch <= 0)
             }
 
             if mustDrop {
@@ -1550,7 +1560,7 @@ final class GameWorld {
             } else if !held.confirmedFist {
                 mustDrop = held.timeSinceGrab >= GameWorld.crystalGrabConfirmWindow
             } else {
-                mustDrop = !rightIsFist && rightFistLatch <= 0
+                mustDrop = rightIsOpen || (!rightIsFist && rightFistLatch <= 0)
             }
 
             if mustDrop {

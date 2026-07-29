@@ -10,41 +10,65 @@ import Foundation
 import simd
 
 enum HandPose {
-    /// Tip-to-wrist average above this ⇒ confidently open (meters).
-    static let openTipToWristDistance: Float = 0.15
-    /// Tip near knuckle ⇒ that finger is curled.
-    static let curledTipToKnuckleDistance: Float = 0.095
-    /// Intermediate-tip near knuckle also counts (tips often occlude in a fist).
-    static let curledIntermediateToKnuckleDistance: Float = 0.07
-    static let minCurledFingers = 2
-    /// Thumb tip near index tip counts as a grab/pinch.
-    static let pinchDistance: Float = 0.055
+    enum Pose: Equatable {
+        case fist
+        case open
+        case unknown
+    }
 
-    /// True when the hand is closed enough to grab a crystal half.
-    ///
-    /// Closed fists often occlude fingertips in visionOS tracking, so missing /
-    /// sparse tip data is treated as a grab. Only a clearly extended open hand
-    /// returns false — that matches "drop when you open your fist".
+    /// Average tip→wrist below this ⇒ closed fist (meters).
+    static let fistMaxTipToWrist: Float = 0.12
+    /// Average tip→wrist above this ⇒ open hand.
+    static let openMinTipToWrist: Float = 0.155
+
+    /// Tip near knuckle ⇒ curled finger.
+    static let fistTipToKnuckle: Float = 0.055
+    /// Tip clearly away from knuckle ⇒ extended finger.
+    static let openTipToKnuckle: Float = 0.095
+
+    /// Intermediate tip folded in (used when fingertip tracking drops in a fist).
+    static let fistIntermediateToKnuckle: Float = 0.048
+
+    static let fistMinCurledFingers = 3
+    static let openMinExtendedFingers = 3
+    static let minMeasuredFingers = 3
+
+    /// Thumb tip near index tip ⇒ pinch/grab.
+    static let pinchDistance: Float = 0.038
+
+    /// True only with positive closed-hand evidence — never defaults to grab.
     static func isGrabPose(anchor: HandAnchor) -> Bool {
-        guard anchor.isTracked else { return false }
-        guard let skeleton = anchor.handSkeleton else {
-            // visionOS sometimes delivers tracked hands without a skeleton.
-            return true
-        }
+        classify(anchor: anchor) == .fist
+    }
+
+    static func isOpenPose(anchor: HandAnchor) -> Bool {
+        classify(anchor: anchor) == .open
+    }
+
+    /// Kept for call sites / tests that still say "fist".
+    static func isFist(anchor: HandAnchor) -> Bool {
+        isGrabPose(anchor: anchor)
+    }
+
+    /// Classifies the hand with a dead-band between fist and open so noisy frames
+    /// stay `.unknown` instead of flipping arbitrarily.
+    static func classify(anchor: HandAnchor) -> Pose {
+        guard anchor.isTracked else { return .unknown }
+        guard let skeleton = anchor.handSkeleton else { return .unknown }
 
         let origin = anchor.originFromAnchorTransform
         let wrist = skeleton.joint(.wrist)
-        guard wrist.isTracked else { return true }
+        guard wrist.isTracked else { return .unknown }
         let wristWorld = worldPosition(origin: origin, joint: wrist)
 
-        // Pinch is an easy, reliable grab gesture.
+        // Pinch is a clear, intentional grab.
         let thumb = skeleton.joint(.thumbTip)
-        let index = skeleton.joint(.indexFingerTip)
-        if thumb.isTracked, index.isTracked {
+        let indexTip = skeleton.joint(.indexFingerTip)
+        if thumb.isTracked, indexTip.isTracked {
             let thumbWorld = worldPosition(origin: origin, joint: thumb)
-            let indexWorld = worldPosition(origin: origin, joint: index)
+            let indexWorld = worldPosition(origin: origin, joint: indexTip)
             if simd_distance(thumbWorld, indexWorld) <= pinchDistance {
-                return true
+                return .fist
             }
         }
 
@@ -61,55 +85,61 @@ enum HandPose {
 
         var tipToWrist: [Float] = []
         var curledCount = 0
+        var extendedCount = 0
 
         for finger in fingers {
             let knuckle = skeleton.joint(finger.knuckle)
-            let knuckleWorld: SIMD3<Float>? = knuckle.isTracked
-                ? worldPosition(origin: origin, joint: knuckle)
-                : nil
+            guard knuckle.isTracked else { continue }
+            let knuckleWorld = worldPosition(origin: origin, joint: knuckle)
 
             let tip = skeleton.joint(finger.tip)
             if tip.isTracked {
                 let tipWorld = worldPosition(origin: origin, joint: tip)
-                tipToWrist.append(simd_distance(tipWorld, wristWorld))
-                if let knuckleWorld,
-                   simd_distance(tipWorld, knuckleWorld) <= curledTipToKnuckleDistance {
+                let toWrist = simd_distance(tipWorld, wristWorld)
+                let toKnuckle = simd_distance(tipWorld, knuckleWorld)
+                tipToWrist.append(toWrist)
+
+                if toKnuckle <= fistTipToKnuckle {
                     curledCount += 1
-                    continue
+                } else if toKnuckle >= openTipToKnuckle && toWrist >= openMinTipToWrist * 0.85 {
+                    extendedCount += 1
                 }
+                continue
             }
 
-            // Tips often vanish inside a fist — intermediate joints still track.
+            // Fingertips often vanish inside a real fist — intermediates still track.
             let intermediate = skeleton.joint(finger.intermediate)
-            if intermediate.isTracked, let knuckleWorld {
+            if intermediate.isTracked {
                 let midWorld = worldPosition(origin: origin, joint: intermediate)
-                if simd_distance(midWorld, knuckleWorld) <= curledIntermediateToKnuckleDistance {
+                if simd_distance(midWorld, knuckleWorld) <= fistIntermediateToKnuckle {
                     curledCount += 1
                 }
             }
         }
 
-        if curledCount >= minCurledFingers {
-            return true
+        if curledCount >= fistMinCurledFingers {
+            return .fist
         }
 
-        if tipToWrist.count >= 3 {
-            let averageTipToWrist = tipToWrist.reduce(0, +) / Float(tipToWrist.count)
-            // Clearly open hand with extended fingers.
-            if averageTipToWrist >= openTipToWristDistance && curledCount < 2 {
-                return false
+        if tipToWrist.count >= minMeasuredFingers {
+            let average = tipToWrist.reduce(0, +) / Float(tipToWrist.count)
+            if average <= fistMaxTipToWrist {
+                return .fist
             }
-            // Shorter tip reach ⇒ closed / grabbing.
-            return true
+            if average >= openMinTipToWrist && extendedCount >= openMinExtendedFingers {
+                return .open
+            }
+            if average >= openMinTipToWrist {
+                return .open
+            }
         }
 
-        // Sparse tip data is common while fisting (occlusion). Treat as grab.
-        return true
-    }
+        if extendedCount >= openMinExtendedFingers {
+            return .open
+        }
 
-    /// Kept for call sites / tests that still say "fist".
-    static func isFist(anchor: HandAnchor) -> Bool {
-        isGrabPose(anchor: anchor)
+        // Not enough evidence either way — keep prior latch state in GameWorld.
+        return .unknown
     }
 
     private static func worldPosition(
