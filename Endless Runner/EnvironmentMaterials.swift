@@ -44,14 +44,21 @@ enum EnvironmentMaterials {
         return material
     }
 
-    /// Extremely light glass for Ghost Glass — low fill, faint glow, no solid shell.
+    /// Near-invisible glass for Ghost Glass — tiny fill, almost no glow.
+    /// Uses its own opacity floor (below normal walls) and back-face culling so
+    /// thick slabs don't stack front+back alpha into a solid white sheet.
     static func ghostWallBody(opacity: Float) -> PhysicallyBasedMaterial {
-        wallBody(
-            tint: TintColor(r: 0.95, g: 0.97, b: 1.0, a: opacity),
-            emissive: TintColor(r: 0.85, g: 0.92, b: 1.0, a: 1),
-            opacity: opacity,
-            emissiveIntensity: 0.08
-        )
+        var material = PhysicallyBasedMaterial()
+        let clampedOpacity = max(0.004, min(0.05, opacity))
+        let body = TintColor(r: 0.95, g: 0.97, b: 1.0, a: clampedOpacity)
+        material.baseColor = .init(tint: uiColor(body))
+        material.roughness = .init(floatLiteral: 0.15)
+        material.metallic = .init(floatLiteral: 0.0)
+        material.emissiveColor = .init(color: uiColor(TintColor(r: 0.85, g: 0.92, b: 1.0, a: 1)))
+        material.emissiveIntensity = 0.015
+        material.blending = .transparent(opacity: .init(floatLiteral: clampedOpacity))
+        material.faceCulling = .back
+        return material
     }
 
     static func coin(_ tint: TintColor) -> SimpleMaterial {

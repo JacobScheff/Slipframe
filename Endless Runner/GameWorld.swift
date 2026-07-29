@@ -255,9 +255,13 @@ final class GameWorld {
     /// Brief latch so fist-classifier flicker does not drop after a confirmed grip.
     private var leftFistLatch: Float = 0
     private var rightFistLatch: Float = 0
-    private static let fistLatchSeconds: Float = 0.18
+    private static let fistLatchSeconds: Float = 0.35
     /// After a proximity grab, the player must fist within this window or the half drops.
-    private static let crystalGrabConfirmWindow: Float = 1.0
+    private static let crystalGrabConfirmWindow: Float = 1.25
+    /// Held shards sit this far past the knuckle plane toward the fingertips (meters).
+    private static let crystalGripFingerBias: Float = 0.04
+    /// Lift shards slightly off the knuckle plane so they sit in/on the fingers.
+    private static let crystalGripPalmLift: Float = 0.035
 
     func attach(to content: RealityViewContent, gameModel: GameModel) {
         self.gameModel = gameModel
@@ -864,36 +868,105 @@ final class GameWorld {
         return points
     }
 
-    /// Grip / fist center near the fingers — not the wrist origin of the hand anchor.
+    /// Grip point on the fingers — knuckles + a bit toward the tips.
+    /// Fingertip averages sit under a closed fist, which made shards hang below the hand.
     private static func gripPoint(from anchor: HandAnchor) -> SIMD3<Float> {
         let origin = anchor.originFromAnchorTransform
         let wrist = SIMD3<Float>(origin.columns.3.x, origin.columns.3.y, origin.columns.3.z)
-        guard let skeleton = anchor.handSkeleton else { return wrist }
+        guard let skeleton = anchor.handSkeleton else {
+            // No skeleton: nudge from wrist along the hand anchor's local finger axis.
+            let alongFingers = SIMD3<Float>(-origin.columns.2.x, -origin.columns.2.y, -origin.columns.2.z)
+            let palmUp = SIMD3<Float>(origin.columns.1.x, origin.columns.1.y, origin.columns.1.z)
+            return wrist
+                + alongFingers * (0.08 + GameWorld.crystalGripFingerBias)
+                + palmUp * GameWorld.crystalGripPalmLift
+        }
 
-        let tipNames: [HandSkeleton.JointName] = [
-            .thumbTip, .indexFingerTip, .middleFingerTip, .ringFingerTip, .littleFingerTip
+        let knuckleNames: [HandSkeleton.JointName] = [
+            .indexFingerKnuckle, .middleFingerKnuckle, .ringFingerKnuckle
         ]
-        var sum = SIMD3<Float>.zero
-        var count = 0
+        var knuckleSum = SIMD3<Float>.zero
+        var knuckleCount = 0
+        for name in knuckleNames {
+            let joint = skeleton.joint(name)
+            guard joint.isTracked else { continue }
+            let world = origin * joint.anchorFromJointTransform
+            knuckleSum += SIMD3(world.columns.3.x, world.columns.3.y, world.columns.3.z)
+            knuckleCount += 1
+        }
+
+        let intermediateNames: [HandSkeleton.JointName] = [
+            .indexFingerIntermediateBase, .middleFingerIntermediateBase, .ringFingerIntermediateBase
+        ]
+        var midSum = SIMD3<Float>.zero
+        var midCount = 0
+        for name in intermediateNames {
+            let joint = skeleton.joint(name)
+            guard joint.isTracked else { continue }
+            let world = origin * joint.anchorFromJointTransform
+            midSum += SIMD3(world.columns.3.x, world.columns.3.y, world.columns.3.z)
+            midCount += 1
+        }
+
+        if knuckleCount > 0 {
+            let knuckles = knuckleSum / Float(knuckleCount)
+            // Prefer mid-finger joints when available; otherwise push past knuckles toward tips.
+            let alongFingers: SIMD3<Float>
+            if midCount > 0 {
+                let mids = midSum / Float(midCount)
+                alongFingers = mids - knuckles
+            } else {
+                alongFingers = knuckles - wrist
+            }
+            let fingerDir = length(alongFingers) > 0.001
+                ? normalize(alongFingers)
+                : SIMD3<Float>(0, 0, 0)
+
+            // Palm "up" ≈ wrist→knuckles cross a side finger, falling back to world up.
+            var palmUp = SIMD3<Float>(0, 1, 0)
+            if knuckleCount >= 2 {
+                let index = skeleton.joint(.indexFingerKnuckle)
+                let ring = skeleton.joint(.ringFingerKnuckle)
+                if index.isTracked, ring.isTracked {
+                    let iWorld = origin * index.anchorFromJointTransform
+                    let rWorld = origin * ring.anchorFromJointTransform
+                    let indexPos = SIMD3<Float>(iWorld.columns.3.x, iWorld.columns.3.y, iWorld.columns.3.z)
+                    let ringPos = SIMD3<Float>(rWorld.columns.3.x, rWorld.columns.3.y, rWorld.columns.3.z)
+                    let side = ringPos - indexPos
+                    let candidate = cross(fingerDir, side)
+                    if length(candidate) > 0.001 {
+                        palmUp = normalize(candidate)
+                        // Keep lift toward the back of the hand (away from the palm underside).
+                        if palmUp.y < 0 { palmUp = -palmUp }
+                    }
+                }
+            }
+
+            let base = midCount > 0 ? (midSum / Float(midCount)) : knuckles
+            return base
+                + fingerDir * GameWorld.crystalGripFingerBias
+                + palmUp * GameWorld.crystalGripPalmLift
+        }
+
+        // Fallback: fingertip blend, still lifted so it doesn't hang under the fist.
+        let tipNames: [HandSkeleton.JointName] = [
+            .indexFingerTip, .middleFingerTip, .ringFingerTip
+        ]
+        var tipSum = SIMD3<Float>.zero
+        var tipCount = 0
         for name in tipNames {
             let joint = skeleton.joint(name)
             guard joint.isTracked else { continue }
             let world = origin * joint.anchorFromJointTransform
-            sum += SIMD3(world.columns.3.x, world.columns.3.y, world.columns.3.z)
-            count += 1
+            tipSum += SIMD3(world.columns.3.x, world.columns.3.y, world.columns.3.z)
+            tipCount += 1
         }
-        if count > 0 {
-            // Bias toward the fingertips so the shard sits in the hand, not on the wrist.
-            return mix(wrist, sum / Float(count), t: 0.85)
+        if tipCount > 0 {
+            let tips = tipSum / Float(tipCount)
+            return mix(wrist, tips, t: 0.9) + SIMD3<Float>(0, GameWorld.crystalGripPalmLift, 0)
         }
 
-        let middle = skeleton.joint(.middleFingerTip)
-        if middle.isTracked {
-            let midWorld = origin * middle.anchorFromJointTransform
-            let mid = SIMD3<Float>(midWorld.columns.3.x, midWorld.columns.3.y, midWorld.columns.3.z)
-            return mix(wrist, mid, t: 0.55)
-        }
-        return wrist
+        return wrist + SIMD3<Float>(0, 0.08, 0)
     }
 
     // MARK: - Loop
@@ -1533,10 +1606,24 @@ final class GameWorld {
         )
         heldEntity.name = "heldHalf"
         root.addChild(heldEntity)
-        let held = HeldHalf(type: source.type, charged: source.charged, entity: heldEntity)
+        var held = HeldHalf(type: source.type, charged: source.charged, entity: heldEntity)
         if left {
+            if leftIsFist {
+                held.confirmedFist = true
+                leftFistLatch = GameWorld.fistLatchSeconds
+            }
+            if let grip = leftHandGripWorld {
+                held.entity.position = root.convert(position: grip, from: nil)
+            }
             heldLeft = held
         } else {
+            if rightIsFist {
+                held.confirmedFist = true
+                rightFistLatch = GameWorld.fistLatchSeconds
+            }
+            if let grip = rightHandGripWorld {
+                held.entity.position = root.convert(position: grip, from: nil)
+            }
             heldRight = held
         }
     }

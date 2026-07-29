@@ -303,7 +303,7 @@ final class Endless_RunnerTests: XCTestCase {
         let ghost = EnvironmentCatalog.profile(for: .ghostGlass)
         XCTAssertEqual(ghost.twist, .ghostWalls)
         XCTAssertEqual(ghost.ghostWallChance, 1.0, accuracy: 0.001)
-        XCTAssertLessThan(ghost.ghostWallOpacity, 0.1)
+        XCTAssertLessThan(ghost.ghostWallOpacity, 0.03)
         // White-ish tint (high RGB, low chroma).
         XCTAssertGreaterThan(ghost.palette.wallTint.r, 0.9)
         XCTAssertGreaterThan(ghost.palette.wallTint.g, 0.9)

@@ -177,14 +177,14 @@ enum EnvironmentCatalog {
                     ambienceBrightness: 1.0,
                     fogDensity: 0.0,
                     fogColor: TintColor(r: 0.7, g: 0.8, b: 0.9, a: 0.0),
-                    wallTint: TintColor(r: 0.95, g: 0.97, b: 1.0, a: 0.05),
+                    wallTint: TintColor(r: 0.95, g: 0.97, b: 1.0, a: 0.012),
                     wallEmissive: TintColor(r: 0.85, g: 0.92, b: 1.0, a: 1),
-                    wallOpacity: 0.05,
-                    wallEmissiveIntensity: 0.08,
+                    wallOpacity: 0.012,
+                    wallEmissiveIntensity: 0.015,
                     coinTint: TintColor(r: 0.85, g: 0.95, b: 1.0, a: 1)
                 ),
                 ghostWallChance: 1.0,
-                ghostWallOpacity: 0.05,
+                ghostWallOpacity: 0.012,
                 lowCrawlTeachCount: 0,
                 duckHazardChance: 0
             )

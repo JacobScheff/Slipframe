@@ -10,22 +10,25 @@ import Foundation
 import simd
 
 enum HandPose {
-    /// Generous tip-to-wrist average for a closed / grabbing hand (meters).
-    static let grabTipToWristDistance: Float = 0.17
+    /// Tip-to-wrist average above this ⇒ confidently open (meters).
+    static let openTipToWristDistance: Float = 0.15
     /// Tip near knuckle ⇒ that finger is curled.
-    static let curledTipToKnuckleDistance: Float = 0.085
+    static let curledTipToKnuckleDistance: Float = 0.095
+    /// Intermediate-tip near knuckle also counts (tips often occlude in a fist).
+    static let curledIntermediateToKnuckleDistance: Float = 0.07
     static let minCurledFingers = 2
     /// Thumb tip near index tip counts as a grab/pinch.
-    static let pinchDistance: Float = 0.045
+    static let pinchDistance: Float = 0.055
 
     /// True when the hand is closed enough to grab a crystal half.
-    /// If the skeleton is missing but the hand is tracked, returns true so
-    /// Crystal Cave is still playable (coins already work from contact points alone).
+    ///
+    /// Closed fists often occlude fingertips in visionOS tracking, so missing /
+    /// sparse tip data is treated as a grab. Only a clearly extended open hand
+    /// returns false — that matches "drop when you open your fist".
     static func isGrabPose(anchor: HandAnchor) -> Bool {
         guard anchor.isTracked else { return false }
         guard let skeleton = anchor.handSkeleton else {
             // visionOS sometimes delivers tracked hands without a skeleton.
-            // Don't hard-block Crystal Cave grabs in that case.
             return true
         }
 
@@ -45,39 +48,63 @@ enum HandPose {
             }
         }
 
-        let fingers: [(tip: HandSkeleton.JointName, knuckle: HandSkeleton.JointName)] = [
-            (.indexFingerTip, .indexFingerKnuckle),
-            (.middleFingerTip, .middleFingerKnuckle),
-            (.ringFingerTip, .ringFingerKnuckle),
-            (.littleFingerTip, .littleFingerKnuckle)
+        let fingers: [(
+            tip: HandSkeleton.JointName,
+            intermediate: HandSkeleton.JointName,
+            knuckle: HandSkeleton.JointName
+        )] = [
+            (.indexFingerTip, .indexFingerIntermediateTip, .indexFingerKnuckle),
+            (.middleFingerTip, .middleFingerIntermediateTip, .middleFingerKnuckle),
+            (.ringFingerTip, .ringFingerIntermediateTip, .ringFingerKnuckle),
+            (.littleFingerTip, .littleFingerIntermediateTip, .littleFingerKnuckle)
         ]
 
         var tipToWrist: [Float] = []
         var curledCount = 0
 
         for finger in fingers {
-            let tip = skeleton.joint(finger.tip)
-            guard tip.isTracked else { continue }
-            let tipWorld = worldPosition(origin: origin, joint: tip)
-            tipToWrist.append(simd_distance(tipWorld, wristWorld))
-
             let knuckle = skeleton.joint(finger.knuckle)
-            if knuckle.isTracked {
-                let knuckleWorld = worldPosition(origin: origin, joint: knuckle)
-                if simd_distance(tipWorld, knuckleWorld) <= curledTipToKnuckleDistance {
+            let knuckleWorld: SIMD3<Float>? = knuckle.isTracked
+                ? worldPosition(origin: origin, joint: knuckle)
+                : nil
+
+            let tip = skeleton.joint(finger.tip)
+            if tip.isTracked {
+                let tipWorld = worldPosition(origin: origin, joint: tip)
+                tipToWrist.append(simd_distance(tipWorld, wristWorld))
+                if let knuckleWorld,
+                   simd_distance(tipWorld, knuckleWorld) <= curledTipToKnuckleDistance {
+                    curledCount += 1
+                    continue
+                }
+            }
+
+            // Tips often vanish inside a fist — intermediate joints still track.
+            let intermediate = skeleton.joint(finger.intermediate)
+            if intermediate.isTracked, let knuckleWorld {
+                let midWorld = worldPosition(origin: origin, joint: intermediate)
+                if simd_distance(midWorld, knuckleWorld) <= curledIntermediateToKnuckleDistance {
                     curledCount += 1
                 }
             }
         }
 
-        if tipToWrist.count >= 2 {
-            let averageTipToWrist = tipToWrist.reduce(0, +) / Float(tipToWrist.count)
-            if averageTipToWrist <= grabTipToWristDistance {
-                return true
-            }
+        if curledCount >= minCurledFingers {
+            return true
         }
 
-        return curledCount >= minCurledFingers
+        if tipToWrist.count >= 3 {
+            let averageTipToWrist = tipToWrist.reduce(0, +) / Float(tipToWrist.count)
+            // Clearly open hand with extended fingers.
+            if averageTipToWrist >= openTipToWristDistance && curledCount < 2 {
+                return false
+            }
+            // Shorter tip reach ⇒ closed / grabbing.
+            return true
+        }
+
+        // Sparse tip data is common while fisting (occlusion). Treat as grab.
+        return true
     }
 
     /// Kept for call sites / tests that still say "fist".
