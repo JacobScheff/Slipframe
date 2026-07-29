@@ -427,6 +427,50 @@ final class Endless_RunnerTests: XCTestCase {
         XCTAssertGreaterThan(midShrink, 0)
         XCTAssertLessThan(midShrink, 1)
         XCTAssertEqual(StormWind.gustExpandAmount(progress: 1, expandFinishAt: finish), 0, accuracy: 0.001)
+        XCTAssertTrue(StormWind.gustLineDidDisappear(progress: 1, expandFinishAt: finish))
+        XCTAssertFalse(StormWind.gustLineDidDisappear(progress: 0.5, expandFinishAt: finish))
+    }
+
+    func testStormGustBarShrinksTowardShoveDirection() {
+        let finish: Float = 0.42
+        let full: Float = 2.8
+        // Expand right: center moves right from the left origin edge.
+        let expanding = StormWind.gustBarLayout(
+            progress: finish * 0.5,
+            expandFinishAt: finish,
+            direction: 1,
+            fullWidth: full
+        )
+        XCTAssertGreaterThan(expanding.width, 0.1)
+        XCTAssertLessThan(expanding.centerX, 0)
+
+        let fullBar = StormWind.gustBarLayout(
+            progress: finish,
+            expandFinishAt: finish,
+            direction: 1,
+            fullWidth: full
+        )
+        XCTAssertEqual(fullBar.width, full, accuracy: 0.01)
+        XCTAssertEqual(fullBar.centerX, 0, accuracy: 0.01)
+
+        // Shrink the other way: remaining segment sits on the right (shove) side.
+        let shrinking = StormWind.gustBarLayout(
+            progress: 0.75,
+            expandFinishAt: finish,
+            direction: 1,
+            fullWidth: full
+        )
+        XCTAssertGreaterThan(shrinking.width, 0)
+        XCTAssertLessThan(shrinking.width, full)
+        XCTAssertGreaterThan(shrinking.centerX, 0)
+
+        let gone = StormWind.gustBarLayout(
+            progress: 1,
+            expandFinishAt: finish,
+            direction: 1,
+            fullWidth: full
+        )
+        XCTAssertEqual(gone.width, 0, accuracy: 0.001)
     }
 
     func testStormShoveForbidsWallsOnShiftSide() {

@@ -1095,13 +1095,16 @@ final class GameWorld {
     private func updateWind(deltaTime: Float) {
         guard activeSpawnProfile.twist == .windShove else { return }
 
-        // Warning phase: expand then shrink; boxes stay still until the line is gone.
+        // Warning phase: expand then shrink the other way; shove starts the instant the line is gone.
         if windTelegraphRemaining > 0 {
             windTelegraphRemaining = max(0, windTelegraphRemaining - deltaTime)
             let warnProgress = 1 - (windTelegraphRemaining / GameWorld.windTelegraphSeconds)
             updateGustVisual(progress: warnProgress)
-            if windTelegraphRemaining <= 0 {
-                // Line fully retracted — shift starts immediately.
+            if StormWind.gustLineDidDisappear(
+                progress: warnProgress,
+                expandFinishAt: GameWorld.gustExpandFinishAt
+            ) || windTelegraphRemaining <= 0 {
+                windTelegraphRemaining = 0
                 startWindDrift()
             }
             return
@@ -1225,27 +1228,28 @@ final class GameWorld {
         layoutGustBar(progress: progress, direction: pendingWindDirection)
     }
 
-    /// Expands toward the shove direction, then shrinks back the same way as a countdown.
+    /// Expands toward the shove, then shrinks the other way (wipes onward in shove direction).
     private func layoutGustBar(progress: Float, direction: Float) {
         guard let model = gustEntity?.children.first as? ModelEntity else { return }
 
-        let dir: Float = direction >= 0 ? 1 : -1
-        let fullWidth = GameWorld.gustBarWidth
-        let expand = StormWind.gustExpandAmount(
+        let layout = StormWind.gustBarLayout(
             progress: progress,
-            expandFinishAt: GameWorld.gustExpandFinishAt
+            expandFinishAt: GameWorld.gustExpandFinishAt,
+            direction: direction,
+            fullWidth: GameWorld.gustBarWidth
         )
 
-        let width = max(0.02, fullWidth * expand)
-        model.scale = SIMD3(width, 1, 1)
+        // Hide completely once collapsed so disappearance and shove share the same frame.
+        let visible = layout.width > 0.001
+        model.isEnabled = visible
+        if visible {
+            model.scale = SIMD3(layout.width, 1, 1)
+            model.position = SIMD3(layout.centerX, 0, 0)
+        }
 
-        // Origin-side edge stays fixed; leading edge grows then retreats.
-        let fixedEdgeX = -dir * (fullWidth * 0.5)
-        model.position = SIMD3(fixedEdgeX + dir * (width * 0.5), 0, 0)
-
-        let settle = CGFloat(min(1, expand))
+        let settle = CGFloat(min(1, layout.width / max(0.001, GameWorld.gustBarWidth)))
         let pulse = 0.5 + 0.5 * sin(Double(progress) * .pi * 4)
-        let alpha = (0.2 + 0.4 * settle) + 0.2 * pulse * settle
+        let alpha = visible ? ((0.2 + 0.4 * settle) + 0.2 * pulse * settle) : 0
         model.model?.materials = [
             UnlitMaterial(color: UIColor(red: 0.55, green: 0.8, blue: 1.0, alpha: alpha))
         ]

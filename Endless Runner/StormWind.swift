@@ -8,7 +8,7 @@
 import Foundation
 
 enum StormWind {
-    /// Warning bar width factor: expand toward the shove, then shrink back to 0.
+    /// Warning bar width factor: expand toward the shove, then shrink to 0.
     /// `progress` is 0…1 over the full telegraph; `expandFinishAt` is when full width is reached.
     static func gustExpandAmount(progress: Float, expandFinishAt: Float) -> Float {
         let finish = min(0.95, max(0.05, expandFinishAt))
@@ -19,8 +19,44 @@ enum StormWind {
             return 1 - (1 - t) * (1 - t)
         }
         let t = (p - finish) / (1 - finish)
-        // Ease in while shrinking back along the same axis.
+        // Ease in while shrinking away.
         return (1 - t) * (1 - t)
+    }
+
+    /// True once the expand+shrink cycle has finished (line fully gone).
+    static func gustLineDidDisappear(progress: Float, expandFinishAt: Float) -> Bool {
+        let finish = min(0.95, max(0.05, expandFinishAt))
+        return progress >= 1 - 0.0001 || (
+            progress > finish && gustExpandAmount(progress: progress, expandFinishAt: finish) <= 0.001
+        )
+    }
+
+    /// Bar geometry for the telegraph.
+    /// Expand: origin edge fixed, grows toward shove.
+    /// Shrink: opposite — leading edge stays at full extent, bar collapses onward in the shove direction.
+    static func gustBarLayout(
+        progress: Float,
+        expandFinishAt: Float,
+        direction: Float,
+        fullWidth: Float
+    ) -> (width: Float, centerX: Float) {
+        let dir: Float = direction >= 0 ? 1 : -1
+        let finish = min(0.95, max(0.05, expandFinishAt))
+        let amount = gustExpandAmount(progress: progress, expandFinishAt: finish)
+        let width = max(0, fullWidth * amount)
+
+        let originEdge = -dir * (fullWidth * 0.5)
+        let leadEdge = dir * (fullWidth * 0.5)
+
+        let centerX: Float
+        if progress <= finish {
+            // Grow from the far/origin side toward the shove.
+            centerX = originEdge + dir * (width * 0.5)
+        } else {
+            // Shrink the other way: wipe toward the shove side.
+            centerX = leadEdge - dir * (width * 0.5)
+        }
+        return (width, centerX)
     }
 
     /// Next shove direction (±1). Offset step is clamped to -1…+1 from start.
