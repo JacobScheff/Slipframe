@@ -20,6 +20,7 @@
 		B01A10072C72000100A00008 /* PlayHUDView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A10062C72000100A00007 /* PlayHUDView.swift */; };
 		B01A10092C72000100A0000A /* GameSFX.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A10082C72000100A00009 /* GameSFX.swift */; };
 		B01A100B2C72000100A0000C /* WallCollision.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A100A2C72000100A0000B /* WallCollision.swift */; };
+		B01A100D2C72000100A0000E /* GameVisuals.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A100C2C72000100A0000D /* GameVisuals.swift */; };
 		B01A10112C72000100A00011 /* EnvironmentProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A10102C72000100A00010 /* EnvironmentProfile.swift */; };
 		B01A10132C72000100A00013 /* EnvironmentDirector.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A10122C72000100A00012 /* EnvironmentDirector.swift */; };
 		B01A10152C72000100A00015 /* GameMusic.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A10142C72000100A00014 /* GameMusic.swift */; };
@@ -57,6 +58,7 @@
 		B01A10062C72000100A00007 /* PlayHUDView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayHUDView.swift; sourceTree = "<group>"; };
 		B01A10082C72000100A00009 /* GameSFX.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameSFX.swift; sourceTree = "<group>"; };
 		B01A100A2C72000100A0000B /* WallCollision.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WallCollision.swift; sourceTree = "<group>"; };
+		B01A100C2C72000100A0000D /* GameVisuals.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameVisuals.swift; sourceTree = "<group>"; };
 		B01A10102C72000100A00010 /* EnvironmentProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentProfile.swift; sourceTree = "<group>"; };
 		B01A10122C72000100A00012 /* EnvironmentDirector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentDirector.swift; sourceTree = "<group>"; };
 		B01A10142C72000100A00014 /* GameMusic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameMusic.swift; sourceTree = "<group>"; };
@@ -115,6 +117,7 @@
 				B01A10002C72000100A00001 /* ImmersiveView.swift */,
 				B01A10022C72000100A00003 /* GameModel.swift */,
 				B01A10042C72000100A00005 /* GameWorld.swift */,
+				B01A100C2C72000100A0000D /* GameVisuals.swift */,
 				B01A100A2C72000100A0000B /* WallCollision.swift */,
 				B01A10102C72000100A00010 /* EnvironmentProfile.swift */,
 				B01A10122C72000100A00012 /* EnvironmentDirector.swift */,
@@ -273,6 +276,7 @@
 				B01A10012C72000100A00002 /* ImmersiveView.swift in Sources */,
 				B01A10032C72000100A00004 /* GameModel.swift in Sources */,
 				B01A10052C72000100A00006 /* GameWorld.swift in Sources */,
+				B01A100D2C72000100A0000E /* GameVisuals.swift in Sources */,
 				B01A100B2C72000100A0000C /* WallCollision.swift in Sources */,
 				B01A10112C72000100A00011 /* EnvironmentProfile.swift in Sources */,
 				B01A10132C72000100A00013 /* EnvironmentDirector.swift in Sources */,

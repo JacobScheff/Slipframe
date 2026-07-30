@@ -8,6 +8,7 @@
 //  - Obstacles emerge from the portal into the real room
 //  - Biomes tint ambience / walls / coins (ready for custom assets later)
 //  - Each biome applies one gameplay twist via EnvironmentDirector
+//  Visuals: polished procedural meshes + catalog textures (see ASSET_SPEC.md).
 //
 
 import ARKit
@@ -51,6 +52,8 @@ final class GameWorld {
 
     private struct CoinItem {
         let entity: Entity
+        let baseY: Float
+        var phase: Float
         var collected = false
     }
 
@@ -176,6 +179,10 @@ final class GameWorld {
     private static let gustBarZ: Float = -1.4
     /// Fraction of the telegraph used to finish the expand; remainder shrinks back.
     private static let gustExpandFinishAt: Float = 0.42
+    /// Coin bob amplitude / spin rates.
+    private static let coinBobAmplitude: Float = 0.045
+    private static let coinBobSpeed: Float = 2.6
+    private static let coinSpinSpeed: Float = 1.8
 
     /// Playfield origin: floor at y=0, stand line at z=0, track extends along −Z.
     let root = Entity()
@@ -201,6 +208,7 @@ final class GameWorld {
     private let portalRoot = Entity()
     private let portalEntity = Entity()
     private let portalWorld = Entity()
+    private let visualFX = VisualFXController()
 
     private weak var gameModel: GameModel?
     private let environmentDirector = EnvironmentDirector()
@@ -226,6 +234,8 @@ final class GameWorld {
     private var activeRunID: Int = -1
     /// After Start, playfield pose no longer follows the player.
     private var isPlayfieldLocked = false
+    /// Seconds since attach — drives portal pulse / ambient motion.
+    private var elapsedTime: Float = 0
 
     // Wind shove state (offsets obstacle boxes only).
     private var windCurrentX: Float = 0
@@ -277,6 +287,9 @@ final class GameWorld {
         content.add(wallAnchor)
         isPlayfieldLocked = false
         lastDebugMode = gameModel.environmentDebugMode
+        elapsedTime = 0
+        GameMaterials.warmTextures()
+        visualFX.attach(to: root)
 
         if updateSubscription == nil {
             updateSubscription = content.subscribe(to: SceneEvents.Update.self) { [weak self] event in
@@ -335,9 +348,11 @@ final class GameWorld {
         rightIsOpen = false
         updateSubscription = nil
         isPlayfieldLocked = false
+        elapsedTime = 0
         portalZ = GameWorld.defaultPortalZ
         activeSpawnZ = GameWorld.defaultPortalZ + GameWorld.spawnInFrontOfPortal
         lastBuiltPortalZ = .greatestFiniteMagnitude
+        visualFX.clear()
         clearDynamicContent()
         dropHeldHalves()
         gameModel?.prefersRoomDimming = false
@@ -395,31 +410,14 @@ final class GameWorld {
         let nearZ = GameWorld.trackNearZ
         let depth = max(1.0, nearZ - farZ)
         let centerZ = (nearZ + farZ) * 0.5
-        let palette = environmentDirector.displayedPalette
 
-        let floorMesh = MeshResource.generateBox(
+        let track = GameVisualBuilders.makeTrack(
             width: GameWorld.trackWidth,
-            height: 0.02,
-            depth: depth
+            depth: depth,
+            laneXs: Lane.allCases.map(\.x)
         )
-        let floor = ModelEntity(
-            mesh: floorMesh,
-            materials: [EnvironmentMaterials.simple(palette.floor, roughness: 0.85)]
-        )
-        floor.name = "floor"
-        floor.position = SIMD3(0, 0, centerZ)
-        trackRoot.addChild(floor)
-
-        for lane in Lane.allCases {
-            let stripeMesh = MeshResource.generateBox(width: 0.07, height: 0.025, depth: depth)
-            let stripe = ModelEntity(
-                mesh: stripeMesh,
-                materials: [EnvironmentMaterials.unlit(palette.laneStripe)]
-            )
-            stripe.name = "laneStripe"
-            stripe.position = SIMD3(lane.x, 0.02, centerZ)
-            trackRoot.addChild(stripe)
-        }
+        track.position = SIMD3(0, 0, centerZ)
+        trackRoot.addChild(track)
     }
 
     /// Always-on Synth Riders-style aperture at the end of the track.
@@ -462,24 +460,12 @@ final class GameWorld {
             existing.removeFromParent()
         }
 
-        let rim = Entity()
-        rim.name = "portalRim"
-        let t = GameWorld.portalRimThickness
-        let palette = environmentDirector.displayedPalette
-
-        let haloMesh = MeshResource.generatePlane(
-            width: GameWorld.portalWidth + t * 2,
-            height: GameWorld.portalHeight + t * 2,
-            cornerRadius: GameWorld.portalCornerRadius + t * 0.4
+        let rim = GameVisualBuilders.makePortalRim(
+            width: GameWorld.portalWidth,
+            height: GameWorld.portalHeight,
+            cornerRadius: GameWorld.portalCornerRadius,
+            thickness: GameWorld.portalRimThickness
         )
-        let halo = ModelEntity(
-            mesh: haloMesh,
-            materials: [EnvironmentMaterials.unlit(palette.portalRim)]
-        )
-        halo.name = "portalRimHalo"
-        halo.position = SIMD3(0, 0, -0.015)
-        rim.addChild(halo)
-
         portalRoot.addChild(rim)
     }
 
@@ -488,73 +474,7 @@ final class GameWorld {
         for child in portalWorld.children {
             child.removeFromParent()
         }
-
-        let interior = Entity()
-        interior.name = "portalInterior"
-        interior.position = SIMD3(0, 0, -0.05)
-        let palette = environmentDirector.displayedPalette
-
-        let voidMat = EnvironmentMaterials.unlit(palette.portalVoid)
-        let railMat = EnvironmentMaterials.unlit(palette.portalRail)
-        let accentMat = EnvironmentMaterials.unlit(palette.portalAccent)
-
-        let tunnelW: Float = 4.4
-        let tunnelH = GameWorld.portalHeight + 0.4
-        let tunnelDepth: Float = 10
-
-        let floor = ModelEntity(
-            mesh: MeshResource.generateBox(width: tunnelW, height: 0.06, depth: tunnelDepth),
-            materials: [voidMat]
-        )
-        floor.name = "portalFloor"
-        floor.position = SIMD3(0, -tunnelH * 0.5, -tunnelDepth * 0.5)
-        interior.addChild(floor)
-
-        let ceiling = ModelEntity(
-            mesh: MeshResource.generateBox(width: tunnelW, height: 0.06, depth: tunnelDepth),
-            materials: [voidMat]
-        )
-        ceiling.name = "portalCeiling"
-        ceiling.position = SIMD3(0, tunnelH * 0.5, -tunnelDepth * 0.5)
-        interior.addChild(ceiling)
-
-        for sign: Float in [-1, 1] {
-            let wall = ModelEntity(
-                mesh: MeshResource.generateBox(width: 0.06, height: tunnelH, depth: tunnelDepth),
-                materials: [voidMat]
-            )
-            wall.name = "portalSide"
-            wall.position = SIMD3(sign * tunnelW * 0.5, 0, -tunnelDepth * 0.5)
-            interior.addChild(wall)
-        }
-
-        let back = ModelEntity(
-            mesh: MeshResource.generateBox(width: tunnelW, height: tunnelH, depth: 0.08),
-            materials: [voidMat]
-        )
-        back.name = "portalBack"
-        back.position = SIMD3(0, 0, -tunnelDepth)
-        interior.addChild(back)
-
-        for sign: Float in [-1, 1] {
-            let rail = ModelEntity(
-                mesh: MeshResource.generateBox(width: 0.05, height: 0.05, depth: tunnelDepth - 0.5),
-                materials: [railMat]
-            )
-            rail.name = "portalRail"
-            rail.position = SIMD3(sign * 1.35, -tunnelH * 0.5 + 0.08, -tunnelDepth * 0.5)
-            interior.addChild(rail)
-        }
-
-        let farGlow = ModelEntity(
-            mesh: MeshResource.generateSphere(radius: 0.45),
-            materials: [accentMat]
-        )
-        farGlow.name = "portalAccent"
-        farGlow.position = SIMD3(0, -0.15, -tunnelDepth + 1.2)
-        interior.addChild(farGlow)
-
-        portalWorld.addChild(interior)
+        portalWorld.addChild(GameVisualBuilders.makePortalInterior(portalHeight: GameWorld.portalHeight))
     }
 
     private func layoutPortal() {
@@ -562,30 +482,10 @@ final class GameWorld {
         activeSpawnZ = portalZ + GameWorld.spawnInFrontOfPortal
     }
 
-    /// Minimal stand line at the player's start — easy to find, quiet otherwise.
+    /// Polished stand zone at the player's start — pad, line, forward chevrons.
     private func buildStartMarker() {
         if root.children.contains(where: { $0.name == "startMarker" }) { return }
-
-        let marker = Entity()
-        marker.name = "startMarker"
-        marker.position = SIMD3(0, 0.03, 0)
-
-        let lineMesh = MeshResource.generateBox(width: 2.35, height: 0.008, depth: 0.028)
-        let lineMaterial = UnlitMaterial(
-            color: UIColor(red: 0.98, green: 0.93, blue: 0.82, alpha: 0.75)
-        )
-        let line = ModelEntity(mesh: lineMesh, materials: [lineMaterial])
-        marker.addChild(line)
-
-        let tickMesh = MeshResource.generateBox(width: 0.1, height: 0.01, depth: 0.1)
-        let tickMaterial = UnlitMaterial(
-            color: UIColor(red: 1.0, green: 0.86, blue: 0.45, alpha: 0.9)
-        )
-        let tick = ModelEntity(mesh: tickMesh, materials: [tickMaterial])
-        tick.position = SIMD3(0, 0.004, 0)
-        marker.addChild(tick)
-
-        root.addChild(marker)
+        root.addChild(GameVisualBuilders.makeStartMarker())
     }
 
     private func beginRun(runID: Int) {
@@ -593,6 +493,7 @@ final class GameWorld {
         snapPlayfieldToPlayer()
         updatePortalAndTrack()
         isPlayfieldLocked = true
+        visualFX.clear()
         clearDynamicContent()
         dropHeldHalves()
         resetWind()
@@ -618,7 +519,12 @@ final class GameWorld {
     // MARK: - Palette / room dimming
 
     private func applyPalette(_ palette: EnvironmentPalette, telegraph: Float) {
-        for child in trackRoot.children {
+        // Polished track nests floor/stripes under trackAssembly.
+        let trackNodes = trackRoot.children.flatMap { child -> [Entity] in
+            if child.name == "trackAssembly" { return Array(child.children) }
+            return [child]
+        }
+        for child in trackNodes {
             guard let model = child as? ModelEntity else { continue }
             if child.name == "floor" {
                 model.model?.materials = [EnvironmentMaterials.simple(palette.floor, roughness: 0.85)]
@@ -651,10 +557,13 @@ final class GameWorld {
                 switch child.name {
                 case "portalRail":
                     model.model?.materials = [EnvironmentMaterials.unlit(palette.portalRail)]
-                case "portalAccent":
+                case "portalAccent", "farCore":
                     model.model?.materials = [EnvironmentMaterials.unlit(palette.portalAccent)]
-                default:
+                case "portalFloor", "portalCeiling", "portalSide", "portalBack":
                     model.model?.materials = [EnvironmentMaterials.unlit(palette.portalVoid)]
+                default:
+                    // Keep polished rings / chevrons / bloom on their neon materials.
+                    continue
                 }
             }
         }
@@ -984,6 +893,13 @@ final class GameWorld {
     // MARK: - Loop
 
     private func tick(deltaTime: Float) {
+        elapsedTime += deltaTime
+        animatePortal(deltaTime: deltaTime)
+        animateCoins(deltaTime: deltaTime)
+        visualFX.tick(deltaTime: deltaTime)
+
+        // Before Start, keep the stand line under the player and refresh portal depth.
+        // After Start, pose / portal / track are frozen — only obstacles move.
         if !isPlayfieldLocked {
             snapPlayfieldToPlayer()
             updatePortalAndTrack()
@@ -1075,6 +991,49 @@ final class GameWorld {
             rightFistLatch = 0
         } else {
             rightFistLatch = max(0, rightFistLatch - deltaTime * 0.65)
+        }
+    }
+
+    private func animatePortal(deltaTime: Float) {
+        _ = deltaTime
+        guard let rim = portalRoot.children.first(where: { $0.name == "portalRim" }) else { return }
+        let pulse = 1.0 + 0.035 * sin(elapsedTime * 2.2)
+        rim.scale = SIMD3(pulse, pulse, 1)
+
+        if let bloom = rim.children.first(where: { $0.name == "portalBloom" }) {
+            let bloomPulse = 1.0 + 0.06 * sin(elapsedTime * 1.6 + 0.4)
+            bloom.scale = SIMD3(bloomPulse, bloomPulse, 1)
+        }
+
+        // Subtle far-glow breathe inside the tunnel.
+        if let interior = portalWorld.children.first(where: { $0.name == "portalInterior" }),
+           let farCore = interior.children.first(where: { $0.name == "farCore" }) {
+            let glow = 1.0 + 0.12 * sin(elapsedTime * 1.8)
+            farCore.scale = SIMD3(repeating: glow)
+        }
+    }
+
+    private func animateCoins(deltaTime: Float) {
+        for index in coins.indices {
+            guard !coins[index].collected else { continue }
+            coins[index].phase += deltaTime
+            let phase = coins[index].phase
+            let bob = sin(phase * GameWorld.coinBobSpeed) * GameWorld.coinBobAmplitude
+            coins[index].entity.position.y = coins[index].baseY + bob
+            coins[index].entity.orientation = simd_quatf(
+                angle: phase * GameWorld.coinSpinSpeed,
+                axis: SIMD3(0, 1, 0)
+            )
+
+            if let spark = coins[index].entity.children.first(where: { $0.name == "coinSpark" }) {
+                let orbit = phase * 3.2
+                let r = GameWorld.coinRadius * 0.9
+                spark.position = SIMD3(cos(orbit) * r, sin(orbit * 0.7) * r * 0.35, sin(orbit) * r * 0.2)
+            }
+            if let aura = coins[index].entity.children.first(where: { $0.name == "coinAura" }) {
+                let s = 1.0 + 0.08 * sin(phase * 3.5)
+                aura.scale = SIMD3(repeating: s)
+            }
         }
     }
 
@@ -1488,15 +1447,19 @@ final class GameWorld {
     }
 
     private func spawnCoin(in lane: Lane, underCeiling: Bool = false) {
-        let mesh = MeshResource.generateSphere(radius: GameWorld.coinRadius)
-        let material = EnvironmentMaterials.coin(activeSpawnProfile.palette.coinTint)
-        let coin = ModelEntity(mesh: mesh, materials: [material])
+        let coin = GameVisualBuilders.makeCoin(radius: GameWorld.coinRadius)
+        // Mild outward offset — still a reach, but easier to snag mid-dodge.
         let outward: Float = lane == .center ? 0 : (lane.x > 0 ? GameWorld.coinOutwardOffset : -GameWorld.coinOutwardOffset)
-        let height = underCeiling ? GameWorld.lowCrawlCoinHeight : GameWorld.coinHeight
-        coin.position = SIMD3(lane.x + outward + windCurrentX, height, activeSpawnZ)
-        coin.name = "coin"
+        let baseY = underCeiling ? GameWorld.lowCrawlCoinHeight : GameWorld.coinHeight
+        coin.position = SIMD3(lane.x + outward + windCurrentX, baseY, activeSpawnZ)
         root.addChild(coin)
-        coins.append(CoinItem(entity: coin))
+        coins.append(
+            CoinItem(
+                entity: coin,
+                baseY: baseY,
+                phase: Float.random(in: 0...(Float.pi * 2))
+            )
+        )
     }
 
     private func spawnHalfCrystal(in lane: Lane) {
@@ -1775,6 +1738,9 @@ final class GameWorld {
 
             if hit {
                 wall.hasResolvedHit = true
+                visualFX.spawnHitFlash(near: SIMD3(head.x, head.y, wall.entity.position.z))
+                // Quick squash so the hit reads before game-over UI.
+                wall.entity.scale = SIMD3(1.08, 0.92, 1.15)
                 GameSFX.shared.playWallHit()
                 dropHeldHalves()
                 gameModel.endRun()
@@ -1805,6 +1771,7 @@ final class GameWorld {
             for hand in hands {
                 if distance(hand, coinPos) <= GameWorld.collectDistance {
                     coins[index].collected = true
+                    visualFX.spawnCoinBurst(at: coinPos)
                     coins[index].entity.removeFromParent()
                     gameModel.collectCoin(points: GameWorld.coinPoints)
                     GameSFX.shared.playCoinCollect()
