@@ -1677,13 +1677,19 @@ final class GameWorld {
         )
         heldEntity.name = "heldHalf"
         root.addChild(heldEntity)
-        let held = HeldHalf(type: source.type, charged: source.charged, entity: heldEntity)
+        var held = HeldHalf(type: source.type, charged: source.charged, entity: heldEntity)
         if left {
+            if leftIsFist {
+                held.confirmedFist = true
+            }
             if let grip = leftHandGripWorld {
                 held.entity.position = root.convert(position: grip, from: nil)
             }
             heldLeft = held
         } else {
+            if rightIsFist {
+                held.confirmedFist = true
+            }
             if let grip = rightHandGripWorld {
                 held.entity.position = root.convert(position: grip, from: nil)
             }
