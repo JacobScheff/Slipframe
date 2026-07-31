@@ -94,6 +94,10 @@ final class GameWorld {
         let type: CrystalHalfType
         let charged: Bool
         let entity: Entity
+        /// True once a fist is detected after grab; opening the hand after this drops it.
+        var confirmedFist: Bool = false
+        /// Seconds since grab — must fist within `crystalGrabConfirmWindow` or it drops.
+        var timeSinceGrab: Float = 0
     }
 
     // Layout
@@ -284,8 +288,12 @@ final class GameWorld {
     /// World-space grip point (fingertip / palm center), not the wrist.
     private var leftHandGripWorld: SIMD3<Float>?
     private var rightHandGripWorld: SIMD3<Float>?
+    private var leftIsFist = false
+    private var rightIsFist = false
     private var leftIsOpen = false
     private var rightIsOpen = false
+    /// After proximity grab, must fist quickly or the half drops.
+    private static let crystalGrabConfirmWindow: Float = 0.12
     /// Crystal Cave half spawn chance per beat (was 0.2; +50%).
     private static let crystalHalfSpawnChance: Float = 0.3
     /// Held shards sit this far past the knuckle plane toward the fingertips (meters).
@@ -358,6 +366,8 @@ final class GameWorld {
         rightHandContactsWorld = []
         leftHandGripWorld = nil
         rightHandGripWorld = nil
+        leftIsFist = false
+        rightIsFist = false
         leftIsOpen = false
         rightIsOpen = false
         updateSubscription = nil
@@ -731,10 +741,12 @@ final class GameWorld {
                         case .left:
                             leftHandContactsWorld = []
                             leftHandGripWorld = nil
+                            leftIsFist = false
                             leftIsOpen = false
                         case .right:
                             rightHandContactsWorld = []
                             rightHandGripWorld = nil
+                            rightIsFist = false
                             rightIsOpen = false
                         @unknown default: break
                         }
@@ -742,16 +754,18 @@ final class GameWorld {
                     }
                     let contacts = Self.contactPoints(from: anchor)
                     let grip = Self.gripPoint(from: anchor)
-                    let isOpen = HandPose.isOpenPose(anchor: anchor)
+                    let pose = HandPose.classify(anchor: anchor)
                     switch anchor.chirality {
                     case .left:
                         leftHandContactsWorld = contacts
                         leftHandGripWorld = grip
-                        leftIsOpen = isOpen
+                        leftIsFist = pose == .fist
+                        leftIsOpen = pose == .open
                     case .right:
                         rightHandContactsWorld = contacts
                         rightHandGripWorld = grip
-                        rightIsOpen = isOpen
+                        rightIsFist = pose == .fist
+                        rightIsOpen = pose == .open
                     @unknown default:
                         break
                     }
@@ -965,7 +979,7 @@ final class GameWorld {
         if activeSpawnProfile.twist == .crystalHalves {
             tryGrabHalves()
         }
-        updateHeldHalves()
+        updateHeldHalves(deltaTime: dt)
 
         distanceUntilSpawn -= travel
         if distanceUntilSpawn <= 0 {
@@ -1519,28 +1533,62 @@ final class GameWorld {
         heldRight = nil
     }
 
-    private func updateHeldHalves() {
-        // Hold while the hand is not fully open; open palm is the release signal.
-        if let held = heldLeft {
+    private func updateHeldHalves(deltaTime: Float) {
+        // Proximity can pick up, but a fist must land quickly. After that, open palm drops.
+        if var held = heldLeft {
+            held.timeSinceGrab += deltaTime
             let tracked = leftHandGripWorld != nil || !leftHandContactsWorld.isEmpty
+            if leftIsFist {
+                held.confirmedFist = true
+            }
+
+            let mustDrop: Bool
             if !tracked || leftIsOpen {
+                mustDrop = true
+            } else if !held.confirmedFist {
+                mustDrop = held.timeSinceGrab >= GameWorld.crystalGrabConfirmWindow
+            } else {
+                mustDrop = false
+            }
+
+            if mustDrop {
                 held.entity.removeFromParent()
                 heldLeft = nil
-            } else if let grip = leftHandGripWorld {
-                held.entity.position = root.convert(position: grip, from: nil)
-            } else if let tip = leftHandContactsWorld.last {
-                held.entity.position = root.convert(position: tip, from: nil)
+            } else {
+                if let grip = leftHandGripWorld {
+                    held.entity.position = root.convert(position: grip, from: nil)
+                } else if let tip = leftHandContactsWorld.last {
+                    held.entity.position = root.convert(position: tip, from: nil)
+                }
+                heldLeft = held
             }
         }
-        if let held = heldRight {
+        if var held = heldRight {
+            held.timeSinceGrab += deltaTime
             let tracked = rightHandGripWorld != nil || !rightHandContactsWorld.isEmpty
+            if rightIsFist {
+                held.confirmedFist = true
+            }
+
+            let mustDrop: Bool
             if !tracked || rightIsOpen {
+                mustDrop = true
+            } else if !held.confirmedFist {
+                mustDrop = held.timeSinceGrab >= GameWorld.crystalGrabConfirmWindow
+            } else {
+                mustDrop = false
+            }
+
+            if mustDrop {
                 held.entity.removeFromParent()
                 heldRight = nil
-            } else if let grip = rightHandGripWorld {
-                held.entity.position = root.convert(position: grip, from: nil)
-            } else if let tip = rightHandContactsWorld.last {
-                held.entity.position = root.convert(position: tip, from: nil)
+            } else {
+                if let grip = rightHandGripWorld {
+                    held.entity.position = root.convert(position: grip, from: nil)
+                } else if let tip = rightHandContactsWorld.last {
+                    held.entity.position = root.convert(position: tip, from: nil)
+                }
+                heldRight = held
             }
         }
 
@@ -1569,7 +1617,7 @@ final class GameWorld {
     private func tryGrabHalves() {
         guard activeSpawnProfile.twist == .crystalHalves else { return }
 
-        // Proximity pickup while the hand is not fully open. Opening the hand drops it.
+        // Proximity pickup while not open; must fist within the confirm window to keep it.
         if heldLeft == nil && !leftIsOpen {
             let points = handPointsInRoot(leftHandContactsWorld, gripWorld: leftHandGripWorld)
             if let index = nearestHalfIndex(toAnyOf: points) {
