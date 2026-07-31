@@ -87,16 +87,10 @@ struct LevelSelectView: View {
     }
 
     private var normalBody: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(PlayModeKind.normal.subtitle)
-                .font(.system(size: 16, weight: .regular, design: .rounded))
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            Label("Starts on Ember Run", systemImage: "flame.fill")
-                .font(.system(size: 16, weight: .semibold, design: .rounded))
-                .foregroundStyle(gold)
-        }
+        Text(PlayModeKind.normal.subtitle)
+            .font(.system(size: 16, weight: .regular, design: .rounded))
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
     }
 
     private var soloBody: some View {
