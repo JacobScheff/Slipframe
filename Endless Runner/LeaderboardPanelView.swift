@@ -31,7 +31,7 @@ struct LeaderboardPanelView: View {
                     .font(.system(size: 20, weight: .semibold, design: .rounded))
                     .foregroundStyle(neon)
 
-                Text("Top score and top coins per mode — Normal, each Solo biome, and Daily. Playlists stay off the board.")
+                Text("Top score and top coins per mode — Normal, each Loop biome, and Daily. Playlists stay off the board.")
                     .font(.system(size: 15, weight: .regular, design: .rounded))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

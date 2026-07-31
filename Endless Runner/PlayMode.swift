@@ -19,7 +19,7 @@ enum PlayModeKind: String, CaseIterable, Identifiable {
         switch self {
         case .normal: return "Normal"
         case .playlist: return "Playlist"
-        case .solo: return "Solo"
+        case .solo: return "Loop"
         case .daily: return "Daily"
         }
     }
@@ -60,7 +60,7 @@ enum PlayMode: Equatable {
         case .normal:
             return "Normal"
         case .solo(let id):
-            return "Solo · \(id.displayName)"
+            return "Loop · \(id.displayName)"
         case .playlist(let environments, let start):
             let count = environments.count
             if let start {
