@@ -419,6 +419,7 @@ final class GameWorld {
         activeSpawnZ = GameWorld.defaultPortalZ + GameWorld.spawnInFrontOfPortal
         lastBuiltPortalZ = .greatestFiniteMagnitude
         visualFX.clear()
+        resetGameOverClear()
         clearDynamicContent()
         dropHeldHalves()
         gameModel?.prefersRoomDimming = false
