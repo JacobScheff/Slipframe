@@ -123,6 +123,8 @@ final class GameWorld {
     private static let lowCrawlSpawnGapMax: Float = 4.2
     /// Nudge adjacent double-lane slabs slightly farther apart (meters each side).
     private static let adjacentPairSpread: Float = 0.09
+    /// Extra Z gap when consecutive adjacent doubles open on opposite outer lanes (left↔right).
+    private static let oppositeOpenLaneSpacingBonus: Float = 0.35
     private static let coinPoints = CrystalCombine.baseCoinPoints
     /// HUD sits above the corridor, further down the track, clear of the play volume.
     private static let hudPosition = SIMD3<Float>(0, 2.45, -3.2)
@@ -224,6 +226,10 @@ final class GameWorld {
     private var speed: Float = GameWorld.baseSpeed
     /// First obstacle spawns on the opening tick of a run.
     private var distanceUntilSpawn: Float = 0
+    /// Open outer lane raw of the last adjacent double wall (−1 / +1), if any.
+    private var lastAdjacentDoubleOpenLaneRaw: Int?
+    /// Extra depth for this beat when a left↔right open-lane flip needs more room.
+    private var patternSpawnZOffset: Float = 0
     private var distanceAccumulator: Float = 0
     /// Portal plane depth along playfield −Z.
     private var portalZ: Float = GameWorld.defaultPortalZ
@@ -512,6 +518,8 @@ final class GameWorld {
         speed = GameWorld.baseSpeed
         distanceUntilSpawn = 0
         distanceAccumulator = 0
+        lastAdjacentDoubleOpenLaneRaw = nil
+        patternSpawnZOffset = 0
         GameSFX.shared.prepare()
         GameMusic.shared.prepare()
     }
@@ -677,6 +685,8 @@ final class GameWorld {
         walls.removeAll()
         coins.removeAll()
         halves.removeAll()
+        lastAdjacentDoubleOpenLaneRaw = nil
+        patternSpawnZOffset = 0
         gustEntity?.removeFromParent()
         gustEntity = nil
     }
@@ -956,8 +966,10 @@ final class GameWorld {
 
         distanceUntilSpawn -= travel
         if distanceUntilSpawn <= 0 {
+            patternSpawnZOffset = 0
             spawnNextPattern()
-            distanceUntilSpawn = Self.spawnGap(for: activeSpawnProfile)
+            // Preserve spacing to the following beat when this one was pushed deeper.
+            distanceUntilSpawn = Self.spawnGap(for: activeSpawnProfile) + patternSpawnZOffset
         }
 
         resolveCollisions(gameModel: gameModel)
@@ -1366,8 +1378,19 @@ final class GameWorld {
     }
 
     private func spawnWall(blocking lanes: Set<Lane>, kind: WallKind, profile: EnvironmentProfile) {
+        let openLaneRaw = ObstacleLayout.adjacentDoubleOpenLaneRaw(
+            blockingLaneRaws: Set(lanes.map(\.rawValue))
+        )
+        if ObstacleLayout.requiresOppositeOpenLaneSpacing(
+            previousOpenLaneRaw: lastAdjacentDoubleOpenLaneRaw,
+            nextOpenLaneRaw: openLaneRaw
+        ) {
+            patternSpawnZOffset = Self.oppositeOpenLaneSpacingBonus
+        }
+        lastAdjacentDoubleOpenLaneRaw = openLaneRaw
+
         let parent = Entity()
-        parent.position = SIMD3(windCurrentX, GameWorld.wallHeight * 0.5, activeSpawnZ)
+        parent.position = SIMD3(windCurrentX, GameWorld.wallHeight * 0.5, patternSpawnZ)
         parent.name = kind == .ghost ? "wallGhost" : "wall"
 
         var slabXs: [Float] = []
@@ -1383,6 +1406,11 @@ final class GameWorld {
         walls.append(WallItem(entity: parent, localSlabXs: slabXs, kind: kind))
     }
 
+    /// Spawn depth for the current beat (deeper when an opposite-open double needs room).
+    private var patternSpawnZ: Float {
+        activeSpawnZ - patternSpawnZOffset
+    }
+
     /// Adjacent double-lane blocks get a slight extra gap so they don't read as one slab.
     private static func slabX(for lane: Lane, blocking: Set<Lane>) -> Float {
         ObstacleLayout.slabLocalX(
@@ -1394,10 +1422,12 @@ final class GameWorld {
     }
 
     private func spawnDuckWall() {
+        // Duck gates break adjacent-double open-lane chaining.
+        lastAdjacentDoubleOpenLaneRaw = nil
         let parent = Entity()
         // Center the hanging slab in the upper corridor band.
         let centerY = GameWorld.duckClearanceY + GameWorld.duckSlabHeight * 0.5
-        parent.position = SIMD3(windCurrentX, centerY, activeSpawnZ)
+        parent.position = SIMD3(windCurrentX, centerY, patternSpawnZ)
         parent.name = "wallDuck"
 
         let mesh = MeshResource.generateBox(
@@ -1458,7 +1488,7 @@ final class GameWorld {
         // Mild outward offset — still a reach, but easier to snag mid-dodge.
         let outward: Float = lane == .center ? 0 : (lane.x > 0 ? GameWorld.coinOutwardOffset : -GameWorld.coinOutwardOffset)
         let baseY = underCeiling ? GameWorld.lowCrawlCoinHeight : GameWorld.coinHeight
-        coin.position = SIMD3(lane.x + outward + windCurrentX, baseY, activeSpawnZ)
+        coin.position = SIMD3(lane.x + outward + windCurrentX, baseY, patternSpawnZ)
         root.addChild(coin)
         coins.append(
             CoinItem(
@@ -1477,7 +1507,7 @@ final class GameWorld {
         let material = EnvironmentMaterials.crystalHalf(type: roll.type, charged: roll.charged)
         let entity = ModelEntity(mesh: mesh, materials: [material])
         let outward: Float = lane == .center ? 0 : (lane.x > 0 ? GameWorld.coinOutwardOffset : -GameWorld.coinOutwardOffset)
-        entity.position = SIMD3(lane.x + outward + windCurrentX, GameWorld.coinHeight, activeSpawnZ)
+        entity.position = SIMD3(lane.x + outward + windCurrentX, GameWorld.coinHeight, patternSpawnZ)
         entity.name = roll.charged ? "halfCrystalCharged" : "halfCrystal"
         root.addChild(entity)
         halves.append(HalfCrystalItem(entity: entity, type: roll.type, charged: roll.charged))
