@@ -11,28 +11,47 @@ struct PlayHUDView: View {
     @EnvironmentObject private var gameModel: GameModel
     @State private var isEnvironmentMenuOpen = false
 
-    var body: some View {
-        VStack(spacing: 28) {
-            Text("Endless Runner")
-                .font(.system(size: 48, weight: .semibold))
+    private let neon = Color(red: 0.35, green: 0.92, blue: 1.0)
+    private let gold = Color(red: 1.0, green: 0.82, blue: 0.32)
+    private let hazard = Color(red: 1.0, green: 0.35, blue: 0.32)
 
-            HStack(spacing: 56) {
-                labeledValue(title: "Score", value: "\(gameModel.score)")
-                labeledValue(title: "Coins", value: "\(gameModel.coinsCollected)")
+    var body: some View {
+        VStack(spacing: 22) {
+            titleBlock
+
+            HStack(spacing: 40) {
+                metricChip(title: "Score", value: "\(gameModel.score)", accent: neon)
+                metricChip(title: "Coins", value: "\(gameModel.coinsCollected)", accent: gold)
             }
 
             Text(statusText)
-                .font(.title2)
-                .foregroundStyle(.secondary)
+                .font(.system(size: 22, weight: .medium, design: .rounded))
+                .foregroundStyle(statusColor)
                 .multilineTextAlignment(.center)
+                .frame(maxWidth: 560)
 
             controls
 
             debugEnvironmentPicker
         }
-        .padding(.horizontal, 56)
-        .padding(.vertical, 44)
-        .frame(minWidth: 720)
+        .padding(.horizontal, 48)
+        .padding(.vertical, 36)
+        .frame(minWidth: 700)
+        .background {
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .strokeBorder(
+                    LinearGradient(
+                        colors: [
+                            neon.opacity(0.7),
+                            neon.opacity(0.15),
+                            gold.opacity(0.35)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1.5
+                )
+        }
         .glassBackgroundEffect()
         // Open menu overlays upward above the HUD so it doesn't grow the card.
         .overlay(alignment: .bottom) {
@@ -45,25 +64,46 @@ struct PlayHUDView: View {
         .zIndex(isEnvironmentMenuOpen ? 20 : 0)
     }
 
+    private var titleBlock: some View {
+        VStack(spacing: 6) {
+            Text("ENDLESS RUNNER")
+                .font(.system(size: 18, weight: .bold, design: .rounded))
+                .tracking(4)
+                .foregroundStyle(neon.opacity(0.85))
+
+            Text(gameModel.isGameOver ? "Run Over" : (gameModel.isPlaying ? "In Motion" : "Ready"))
+                .font(.system(size: 44, weight: .semibold, design: .rounded))
+                .foregroundStyle(.primary)
+        }
+    }
+
     @ViewBuilder
     private var controls: some View {
         if gameModel.isGameOver {
-            Button("Restart") {
+            Button {
                 gameModel.startRun()
+            } label: {
+                Label("Restart", systemImage: "arrow.counterclockwise")
+                    .font(.system(size: 24, weight: .semibold, design: .rounded))
+                    .frame(minWidth: 220)
             }
             .buttonStyle(.borderedProminent)
+            .tint(hazard)
             .controlSize(.large)
-            .font(.title2)
         } else if !gameModel.isPlaying {
-            Button("Start Run") {
+            Button {
                 gameModel.startRun()
+            } label: {
+                Label("Start Run", systemImage: "play.fill")
+                    .font(.system(size: 24, weight: .semibold, design: .rounded))
+                    .frame(minWidth: 220)
             }
             .buttonStyle(.borderedProminent)
+            .tint(neon)
             .controlSize(.large)
-            .font(.title2)
         } else {
             Text("Dodge walls with your head and hands.\nGrab gold coins with your hands.")
-                .font(.title3)
+                .font(.system(size: 20, weight: .regular, design: .rounded))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
 
@@ -71,7 +111,7 @@ struct PlayHUDView: View {
                 gameModel.endRun()
             }
             .controlSize(.large)
-            .font(.title2)
+            .font(.system(size: 20, weight: .medium, design: .rounded))
         }
     }
 
@@ -169,25 +209,44 @@ struct PlayHUDView: View {
         )
     }
 
-    private func labeledValue(title: String, value: String) -> some View {
-        VStack(spacing: 8) {
-            Text(title)
-                .font(.title3.weight(.medium))
-                .foregroundStyle(.secondary)
+    private func metricChip(title: String, value: String, accent: Color) -> some View {
+        VStack(spacing: 6) {
+            Text(title.uppercased())
+                .font(.system(size: 14, weight: .bold, design: .rounded))
+                .tracking(1.5)
+                .foregroundStyle(accent.opacity(0.9))
             Text(value)
-                .font(.system(size: 56, weight: .bold, design: .monospaced))
+                .font(.system(size: 52, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(.primary)
         }
-        .frame(minWidth: 180)
+        .frame(minWidth: 160)
+        .padding(.vertical, 14)
+        .padding(.horizontal, 18)
+        .background {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(accent.opacity(0.12))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .strokeBorder(accent.opacity(0.35), lineWidth: 1)
+                }
+        }
     }
 
     private var statusText: String {
         if gameModel.isGameOver {
-            return "Hit a wall — run over."
+            return "Hit a wall — shake it off and go again."
         }
         if gameModel.isPlaying {
-            return "Running…"
+            return "Obstacles stream from the portal."
         }
-        return "Obstacles come through the portal — dodge and grab coins."
+        return "Stand on the line. Obstacles emerge from the portal — dodge and grab coins."
+    }
+
+    private var statusColor: Color {
+        if gameModel.isGameOver { return hazard.opacity(0.95) }
+        if gameModel.isPlaying { return neon.opacity(0.9) }
+        return .secondary
     }
 }
 
