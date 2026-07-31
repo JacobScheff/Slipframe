@@ -1613,8 +1613,9 @@ final class GameWorld {
             heldLeft = nil
             heldRight = nil
             GameSFX.shared.playCoinCollect()
-            DispatchQueue.main.async { [weak self] in
-                self?.gameModel?.collectCoin(points: payout)
+            let model = self.gameModel
+            DispatchQueue.main.async {
+                model?.collectCoin(points: payout)
             }
         }
     }
@@ -1830,9 +1831,10 @@ final class GameWorld {
                     // Hide now; removeFromParent happens in prune. HUD/SFX after this tick.
                     coins[index].entity.isEnabled = false
                     let points = GameWorld.coinPoints
+                    let model = gameModel
                     GameSFX.shared.playCoinCollect()
-                    DispatchQueue.main.async { [gameModel] in
-                        gameModel.collectCoin(points: points)
+                    DispatchQueue.main.async {
+                        model.collectCoin(points: points)
                     }
                     break
                 }
