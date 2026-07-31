@@ -33,7 +33,7 @@ enum PlayModeKind: String, CaseIterable, Identifiable {
         case .solo:
             return "One biome on loop."
         case .daily:
-            return "Endless random biomes — same seed for everyone today (Eastern Time)."
+            return "Same biomes and walls for everyone today (Eastern Time)."
         }
     }
 }

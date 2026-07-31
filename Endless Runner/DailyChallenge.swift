@@ -62,6 +62,15 @@ enum DailyChallenge {
         SeededGenerator(seed: seed(for: dayKey))
     }
 
+    /// Separate stream from biome picks so wall/coin spawns cannot desync environment order.
+    static func gameplaySeed(for dayKey: String) -> UInt64 {
+        seed(for: dayKey) &+ 0xD1B5_4A32_D192_ED03
+    }
+
+    static func makeGameplayGenerator(dayKey: String) -> SeededGenerator {
+        SeededGenerator(seed: gameplaySeed(for: dayKey))
+    }
+
     /// Seconds until the next midnight in America/New_York.
     static func secondsUntilRollover(from date: Date = Date(), timeZone: TimeZone = timeZone) -> TimeInterval {
         var calendar = Calendar(identifier: .gregorian)

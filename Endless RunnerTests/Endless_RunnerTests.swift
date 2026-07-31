@@ -336,6 +336,61 @@ final class Endless_RunnerTests: XCTestCase {
         XCTAssertGreaterThan(DailyChallenge.secondsUntilRollover(), 0)
     }
 
+    func testDailyGameplaySeedIsStableAndDistinctFromBiomeSeed() {
+        let key = "2026-07-31"
+        XCTAssertEqual(DailyChallenge.gameplaySeed(for: key), DailyChallenge.gameplaySeed(for: key))
+        XCTAssertNotEqual(DailyChallenge.gameplaySeed(for: key), DailyChallenge.seed(for: key))
+        XCTAssertNotEqual(
+            DailyChallenge.gameplaySeed(for: key),
+            DailyChallenge.gameplaySeed(for: "2026-08-01")
+        )
+    }
+
+    func testDailyGameplayGeneratorProducesIdenticalWallPatternStream() {
+        // Same weighted table shape as GameWorld.randomWallLanes (lane raw values).
+        let patterns: [[Int]] = [
+            [-1], [0], [1],
+            [-1], [0], [1],
+            [-1], [1],
+            [-1, 0], [0, 1], [-1, 1],
+            [-1, 1], [-1, 0], [0, 1]
+        ]
+        let key = "2026-07-31"
+        var a = DailyChallenge.makeGameplayGenerator(dayKey: key)
+        var b = DailyChallenge.makeGameplayGenerator(dayKey: key)
+        for _ in 0..<48 {
+            XCTAssertEqual(
+                patterns.randomElement(using: &a),
+                patterns.randomElement(using: &b)
+            )
+        }
+    }
+
+    func testSeededStormWallPicksAreDeterministic() {
+        let patterns: [[Int]] = [
+            [-1], [0], [1],
+            [-1, 0], [0, 1], [-1, 1]
+        ]
+        var a = SeededGenerator(seed: 0xC0FFEE)
+        var b = SeededGenerator(seed: 0xC0FFEE)
+        for _ in 0..<30 {
+            let leftA = StormWind.chooseWallLanes(
+                from: patterns,
+                offsetStep: 0,
+                pendingDirection: -1,
+                rng: &a
+            )
+            let leftB = StormWind.chooseWallLanes(
+                from: patterns,
+                offsetStep: 0,
+                pendingDirection: -1,
+                rng: &b
+            )
+            XCTAssertEqual(leftA, leftB)
+            XCTAssertFalse(leftA.contains(-1))
+        }
+    }
+
     func testPlaylistCannotStartWhenEmpty() {
         let model = GameModel()
         model.playKind = .playlist

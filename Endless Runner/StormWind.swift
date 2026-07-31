@@ -61,13 +61,22 @@ enum StormWind {
 
     /// Next shove direction (±1). Offset step is clamped to -1…+1 from start.
     /// Away from center must return; at center may pick either side.
-    static func nextDirection(offsetStep: Int, preferredFromGap: Float?) -> Float {
+    static func nextDirection<RNG: RandomNumberGenerator>(
+        offsetStep: Int,
+        preferredFromGap: Float?,
+        rng: inout RNG
+    ) -> Float {
         if offsetStep > 0 { return -1 }
         if offsetStep < 0 { return 1 }
         if let preferred = preferredFromGap, abs(preferred) > 0.01 {
             return preferred >= 0 ? 1 : -1
         }
-        return Bool.random() ? 1 : -1
+        return Bool.random(using: &rng) ? 1 : -1
+    }
+
+    static func nextDirection(offsetStep: Int, preferredFromGap: Float?) -> Float {
+        var rng = SystemRandomNumberGenerator()
+        return nextDirection(offsetStep: offsetStep, preferredFromGap: preferredFromGap, rng: &rng)
     }
 
     static func applyStep(offsetStep: Int, direction: Float) -> Int {
@@ -87,10 +96,11 @@ enum StormWind {
 
     /// Pick a wall lane pattern that never blocks the forbidden outer lane.
     /// Pattern entries use lane raw values: -1 left, 0 center, +1 right.
-    static func chooseWallLanes(
+    static func chooseWallLanes<RNG: RandomNumberGenerator>(
         from patterns: [[Int]],
         offsetStep: Int,
-        pendingDirection: Float
+        pendingDirection: Float,
+        rng: inout RNG
     ) -> [Int] {
         let forbidden = forbiddenOuterLaneRaw(
             offsetStep: offsetStep,
@@ -100,6 +110,20 @@ enum StormWind {
             guard let forbidden else { return true }
             return !pattern.contains(forbidden)
         }
-        return allowed.randomElement() ?? [0]
+        return allowed.randomElement(using: &rng) ?? [0]
+    }
+
+    static func chooseWallLanes(
+        from patterns: [[Int]],
+        offsetStep: Int,
+        pendingDirection: Float
+    ) -> [Int] {
+        var rng = SystemRandomNumberGenerator()
+        return chooseWallLanes(
+            from: patterns,
+            offsetStep: offsetStep,
+            pendingDirection: pendingDirection,
+            rng: &rng
+        )
     }
 }
