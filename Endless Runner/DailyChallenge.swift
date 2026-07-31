@@ -87,8 +87,9 @@ enum DailyChallenge {
         var rng = makeGenerator(dayKey: dayKey)
         var current = EnvironmentID.allCases.randomElement(using: &rng) ?? .emberRun
         var result: [EnvironmentID] = [current]
+        let pool = Array(EnvironmentID.allCases)
         for _ in 1..<count {
-            current = EnvironmentDirector.randomNext(excluding: current, from: EnvironmentID.allCases, rng: &rng)
+            current = EnvironmentDirector.randomNext(excluding: current, from: pool, rng: &rng)
             result.append(current)
         }
         return result

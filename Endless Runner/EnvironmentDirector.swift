@@ -153,10 +153,11 @@ final class EnvironmentDirector {
         )
     }
 
-    static func randomNext(
+    /// Pure helper — `nonisolated` so daily preview / tests can call it off the main actor.
+    nonisolated static func randomNext<RNG: RandomNumberGenerator>(
         excluding current: EnvironmentID,
         from pool: [EnvironmentID] = Array(EnvironmentID.allCases),
-        rng: inout some RandomNumberGenerator
+        rng: inout RNG
     ) -> EnvironmentID {
         let options = pool.filter { $0 != current }
         if options.isEmpty {
@@ -165,14 +166,17 @@ final class EnvironmentDirector {
         return options.randomElement(using: &rng) ?? current
     }
 
-    static func randomNext(excluding current: EnvironmentID) -> EnvironmentID {
+    nonisolated static func randomNext(
+        excluding current: EnvironmentID,
+        from pool: [EnvironmentID] = Array(EnvironmentID.allCases)
+    ) -> EnvironmentID {
         var rng = SystemRandomNumberGenerator()
-        return randomNext(excluding: current, rng: &rng)
+        return randomNext(excluding: current, from: pool, rng: &rng)
     }
 
     /// Biome dwell time for a cue: full track length, minus the crossfade so the
     /// next biome starts as the current song is fading out.
-    static func switchInterval(forTrackDuration trackDuration: Float, crossfade: Float) -> Float {
+    nonisolated static func switchInterval(forTrackDuration trackDuration: Float, crossfade: Float) -> Float {
         let usable = trackDuration - crossfade
         return min(
             EnvironmentCatalog.maxSwitchInterval,
