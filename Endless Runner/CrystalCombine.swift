@@ -2,7 +2,7 @@
 //  CrystalCombine.swift
 //  Endless Runner
 //
-//  Pure Crystal Cave half-crystal rules (grab/merge payouts).
+//  Pure Crystal Cave half-crystal rules (grab/merge coin awards).
 //
 
 import Foundation
@@ -13,7 +13,12 @@ enum CrystalHalfType: String, CaseIterable, Equatable {
 }
 
 enum CrystalCombine {
-    static let baseCoinPoints = 10
+    /// Coins awarded for a normal + normal combine.
+    static let baseMergeCoins = 5
+    /// Multiplier when exactly one half is charged.
+    static let oneChargedMultiplier = 10
+    /// Multiplier when both halves are charged.
+    static let bothChargedMultiplier = 2000
     /// ~1% of spawned halves are charged.
     static let chargedSpawnChance: Float = 0.01
     /// Hands must be within this distance to merge (meters).
@@ -23,18 +28,18 @@ enum CrystalCombine {
         left != right
     }
 
-    /// Payout for a successful different-type merge.
-    /// - normal + normal → 5×
-    /// - one charged → 10×
-    /// - both charged → 1000×
-    static func mergePayout(leftCharged: Bool, rightCharged: Bool) -> Int {
+    /// Coin award for a successful different-type merge (score is distance-only).
+    /// - normal + normal → 5
+    /// - one charged → 50
+    /// - both charged → 10000
+    static func mergeCoinAward(leftCharged: Bool, rightCharged: Bool) -> Int {
         switch (leftCharged, rightCharged) {
         case (true, true):
-            return baseCoinPoints * 1000
+            return baseMergeCoins * bothChargedMultiplier
         case (true, false), (false, true):
-            return baseCoinPoints * 10
+            return baseMergeCoins * oneChargedMultiplier
         case (false, false):
-            return baseCoinPoints * 5
+            return baseMergeCoins
         }
     }
 

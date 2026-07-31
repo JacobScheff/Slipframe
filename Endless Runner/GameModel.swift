@@ -59,10 +59,10 @@ final class GameModel: ObservableObject {
         stats.score += points
     }
 
-    func collectCoin(points: Int = 10) {
+    /// Coins are a separate counter — score is distance-only.
+    func collectCoin(count: Int = 1) {
         guard isPlaying else { return }
-        stats.coinsCollected += 1
-        stats.score += points
+        stats.coinsCollected += count
     }
 
     func endRun() {

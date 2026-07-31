@@ -38,31 +38,31 @@ final class Endless_RunnerTests: XCTestCase {
         XCTAssertEqual(model.score, 10)
     }
 
-    func testCollectCoinIncrementsCountAndScore() {
+    func testCollectCoinIncrementsCountOnly() {
         let model = GameModel()
-        model.collectCoin(points: 10)
+        model.collectCoin()
         XCTAssertEqual(model.coinsCollected, 0)
         XCTAssertEqual(model.score, 0)
 
         model.startRun()
-        model.collectCoin(points: 10)
-        model.collectCoin(points: 10)
+        model.collectCoin()
+        model.collectCoin()
 
         XCTAssertEqual(model.coinsCollected, 2)
-        XCTAssertEqual(model.score, 20)
+        XCTAssertEqual(model.score, 0)
     }
 
     func testEndRunStopsPlayback() {
         let model = GameModel()
         model.startRun()
         model.addScore(5)
-        model.collectCoin(points: 10)
+        model.collectCoin()
 
         model.endRun()
 
         XCTAssertFalse(model.isPlaying)
         XCTAssertTrue(model.isGameOver)
-        XCTAssertEqual(model.score, 15)
+        XCTAssertEqual(model.score, 5)
         XCTAssertEqual(model.coinsCollected, 1)
     }
 
@@ -229,11 +229,19 @@ final class Endless_RunnerTests: XCTestCase {
         XCTAssertFalse(CrystalCombine.canMerge(left: .blue, right: .blue))
     }
 
-    func testCrystalMergePayouts() {
-        XCTAssertEqual(CrystalCombine.mergePayout(leftCharged: false, rightCharged: false), 50)
-        XCTAssertEqual(CrystalCombine.mergePayout(leftCharged: true, rightCharged: false), 100)
-        XCTAssertEqual(CrystalCombine.mergePayout(leftCharged: false, rightCharged: true), 100)
-        XCTAssertEqual(CrystalCombine.mergePayout(leftCharged: true, rightCharged: true), 10_000)
+    func testCrystalMergeCoinAwards() {
+        XCTAssertEqual(CrystalCombine.mergeCoinAward(leftCharged: false, rightCharged: false), 5)
+        XCTAssertEqual(CrystalCombine.mergeCoinAward(leftCharged: true, rightCharged: false), 50)
+        XCTAssertEqual(CrystalCombine.mergeCoinAward(leftCharged: false, rightCharged: true), 50)
+        XCTAssertEqual(CrystalCombine.mergeCoinAward(leftCharged: true, rightCharged: true), 10_000)
+    }
+
+    func testCollectCoinCountOverrideDoesNotAffectScore() {
+        let model = GameModel()
+        model.startRun()
+        model.collectCoin(count: CrystalCombine.mergeCoinAward(leftCharged: true, rightCharged: false))
+        XCTAssertEqual(model.coinsCollected, 50)
+        XCTAssertEqual(model.score, 0)
     }
 
     func testCrystalChargedSpawnRateAroundOnePercent() {
@@ -742,13 +750,13 @@ final class Endless_RunnerTests: XCTestCase {
         let statsAfterStart = statsPublishCount
 
         model.addScore(5)
-        model.collectCoin(points: 10)
+        model.collectCoin()
 
         XCTAssertEqual(gameModelPublishCount, publishesAfterStart,
                        "Score/coin ticks must not invalidate ImmersiveView/RealityView")
-        // addScore: 1 publish; collectCoin: coins + score = 2 publishes.
-        XCTAssertEqual(statsPublishCount, statsAfterStart + 3)
-        XCTAssertEqual(model.score, 15)
+        // addScore: 1 publish; collectCoin: coins only = 1 publish.
+        XCTAssertEqual(statsPublishCount, statsAfterStart + 2)
+        XCTAssertEqual(model.score, 5)
         XCTAssertEqual(model.coinsCollected, 1)
 
         _ = gameModelWatch
