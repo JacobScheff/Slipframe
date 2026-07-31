@@ -169,8 +169,6 @@ struct LevelSelectView: View {
 
     private var dailyBody: some View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
-            let dayKey = DailyChallenge.dayKey(for: context.date)
-            let preview = DailyChallenge.previewSequence(dayKey: dayKey, count: 6)
             let remaining = DailyChallenge.secondsUntilRollover(from: context.date)
 
             VStack(alignment: .leading, spacing: 12) {
@@ -182,18 +180,6 @@ struct LevelSelectView: View {
                     .font(.system(size: 14, weight: .regular, design: .rounded))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("TODAY’S SEQUENCE")
-                        .font(.system(size: 12, weight: .bold, design: .rounded))
-                        .tracking(1.2)
-                        .foregroundStyle(.secondary)
-
-                    Text(preview.map(\.displayName).joined(separator: "  →  "))
-                        .font(.system(size: 15, weight: .medium, design: .rounded))
-                        .foregroundStyle(.primary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
 
                 HStack(spacing: 8) {
                     Image(systemName: "timer")
