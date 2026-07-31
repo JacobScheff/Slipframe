@@ -9,6 +9,8 @@ import SwiftUI
 
 struct PlayHUDView: View {
     @EnvironmentObject private var gameModel: GameModel
+    /// Separate from `GameModel` so score/coin ticks do not invalidate RealityView.
+    @EnvironmentObject private var stats: RunStats
     @State private var isEnvironmentMenuOpen = false
 
     private let neon = Color(red: 0.35, green: 0.92, blue: 1.0)
@@ -20,8 +22,8 @@ struct PlayHUDView: View {
             titleBlock
 
             HStack(spacing: 40) {
-                metricChip(title: "Score", value: "\(gameModel.score)", accent: neon)
-                metricChip(title: "Coins", value: "\(gameModel.coinsCollected)", accent: gold)
+                metricChip(title: "Score", value: "\(stats.score)", accent: neon)
+                metricChip(title: "Coins", value: "\(stats.coinsCollected)", accent: gold)
             }
 
             Text(statusText)
@@ -257,6 +259,8 @@ private enum DebugPickerValue: Hashable {
 }
 
 #Preview {
-    PlayHUDView()
-        .environmentObject(GameModel())
+    let model = GameModel()
+    return PlayHUDView()
+        .environmentObject(model)
+        .environmentObject(model.stats)
 }

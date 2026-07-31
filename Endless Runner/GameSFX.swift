@@ -55,6 +55,13 @@ final class GameSFX {
     }
 
     func playCoinCollect() {
+        // Start playback after the RealityKit update so AVAudioPlayer cannot hitch the tick.
+        DispatchQueue.main.async { [weak self] in
+            self?.playCoinCollectNow()
+        }
+    }
+
+    private func playCoinCollectNow() {
         prepareSessionIfNeeded()
         guard !coinPlayers.isEmpty else { return }
         let player = coinPlayers[nextCoinPlayer % coinPlayers.count]
