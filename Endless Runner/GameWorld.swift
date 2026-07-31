@@ -145,7 +145,6 @@ final class GameWorld {
     private static let adjacentPairSpread: Float = 0.09
     /// Extra Z gap when consecutive adjacent doubles open on opposite outer lanes (left↔right).
     private static let oppositeOpenLaneSpacingBonus: Float = 0.35
-    private static let coinPoints = CrystalCombine.baseCoinPoints
     /// HUD sits above the corridor, further down the track, clear of the play volume.
     private static let hudPosition = SIMD3<Float>(0, 2.45, -3.2)
     /// World scale for the SwiftUI attachment (attachments are small by default).
@@ -1592,7 +1591,7 @@ final class GameWorld {
         let leftPos = left.entity.position
         let rightPos = right.entity.position
         if distance(leftPos, rightPos) <= CrystalCombine.combineDistance {
-            let payout = CrystalCombine.mergePayout(
+            let coins = CrystalCombine.mergeCoinAward(
                 leftCharged: left.charged,
                 rightCharged: right.charged
             )
@@ -1602,9 +1601,8 @@ final class GameWorld {
             heldRight = nil
             GameSFX.shared.playCoinCollect()
             let model = self.gameModel
-            let coinCount = CrystalCombine.mergeCoinCount
             DispatchQueue.main.async {
-                model?.collectCoin(points: payout, coinCount: coinCount)
+                model?.collectCoin(count: coins)
             }
         }
     }
@@ -1820,11 +1818,10 @@ final class GameWorld {
                     visualFX.spawnCoinBurst(at: coinPos)
                     // Hide now; removeFromParent happens in prune. HUD/SFX after this tick.
                     coins[index].entity.isEnabled = false
-                    let points = GameWorld.coinPoints
                     let model = gameModel
                     GameSFX.shared.playCoinCollect()
                     DispatchQueue.main.async {
-                        model.collectCoin(points: points)
+                        model.collectCoin()
                     }
                     break
                 }
