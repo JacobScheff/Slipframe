@@ -165,4 +165,360 @@ final class Endless_RunnerTests: XCTestCase {
         )
         XCTAssertFalse(hit)
     }
+
+    func testDuckBarrierHitsStandingHead() {
+        let head = SIMD3<Float>(0, 1.5, 0)
+        let hit = WallCollision.pointHitsDuckBarrier(
+            point: head,
+            wallZ: 0,
+            centerX: 0,
+            halfWidth: 1.1,
+            halfDepth: 0.2,
+            clearanceY: 0.95,
+            maxY: 2.2
+        )
+        XCTAssertTrue(hit)
+    }
+
+    func testDuckBarrierClearedWhenHeadIsLow() {
+        let head = SIMD3<Float>(0, 0.8, 0)
+        let hit = WallCollision.pointHitsDuckBarrier(
+            point: head,
+            wallZ: 0,
+            centerX: 0,
+            halfWidth: 1.1,
+            halfDepth: 0.2,
+            clearanceY: 0.95,
+            maxY: 2.2
+        )
+        XCTAssertFalse(hit)
+    }
+
+    func testSweptZCatchesTunnelingWall() {
+        // Wall jumped from z=-0.4 to z=0.4 in one frame past a head at z=0.
+        XCTAssertTrue(
+            WallCollision.overlapsSweptZ(
+                pointZ: 0,
+                wallZ: 0.4,
+                previousWallZ: -0.4,
+                halfDepth: 0.2
+            )
+        )
+    }
+
+    func testWallNotRetiredByForwardHandBeforeHead() {
+        // Forward hand at z=-0.5 must not count as "passed" while head is still at 0
+        // and the wall is still in front (z=-0.2).
+        let wallZ: Float = -0.2
+        let headZ: Float = 0
+        let forwardHandZ: Float = -0.5
+        let halfDepth: Float = 0.2
+        XCTAssertFalse(
+            WallCollision.hasPassedContact(wallZ: wallZ, contactZ: headZ, halfDepth: halfDepth)
+        )
+        // Old buggy rule used the forward hand and retired the wall too early:
+        XCTAssertTrue(
+            WallCollision.hasPassedContact(wallZ: wallZ, contactZ: forwardHandZ, halfDepth: halfDepth)
+        )
+    }
+
+    func testCrystalMergeRequiresDifferentTypes() {
+        XCTAssertTrue(CrystalCombine.canMerge(left: .red, right: .blue))
+        XCTAssertFalse(CrystalCombine.canMerge(left: .red, right: .red))
+        XCTAssertFalse(CrystalCombine.canMerge(left: .blue, right: .blue))
+    }
+
+    func testCrystalMergePayouts() {
+        XCTAssertEqual(CrystalCombine.mergePayout(leftCharged: false, rightCharged: false), 50)
+        XCTAssertEqual(CrystalCombine.mergePayout(leftCharged: true, rightCharged: false), 100)
+        XCTAssertEqual(CrystalCombine.mergePayout(leftCharged: false, rightCharged: true), 100)
+        XCTAssertEqual(CrystalCombine.mergePayout(leftCharged: true, rightCharged: true), 10_000)
+    }
+
+    func testCrystalChargedSpawnRateAroundOnePercent() {
+        var rng = SeededGenerator(seed: 42)
+        var charged = 0
+        let trials = 20_000
+        for _ in 0..<trials {
+            if CrystalCombine.makeHalf(rng: &rng).charged {
+                charged += 1
+            }
+        }
+        let rate = Double(charged) / Double(trials)
+        XCTAssertGreaterThan(rate, 0.005)
+        XCTAssertLessThan(rate, 0.02)
+    }
+
+    func testEnvironmentDirectorStartsOnEmberRun() {
+        let director = EnvironmentDirector()
+        director.beginRun(debugMode: .normal)
+        XCTAssertEqual(director.currentID, .emberRun)
+        XCTAssertEqual(director.currentProfile.twist, .baseline)
+    }
+
+    func testEnvironmentDirectorForceModeLocksBiome() {
+        let director = EnvironmentDirector()
+        director.beginRun(debugMode: .force(.fogHollow))
+        XCTAssertEqual(director.currentID, .fogHollow)
+
+        // Even after many switch intervals, forced biome should stick.
+        for _ in 0..<5 {
+            let frame = director.update(deltaTime: director.currentSwitchInterval + 1)
+            XCTAssertEqual(frame.currentID, .fogHollow)
+            XCTAssertFalse(frame.didEnterEnvironment)
+        }
+    }
+
+    func testSwitchIntervalFollowsTrackDurationMinusCrossfade() {
+        let interval = EnvironmentDirector.switchInterval(forTrackDuration: 47, crossfade: 1.25)
+        XCTAssertEqual(interval, 45.75, accuracy: 0.001)
+    }
+
+    func testSwitchIntervalClampsShortAndLongTracks() {
+        let short = EnvironmentDirector.switchInterval(forTrackDuration: 5, crossfade: 1.25)
+        let long = EnvironmentDirector.switchInterval(forTrackDuration: 400, crossfade: 1.25)
+        XCTAssertEqual(short, EnvironmentCatalog.minSwitchInterval)
+        XCTAssertEqual(long, EnvironmentCatalog.maxSwitchInterval)
+    }
+
+    func testEnvironmentDirectorRandomNextAvoidsCurrent() {
+        for id in EnvironmentID.allCases {
+            var rng = SeededGenerator(seed: UInt64(id.hashValue))
+            for _ in 0..<20 {
+                let next = EnvironmentDirector.randomNext(excluding: id, rng: &rng)
+                XCTAssertNotEqual(next, id)
+            }
+        }
+    }
+
+    func testFogHollowPaletteIsDarkerAndFoggierThanEmber() {
+        let ember = EnvironmentCatalog.profile(for: .emberRun).palette
+        let fog = EnvironmentCatalog.profile(for: .fogHollow).palette
+        XCTAssertLessThan(fog.ambienceBrightness, ember.ambienceBrightness)
+        XCTAssertGreaterThan(fog.fogDensity, ember.fogDensity)
+        XCTAssertLessThan(fog.wallOpacity, ember.wallOpacity)
+    }
+
+    func testGhostGlassUsesWhiteTransparentWalls() {
+        let ghost = EnvironmentCatalog.profile(for: .ghostGlass)
+        XCTAssertEqual(ghost.twist, .ghostWalls)
+        XCTAssertEqual(ghost.ghostWallChance, 1.0, accuracy: 0.001)
+        XCTAssertLessThan(ghost.ghostWallOpacity, 0.01)
+        XCTAssertEqual(ghost.palette.wallEmissiveIntensity, 0, accuracy: 0.0001)
+        // White-ish tint (high RGB, low chroma).
+        XCTAssertGreaterThan(ghost.palette.wallTint.r, 0.9)
+        XCTAssertGreaterThan(ghost.palette.wallTint.g, 0.9)
+        XCTAssertGreaterThan(ghost.palette.wallTint.b, 0.9)
+        // No room-dimming flag outside Fog Hollow.
+        XCTAssertEqual(ghost.palette.fogDensity, 0)
+    }
+
+    func testOnlyFogHollowUsesFogDensity() {
+        for id in EnvironmentID.allCases {
+            let density = EnvironmentCatalog.profile(for: id).palette.fogDensity
+            if id == .fogHollow {
+                // Fog Hollow dims passthrough; density is the biome flag (no fog boxes).
+                XCTAssertGreaterThan(density, 0)
+            } else {
+                XCTAssertEqual(density, 0, "Unexpected fog on \(id.displayName)")
+            }
+        }
+    }
+
+    func testFogHollowWallsAreMoreOpaqueThanGhostGlass() {
+        let fog = EnvironmentCatalog.profile(for: .fogHollow).palette
+        let ghost = EnvironmentCatalog.profile(for: .ghostGlass)
+        XCTAssertGreaterThan(fog.wallOpacity, 0.25)
+        XCTAssertGreaterThan(fog.wallOpacity, ghost.ghostWallOpacity)
+    }
+
+    func testAdjacentDoubleLaneWallsSpreadApartSlightly() {
+        let spacing: Float = 0.75
+        let spread: Float = 0.09
+        let leftCenter = Set([-1, 0])
+        let leftX = ObstacleLayout.slabLocalX(
+            laneRaw: -1,
+            blockingLaneRaws: leftCenter,
+            laneSpacing: spacing,
+            adjacentSpread: spread
+        )
+        let centerX = ObstacleLayout.slabLocalX(
+            laneRaw: 0,
+            blockingLaneRaws: leftCenter,
+            laneSpacing: spacing,
+            adjacentSpread: spread
+        )
+        XCTAssertEqual(leftX, -0.75 - spread, accuracy: 0.0001)
+        XCTAssertEqual(centerX, 0 + spread, accuracy: 0.0001)
+
+        // Non-adjacent left+right stays on lane centers.
+        let leftRight = Set([-1, 1])
+        XCTAssertEqual(
+            ObstacleLayout.slabLocalX(
+                laneRaw: -1,
+                blockingLaneRaws: leftRight,
+                laneSpacing: spacing,
+                adjacentSpread: spread
+            ),
+            -0.75,
+            accuracy: 0.0001
+        )
+    }
+
+    func testLowCrawlTeachCountIsPositive() {
+        let crawl = EnvironmentCatalog.profile(for: .lowCrawl)
+        XCTAssertEqual(crawl.twist, .lowCrawl)
+        XCTAssertGreaterThan(crawl.lowCrawlTeachCount, 0)
+        let director = EnvironmentDirector()
+        director.beginRun(debugMode: .force(.lowCrawl))
+        XCTAssertTrue(director.isTeachingLowCrawl)
+        for _ in 0..<crawl.lowCrawlTeachCount {
+            director.noteDuckGateSpawned()
+        }
+        XCTAssertFalse(director.isTeachingLowCrawl)
+    }
+
+    func testGameMusicCrossfadeRecordsCueAndFallbackDuration() {
+        let music = GameMusic.shared
+        music.prepare()
+        let duration = music.crossfade(
+            to: EnvironmentID.stormPass.musicCue,
+            duration: 1.25,
+            loop: false
+        )
+        XCTAssertEqual(music.currentCue, "stormPass")
+        // No bundled track in test host → fallback duration.
+        XCTAssertEqual(duration, GameMusic.fallbackTrackDuration)
+        XCTAssertEqual(music.trackDuration(for: "stormPass"), GameMusic.fallbackTrackDuration)
+        music.stop()
+        XCTAssertNil(music.currentCue)
+    }
+
+    func testEnvironmentDirectorUsesMusicDurationForSwitchInterval() {
+        let director = EnvironmentDirector()
+        director.beginRun(debugMode: .normal)
+        let expected = EnvironmentDirector.switchInterval(
+            forTrackDuration: GameMusic.fallbackTrackDuration,
+            crossfade: EnvironmentCatalog.ambienceLerpSeconds
+        )
+        XCTAssertEqual(director.currentSwitchInterval, expected, accuracy: 0.001)
+    }
+
+    func testStormWindOscillatesWithinOneStepOfCenter() {
+        XCTAssertEqual(StormWind.nextDirection(offsetStep: 0, preferredFromGap: 1), 1, accuracy: 0.001)
+        XCTAssertEqual(StormWind.nextDirection(offsetStep: 0, preferredFromGap: -1), -1, accuracy: 0.001)
+        // After a left shove, next must return right — never left again.
+        XCTAssertEqual(StormWind.nextDirection(offsetStep: -1, preferredFromGap: -1), 1, accuracy: 0.001)
+        XCTAssertEqual(StormWind.nextDirection(offsetStep: 1, preferredFromGap: 1), -1, accuracy: 0.001)
+
+        XCTAssertEqual(StormWind.applyStep(offsetStep: 0, direction: -1), -1)
+        XCTAssertEqual(StormWind.applyStep(offsetStep: -1, direction: 1), 0)
+        XCTAssertEqual(StormWind.applyStep(offsetStep: 0, direction: 1), 1)
+        XCTAssertEqual(StormWind.applyStep(offsetStep: 1, direction: -1), 0)
+        // Clamp so stacked same-side shoves cannot exceed ±1.
+        XCTAssertEqual(StormWind.applyStep(offsetStep: -1, direction: -1), -1)
+        XCTAssertEqual(StormWind.applyStep(offsetStep: 1, direction: 1), 1)
+    }
+
+    func testStormGustBarExpandsThenShrinksToZero() {
+        let finish: Float = 0.42
+        XCTAssertEqual(StormWind.gustExpandAmount(progress: 0, expandFinishAt: finish), 0, accuracy: 0.001)
+        XCTAssertEqual(StormWind.gustExpandAmount(progress: finish, expandFinishAt: finish), 1, accuracy: 0.001)
+        let midShrink = StormWind.gustExpandAmount(progress: 0.7, expandFinishAt: finish)
+        XCTAssertGreaterThan(midShrink, 0)
+        XCTAssertLessThan(midShrink, 1)
+        XCTAssertEqual(StormWind.gustExpandAmount(progress: 1, expandFinishAt: finish), 0, accuracy: 0.001)
+        XCTAssertTrue(StormWind.gustLineDidDisappear(progress: 1, expandFinishAt: finish))
+        XCTAssertFalse(StormWind.gustLineDidDisappear(progress: 0.5, expandFinishAt: finish))
+    }
+
+    func testStormGustBarShrinksTowardShoveDirection() {
+        let finish: Float = 0.42
+        let full: Float = 2.8
+        // Expand right: center moves right from the left origin edge.
+        let expanding = StormWind.gustBarLayout(
+            progress: finish * 0.5,
+            expandFinishAt: finish,
+            direction: 1,
+            fullWidth: full
+        )
+        XCTAssertGreaterThan(expanding.width, 0.1)
+        XCTAssertLessThan(expanding.centerX, 0)
+
+        let fullBar = StormWind.gustBarLayout(
+            progress: finish,
+            expandFinishAt: finish,
+            direction: 1,
+            fullWidth: full
+        )
+        XCTAssertEqual(fullBar.width, full, accuracy: 0.01)
+        XCTAssertEqual(fullBar.centerX, 0, accuracy: 0.01)
+
+        // Shrink the other way: remaining segment sits on the right (shove) side.
+        let shrinking = StormWind.gustBarLayout(
+            progress: 0.75,
+            expandFinishAt: finish,
+            direction: 1,
+            fullWidth: full
+        )
+        XCTAssertGreaterThan(shrinking.width, 0)
+        XCTAssertLessThan(shrinking.width, full)
+        XCTAssertGreaterThan(shrinking.centerX, 0)
+
+        let gone = StormWind.gustBarLayout(
+            progress: 1,
+            expandFinishAt: finish,
+            direction: 1,
+            fullWidth: full
+        )
+        XCTAssertEqual(gone.width, 0, accuracy: 0.001)
+    }
+
+    func testStormShoveForbidsWallsOnShiftSide() {
+        XCTAssertEqual(StormWind.forbiddenOuterLaneRaw(offsetStep: 0, pendingDirection: -1), -1)
+        XCTAssertEqual(StormWind.forbiddenOuterLaneRaw(offsetStep: 0, pendingDirection: 1), 1)
+        // Held off-center still keeps that outer lane clear between shoves.
+        XCTAssertEqual(StormWind.forbiddenOuterLaneRaw(offsetStep: -1, pendingDirection: 0), -1)
+        XCTAssertEqual(StormWind.forbiddenOuterLaneRaw(offsetStep: 1, pendingDirection: 0), 1)
+        // Pending shove wins over the held offset (return shove bans the return side).
+        XCTAssertEqual(StormWind.forbiddenOuterLaneRaw(offsetStep: -1, pendingDirection: 1), 1)
+        XCTAssertNil(StormWind.forbiddenOuterLaneRaw(offsetStep: 0, pendingDirection: 0))
+
+        let patterns: [[Int]] = [
+            [-1], [0], [1],
+            [-1, 0], [0, 1], [-1, 1]
+        ]
+        for _ in 0..<40 {
+            let leftShift = StormWind.chooseWallLanes(
+                from: patterns,
+                offsetStep: 0,
+                pendingDirection: -1
+            )
+            XCTAssertFalse(leftShift.contains(-1), "Left shove must not spawn a left wall: \(leftShift)")
+
+            let rightShift = StormWind.chooseWallLanes(
+                from: patterns,
+                offsetStep: 0,
+                pendingDirection: 1
+            )
+            XCTAssertFalse(rightShift.contains(1), "Right shove must not spawn a right wall: \(rightShift)")
+        }
+    }
+}
+
+/// Deterministic RNG for spawn-rate tests.
+private struct SeededGenerator: RandomNumberGenerator {
+    private var state: UInt64
+
+    init(seed: UInt64) {
+        state = seed == 0 ? 0x4d595df4d0f33173 : seed
+    }
+
+    mutating func next() -> UInt64 {
+        state &+= 0x9e3779b97f4a7c15
+        var z = state
+        z = (z ^ (z >> 30)) &* 0xbf58476d1ce4e5b9
+        z = (z ^ (z >> 27)) &* 0x94d049bb133111eb
+        return z ^ (z >> 31)
+    }
 }

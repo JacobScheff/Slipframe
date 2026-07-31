@@ -16,6 +16,7 @@ final class GameSFX {
     private var coinPlayers: [AVAudioPlayer] = []
     private var nextCoinPlayer = 0
     private var hitPlayer: AVAudioPlayer?
+    private var windPlayer: AVAudioPlayer?
     private var didConfigureSession = false
 
     private init() {
@@ -35,6 +36,12 @@ final class GameSFX {
             volume: 0.65,
             noiseAmount: 0.35
         )
+        windPlayer = Self.makePlayer(
+            frequencies: [220, 160], // airy whoosh bed
+            duration: 1.2, // covers most of the storm telegraph window
+            volume: 0.45,
+            noiseAmount: 0.65
+        )
     }
 
     /// Call when the immersive world attaches so the first collect is hitch-free.
@@ -44,6 +51,7 @@ final class GameSFX {
             player.prepareToPlay()
         }
         hitPlayer?.prepareToPlay()
+        windPlayer?.prepareToPlay()
     }
 
     func playCoinCollect() {
@@ -58,6 +66,14 @@ final class GameSFX {
     func playWallHit() {
         prepareSessionIfNeeded()
         guard let player = hitPlayer else { return }
+        player.currentTime = 0
+        player.play()
+    }
+
+    /// Storm Pass wind-shove telegraph (placeholder until real gust SFX lands).
+    func playWindWhoosh() {
+        prepareSessionIfNeeded()
+        guard let player = windPlayer else { return }
         player.currentTime = 0
         player.play()
     }
