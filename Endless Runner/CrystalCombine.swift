@@ -14,6 +14,8 @@ enum CrystalHalfType: String, CaseIterable, Equatable {
 
 enum CrystalCombine {
     static let baseCoinPoints = 10
+    /// Each successful combine counts as this many coins on the HUD.
+    static let mergeCoinCount = 3
     /// ~1% of spawned halves are charged.
     static let chargedSpawnChance: Float = 0.01
     /// Hands must be within this distance to merge (meters).

@@ -1602,8 +1602,9 @@ final class GameWorld {
             heldRight = nil
             GameSFX.shared.playCoinCollect()
             let model = self.gameModel
+            let coinCount = CrystalCombine.mergeCoinCount
             DispatchQueue.main.async {
-                model?.collectCoin(points: payout)
+                model?.collectCoin(points: payout, coinCount: coinCount)
             }
         }
     }
