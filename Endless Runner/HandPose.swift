@@ -21,16 +21,21 @@ enum HandPose {
     /// Tip→wrist average above this supports an open hand.
     static let openMinTipToWrist: Float = 0.16
 
-    /// Strict tip curl — partial closes should not count; need tips near knuckles.
+    /// Strict tip curl — tips parked near knuckles (partial close, palm toward camera).
     static let fistTipPastKnuckle: Float = 0.02
     static let fistTipToKnuckle: Float = 0.05
+    /// Tip folded past the knuckle toward the palm (full fist; tip→wrist ≤ knuckle→wrist).
+    static let fistTipTuckedPastKnuckle: Float = 0.0
     /// Clear extension past the knuckle ⇒ open finger.
     static let openTipPastKnuckle: Float = 0.065
     static let openTipToKnuckle: Float = 0.1
 
     /// Occlusion-resistant curl: intermediate tip folded toward knuckle / palm.
+    /// Scored even when tips remain "tracked" with bad estimates inside a fist.
     static let fistIntermediateToKnuckle: Float = 0.07
     static let fistIntermediateToWrist: Float = 0.11
+    /// Average intermediate→wrist below this + no extension ⇒ closed hand.
+    static let fistMaxIntermediateToWrist: Float = 0.10
 
     static let fistMinCurledFingers = 3
     static let fistMinOccludedCurledFingers = 2
@@ -53,9 +58,11 @@ enum HandPose {
 
     /// Classifies fist vs open.
     ///
-    /// Important: a *fully* closed fist often occludes fingertips in visionOS, while a
-    /// *partial* close still tracks tips. Tip-based curl is therefore strict, and
-    /// missing tips fall back to intermediate-joint curl so full fists still register.
+    /// A *fully* closed fist often keeps fingertips marked tracked with poor
+    /// estimates on visionOS, while a *partial* close tracks tips near the
+    /// knuckles. Tip curl therefore accepts both knuckle-parked and tucked
+    /// tips, and intermediate-joint curl is always scored so full fists
+    /// register even when tip tracking lies.
     static func classify(anchor: HandAnchor) -> Pose {
         guard anchor.isTracked else { return .unknown }
         guard let skeleton = anchor.handSkeleton else { return .unknown }
@@ -88,9 +95,10 @@ enum HandPose {
         ]
 
         var tipToWrist: [Float] = []
-        var tipCurled = 0
+        var midToWrist: [Float] = []
         var tipExtended = 0
-        var occludedCurled = 0
+        var intermediateCurled = 0
+        var curledFingers = 0
         var tipsTracked = 0
 
         for finger in fingers {
@@ -99,6 +107,26 @@ enum HandPose {
                 ? worldPosition(origin: origin, joint: knuckle)
                 : nil
 
+            var fingerIntermediateCurled = false
+            let intermediate = skeleton.joint(finger.intermediate)
+            if intermediate.isTracked {
+                let midWorld = worldPosition(origin: origin, joint: intermediate)
+                let midWristDist = simd_distance(midWorld, wristWorld)
+                midToWrist.append(midWristDist)
+                if midWristDist <= fistIntermediateToWrist {
+                    fingerIntermediateCurled = true
+                }
+                if let knuckleWorld,
+                   simd_distance(midWorld, knuckleWorld) <= fistIntermediateToKnuckle {
+                    fingerIntermediateCurled = true
+                }
+                if fingerIntermediateCurled {
+                    intermediateCurled += 1
+                }
+            }
+
+            var fingerTipCurled = false
+            var fingerTipExtended = false
             let tip = skeleton.joint(finger.tip)
             if tip.isTracked {
                 tipsTracked += 1
@@ -111,58 +139,70 @@ enum HandPose {
                     let tipPastKnuckle = toWrist - knuckleToWrist
                     let tipToKnuckle = simd_distance(tipWorld, knuckleWorld)
 
-                    // Strict: only tightly curled tips count (avoids "almost closed").
-                    if tipPastKnuckle <= fistTipPastKnuckle && tipToKnuckle <= fistTipToKnuckle {
-                        tipCurled += 1
+                    // Knuckle-parked (partial close) or tucked into palm (full fist).
+                    if tipPastKnuckle <= fistTipTuckedPastKnuckle
+                        || (tipPastKnuckle <= fistTipPastKnuckle && tipToKnuckle <= fistTipToKnuckle) {
+                        fingerTipCurled = true
                     } else if tipPastKnuckle >= openTipPastKnuckle || tipToKnuckle >= openTipToKnuckle {
-                        tipExtended += 1
+                        fingerTipExtended = true
                     }
+                } else if toWrist <= fistMaxTipToWrist {
+                    fingerTipCurled = true
                 }
-            } else {
-                // Full fist path: tip missing — score curl from intermediate joints.
-                let intermediate = skeleton.joint(finger.intermediate)
-                if intermediate.isTracked {
-                    let midWorld = worldPosition(origin: origin, joint: intermediate)
-                    let midToWrist = simd_distance(midWorld, wristWorld)
-                    var curled = midToWrist <= fistIntermediateToWrist
-                    if let knuckleWorld,
-                       simd_distance(midWorld, knuckleWorld) <= fistIntermediateToKnuckle {
-                        curled = true
-                    }
-                    if curled { occludedCurled += 1 }
-                }
+            }
+
+            // Phantom tip extension inside a fist: prefer intermediate fold.
+            if fingerTipExtended && !fingerIntermediateCurled {
+                tipExtended += 1
+                continue
+            }
+            if fingerTipCurled || fingerIntermediateCurled {
+                curledFingers += 1
             }
         }
 
-        // Full fist: few/no tips, but intermediates folded in.
-        if tipsTracked <= 1 && occludedCurled >= fistMinOccludedCurledFingers {
+        // Full fist with mostly missing tips, intermediates folded in.
+        if tipsTracked <= 1 && intermediateCurled >= fistMinOccludedCurledFingers {
             return .fist
         }
-        if tipsTracked <= 2 && occludedCurled >= 3 {
+        if tipsTracked <= 2 && intermediateCurled >= 3 {
             return .fist
         }
 
-        // Strict tip fist (fully curled fingertips still visible).
-        if tipCurled >= fistMinCurledFingers {
+        // Combined curl — tip and/or intermediate evidence per finger.
+        if curledFingers >= fistMinCurledFingers {
+            return .fist
+        }
+
+        // Intermediate-only closed hand (tips tracked but in the dead-band).
+        if intermediateCurled >= fistMinCurledFingers && tipExtended == 0 {
             return .fist
         }
 
         if tipToWrist.count >= 3 {
             let average = tipToWrist.reduce(0, +) / Float(tipToWrist.count)
-            // Very short tip reach + mostly curled ⇒ fist.
-            if average <= fistMaxTipToWrist && tipCurled >= 2 && tipExtended == 0 {
+            if average <= fistMaxTipToWrist && curledFingers >= 2 && tipExtended == 0 {
                 return .fist
             }
-            // Clear open hand.
             if average >= openMinTipToWrist && tipExtended >= openMinExtendedFingers {
                 return .open
             }
-            if average >= openMinTipToWrist && tipCurled == 0 && tipExtended >= 2 {
+            if average >= openMinTipToWrist && curledFingers == 0 && tipExtended >= 2 {
                 return .open
             }
         }
 
-        if tipExtended >= openMinExtendedFingers && tipCurled == 0 {
+        // Closed-hand path from intermediate reach when tip metrics are noisy.
+        if midToWrist.count >= 3 {
+            let midAverage = midToWrist.reduce(0, +) / Float(midToWrist.count)
+            if midAverage <= fistMaxIntermediateToWrist
+                && tipExtended == 0
+                && intermediateCurled >= fistMinOccludedCurledFingers {
+                return .fist
+            }
+        }
+
+        if tipExtended >= openMinExtendedFingers && curledFingers == 0 {
             return .open
         }
 
