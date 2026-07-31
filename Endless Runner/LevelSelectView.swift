@@ -35,15 +35,9 @@ struct LevelSelectView: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("MODE")
-                .font(.system(size: 13, weight: .bold, design: .rounded))
-                .tracking(2)
-                .foregroundStyle(neon.opacity(0.85))
-            Text("Level Select")
-                .font(.system(size: 28, weight: .semibold, design: .rounded))
-                .foregroundStyle(.primary)
-        }
+        Text("Mode Selection")
+            .font(.system(size: 28, weight: .semibold, design: .rounded))
+            .foregroundStyle(.primary)
     }
 
     private var modePicker: some View {
