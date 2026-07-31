@@ -221,7 +221,8 @@ enum HandPose {
         if let midAverage, midAverage >= openMinIntermediateToWrist, curledFingers <= 1, extendedFingers >= 2 {
             return .open
         }
-        if wideSpan && curledFingers <= 1 && (extendedFingers >= 2 || tipAverage.map { $0 >= openMinTipToWrist } == true) {
+        // Wide index↔little span is a strong open signal even facing away.
+        if wideSpan && curledFingers <= 2 {
             return .open
         }
 
