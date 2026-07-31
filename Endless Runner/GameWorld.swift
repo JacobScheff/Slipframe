@@ -292,8 +292,8 @@ final class GameWorld {
     /// After proximity grab, a still-open / flat hand drops quickly.
     /// A non-open hand (fist or closed) confirms immediately — no open→fist required.
     private static let crystalGrabConfirmWindow: Float = 0.12
-    /// Crystal Cave half spawn chance per beat (was 0.2; +50%).
-    private static let crystalHalfSpawnChance: Float = 0.3
+    /// Crystal Cave half spawn chance per beat.
+    private static let crystalHalfSpawnChance: Float = 0.6
     /// Held shards sit this far past the knuckle plane toward the fingertips (meters).
     private static let crystalGripFingerBias: Float = 0.04
     /// Lift shards slightly off the knuckle plane so they sit in/on the fingers.
