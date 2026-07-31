@@ -407,6 +407,99 @@ final class Endless_RunnerTests: XCTestCase {
         )
     }
 
+    func testIsAdjacentDoubleDetectsNeighborPairsOnly() {
+        XCTAssertTrue(ObstacleLayout.isAdjacentDouble(blockingLaneRaws: [-1, 0]))
+        XCTAssertTrue(ObstacleLayout.isAdjacentDouble(blockingLaneRaws: [0, 1]))
+        XCTAssertFalse(ObstacleLayout.isAdjacentDouble(blockingLaneRaws: [-1, 1]))
+        XCTAssertFalse(ObstacleLayout.isAdjacentDouble(blockingLaneRaws: [0]))
+        XCTAssertFalse(ObstacleLayout.isAdjacentDouble(blockingLaneRaws: [-1, 0, 1]))
+    }
+
+    func testAdjacentDoubleGapIsSealedForCollision() {
+        let spacing: Float = 0.75
+        let spread: Float = 0.09
+        let halfWidth = WallCollision.halfWidth(visualWidth: 0.7, inset: 0.12)
+        let halfDepth = WallCollision.halfDepth(visualThickness: 0.7)
+        let leftCenter = Set([-1, 0])
+        let leftX = ObstacleLayout.slabLocalX(
+            laneRaw: -1,
+            blockingLaneRaws: leftCenter,
+            laneSpacing: spacing,
+            adjacentSpread: spread
+        )
+        let centerX = ObstacleLayout.slabLocalX(
+            laneRaw: 0,
+            blockingLaneRaws: leftCenter,
+            laneSpacing: spacing,
+            adjacentSpread: spread
+        )
+        let slabXs = [leftX, centerX]
+        // Midpoint between the two kill boxes — the old squeeze corridor.
+        let gapX = (leftX + halfWidth + centerX - halfWidth) * 0.5
+        let head = SIMD3<Float>(gapX, 1.5, 0)
+
+        // Without sealing, the spread + hit inset leaves a real gap.
+        XCTAssertFalse(
+            WallCollision.pointHitsSlabs(
+                point: head,
+                wallZ: 0,
+                slabXs: slabXs,
+                halfWidth: halfWidth,
+                halfDepth: halfDepth,
+                minY: 0.4,
+                maxY: 2.2,
+                sealBetweenSlabs: false
+            )
+        )
+        // Adjacent doubles seal that span so you cannot slip between them.
+        XCTAssertTrue(
+            WallCollision.pointHitsSlabs(
+                point: head,
+                wallZ: 0,
+                slabXs: slabXs,
+                halfWidth: halfWidth,
+                halfDepth: halfDepth,
+                minY: 0.4,
+                maxY: 2.2,
+                sealBetweenSlabs: true
+            )
+        )
+        // Open outer lane (right) stays clear.
+        let openLaneHead = SIMD3<Float>(0.75, 1.5, 0)
+        XCTAssertFalse(
+            WallCollision.pointHitsSlabs(
+                point: openLaneHead,
+                wallZ: 0,
+                slabXs: slabXs,
+                halfWidth: halfWidth,
+                halfDepth: halfDepth,
+                minY: 0.4,
+                maxY: 2.2,
+                sealBetweenSlabs: true
+            )
+        )
+    }
+
+    func testNonAdjacentDoubleDoesNotSealCenterLane() {
+        let halfWidth = WallCollision.halfWidth(visualWidth: 0.7, inset: 0.12)
+        let halfDepth = WallCollision.halfDepth(visualThickness: 0.7)
+        // left+right keeps the center open — must not become a continuous barrier.
+        let slabXs: [Float] = [-0.75, 0.75]
+        let centerHead = SIMD3<Float>(0, 1.5, 0)
+        XCTAssertFalse(
+            WallCollision.pointHitsSlabs(
+                point: centerHead,
+                wallZ: 0,
+                slabXs: slabXs,
+                halfWidth: halfWidth,
+                halfDepth: halfDepth,
+                minY: 0.4,
+                maxY: 2.2,
+                sealBetweenSlabs: false
+            )
+        )
+    }
+
     func testAdjacentDoubleOpenLaneRawDetectsOuterGap() {
         // Block left+center → only right is open.
         XCTAssertEqual(

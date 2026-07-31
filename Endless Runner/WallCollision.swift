@@ -15,6 +15,14 @@ enum WallKind: Equatable {
 }
 
 enum ObstacleLayout {
+    /// True when exactly two neighboring lanes are blocked (spread-apart double wall).
+    static func isAdjacentDouble(blockingLaneRaws: Set<Int>) -> Bool {
+        guard blockingLaneRaws.count == 2 else { return false }
+        let ordered = blockingLaneRaws.sorted()
+        guard let first = ordered.first, let last = ordered.last else { return false }
+        return last - first == 1
+    }
+
     /// Local X for a lane slab. Adjacent double-lane blocks get a slight extra gap.
     static func slabLocalX(
         laneRaw: Int,
@@ -23,9 +31,9 @@ enum ObstacleLayout {
         adjacentSpread: Float
     ) -> Float {
         var x = Float(laneRaw) * laneSpacing
-        guard blockingLaneRaws.count == 2 else { return x }
+        guard isAdjacentDouble(blockingLaneRaws: blockingLaneRaws) else { return x }
         let ordered = blockingLaneRaws.sorted()
-        guard let first = ordered.first, let last = ordered.last, last - first == 1 else { return x }
+        guard let first = ordered.first, let last = ordered.last else { return x }
         if laneRaw == first { x -= adjacentSpread }
         if laneRaw == last { x += adjacentSpread }
         return x
@@ -34,9 +42,7 @@ enum ObstacleLayout {
     /// Open outer lane raw (−1 left / +1 right) when exactly one adjacent double leaves one side open.
     /// `[left, center]` → right; `[center, right]` → left. Center-open or non-doubles → nil.
     static func adjacentDoubleOpenLaneRaw(blockingLaneRaws: Set<Int>) -> Int? {
-        guard blockingLaneRaws.count == 2 else { return nil }
-        let ordered = blockingLaneRaws.sorted()
-        guard let first = ordered.first, let last = ordered.last, last - first == 1 else { return nil }
+        guard isAdjacentDouble(blockingLaneRaws: blockingLaneRaws) else { return nil }
         let open = Set([-1, 0, 1]).subtracting(blockingLaneRaws)
         guard open.count == 1, let lane = open.first, lane != 0 else { return nil }
         return lane
@@ -76,6 +82,8 @@ enum WallCollision {
     }
 
     /// True when `point` overlaps any slab centered at `slabXs` on the wall's Z.
+    /// When `sealBetweenSlabs` is set, the kill box is one continuous X span from the
+    /// leftmost to rightmost slab (closes the squeeze gap on adjacent doubles).
     static func pointHitsSlabs(
         point: SIMD3<Float>,
         wallZ: Float,
@@ -84,7 +92,8 @@ enum WallCollision {
         halfWidth: Float,
         halfDepth: Float,
         minY: Float,
-        maxY: Float
+        maxY: Float,
+        sealBetweenSlabs: Bool = false
     ) -> Bool {
         guard point.y >= minY, point.y <= maxY else { return false }
         let prior = previousWallZ ?? wallZ
@@ -94,6 +103,10 @@ enum WallCollision {
             previousWallZ: prior,
             halfDepth: halfDepth
         ) else { return false }
+
+        if sealBetweenSlabs, let lo = slabXs.min(), let hi = slabXs.max(), hi > lo {
+            return point.x >= lo - halfWidth && point.x <= hi + halfWidth
+        }
 
         for slabX in slabXs {
             if point.x >= slabX - halfWidth, point.x <= slabX + halfWidth {

@@ -46,14 +46,22 @@ final class GameWorld {
         /// Local X centers of each slab relative to the wall parent.
         let localSlabXs: [Float]
         let kind: WallKind
+        /// Adjacent double-lane walls seal the visual gap between slabs (collision only).
+        let sealsBetweenSlabs: Bool
         var hasResolvedHit = false
         /// Prior-frame Z for swept head/hand collision (prevents tunneling).
         var previousZ: Float
 
-        init(entity: Entity, localSlabXs: [Float], kind: WallKind) {
+        init(
+            entity: Entity,
+            localSlabXs: [Float],
+            kind: WallKind,
+            sealsBetweenSlabs: Bool = false
+        ) {
             self.entity = entity
             self.localSlabXs = localSlabXs
             self.kind = kind
+            self.sealsBetweenSlabs = sealsBetweenSlabs
             self.previousZ = entity.position.z
         }
 
@@ -1418,8 +1426,21 @@ final class GameWorld {
             slabXs.append(x)
         }
 
+        // Adjacent doubles are spread for readability, which leaves a squeezable gap
+        // between kill boxes. Seal that span in collision only — no extra mesh.
+        let sealsGap = ObstacleLayout.isAdjacentDouble(
+            blockingLaneRaws: Set(lanes.map(\.rawValue))
+        )
+
         root.addChild(parent)
-        walls.append(WallItem(entity: parent, localSlabXs: slabXs, kind: kind))
+        walls.append(
+            WallItem(
+                entity: parent,
+                localSlabXs: slabXs,
+                kind: kind,
+                sealsBetweenSlabs: sealsGap
+            )
+        )
     }
 
     /// Spawn depth for the current beat (deeper when an opposite-open double needs room).
@@ -1765,6 +1786,7 @@ final class GameWorld {
                 hit = headHit || handHit
             } else {
                 let slabXs = wall.worldSlabXs()
+                let seal = wall.sealsBetweenSlabs
                 let headHit = headSamples.contains { sample in
                     WallCollision.pointHitsSlabs(
                         point: sample,
@@ -1774,7 +1796,8 @@ final class GameWorld {
                         halfWidth: halfWidth,
                         halfDepth: halfDepth,
                         minY: GameWorld.headHitMinY,
-                        maxY: GameWorld.headHitMaxY
+                        maxY: GameWorld.headHitMaxY,
+                        sealBetweenSlabs: seal
                     )
                 }
                 let handHit = hands.contains { hand in
@@ -1786,7 +1809,8 @@ final class GameWorld {
                         halfWidth: handHalfWidth,
                         halfDepth: handHalfDepth,
                         minY: GameWorld.handHitMinY,
-                        maxY: GameWorld.handHitMaxY
+                        maxY: GameWorld.handHitMaxY,
+                        sealBetweenSlabs: seal
                     )
                 }
                 hit = headHit || handHit
