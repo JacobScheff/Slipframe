@@ -286,8 +286,8 @@ final class GameWorld {
     private var rightHandGripWorld: SIMD3<Float>?
     private var leftIsOpen = false
     private var rightIsOpen = false
-    /// Crystal Cave half spawn chance per beat (was 0.8; cut ~75%).
-    private static let crystalHalfSpawnChance: Float = 0.2
+    /// Crystal Cave half spawn chance per beat (was 0.2; +50%).
+    private static let crystalHalfSpawnChance: Float = 0.3
     /// Held shards sit this far past the knuckle plane toward the fingertips (meters).
     private static let crystalGripFingerBias: Float = 0.04
     /// Lift shards slightly off the knuckle plane so they sit in/on the fingers.
