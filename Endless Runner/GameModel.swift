@@ -25,8 +25,13 @@ final class GameModel: ObservableObject {
     @Published var isGameOver: Bool = false
     @Published var immersiveSpaceOpen: Bool = false
 
-    /// Temporary debug control: Normal rotates biomes; Force locks one biome.
-    @Published var environmentDebugMode: EnvironmentDebugMode = .normal
+    // MARK: - Level select draft (committed via resolvedPlayMode on Start)
+
+    @Published var playKind: PlayModeKind = .normal
+    @Published var soloEnvironment: EnvironmentID = .emberRun
+    @Published var playlistEnvironments: Set<EnvironmentID> = [.emberRun, .fogHollow, .lowCrawl]
+    /// Nil = random start from the selected playlist set.
+    @Published var playlistStart: EnvironmentID? = nil
 
     /// Fog Hollow asks ImmersiveView to dim passthrough (Vision Pro room dimming).
     @Published var prefersRoomDimming: Bool = false
@@ -45,7 +50,33 @@ final class GameModel: ObservableObject {
         set { stats.coinsCollected = newValue }
     }
 
+    /// Mode used for the active / next run.
+    var resolvedPlayMode: PlayMode {
+        switch playKind {
+        case .normal:
+            return .normal
+        case .solo:
+            return .solo(soloEnvironment)
+        case .playlist:
+            let envs = playlistEnvironments
+            let start = playlistStart.flatMap { envs.contains($0) ? $0 : nil }
+            return .playlist(environments: envs, start: start)
+        case .daily:
+            return .daily
+        }
+    }
+
+    var canStartRun: Bool {
+        switch playKind {
+        case .playlist:
+            return !playlistEnvironments.isEmpty
+        case .normal, .solo, .daily:
+            return true
+        }
+    }
+
     func startRun() {
+        guard canStartRun else { return }
         stats.score = 0
         stats.coinsCollected = 0
         isGameOver = false

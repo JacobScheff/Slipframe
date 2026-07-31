@@ -29,6 +29,10 @@
 		B01A101B2C72000100A0001B /* EnvironmentMaterials.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A101A2C72000100A0001A /* EnvironmentMaterials.swift */; };
 		B01A10212C72000100A00021 /* Music in Resources */ = {isa = PBXBuildFile; fileRef = B01A10202C72000100A00020 /* Music */; };
 		B01A10232C72000100A00023 /* StormWind.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A10222C72000100A00022 /* StormWind.swift */; };
+		B01A10252C72000100A00025 /* PlayMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A10242C72000100A00024 /* PlayMode.swift */; };
+		B01A10272C72000100A00027 /* DailyChallenge.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A10262C72000100A00026 /* DailyChallenge.swift */; };
+		B01A10292C72000100A00029 /* LevelSelectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A10282C72000100A00028 /* LevelSelectView.swift */; };
+		B01A102B2C72000100A0002B /* LeaderboardPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A102A2C72000100A0002A /* LeaderboardPanelView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -67,6 +71,10 @@
 		B01A101A2C72000100A0001A /* EnvironmentMaterials.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentMaterials.swift; sourceTree = "<group>"; };
 		B01A10202C72000100A00020 /* Music */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Music; sourceTree = "<group>"; };
 		B01A10222C72000100A00022 /* StormWind.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StormWind.swift; sourceTree = "<group>"; };
+		B01A10242C72000100A00024 /* PlayMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayMode.swift; sourceTree = "<group>"; };
+		B01A10262C72000100A00026 /* DailyChallenge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyChallenge.swift; sourceTree = "<group>"; };
+		B01A10282C72000100A00028 /* LevelSelectView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LevelSelectView.swift; sourceTree = "<group>"; };
+		B01A102A2C72000100A0002A /* LeaderboardPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LeaderboardPanelView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -126,6 +134,10 @@
 				B01A10182C72000100A00018 /* HandPose.swift */,
 				B01A101A2C72000100A0001A /* EnvironmentMaterials.swift */,
 				B01A10222C72000100A00022 /* StormWind.swift */,
+				B01A10242C72000100A00024 /* PlayMode.swift */,
+				B01A10262C72000100A00026 /* DailyChallenge.swift */,
+				B01A10282C72000100A00028 /* LevelSelectView.swift */,
+				B01A102A2C72000100A0002A /* LeaderboardPanelView.swift */,
 				B01A10062C72000100A00007 /* PlayHUDView.swift */,
 				B01A10082C72000100A00009 /* GameSFX.swift */,
 				B01A10202C72000100A00020 /* Music */,
@@ -285,6 +297,10 @@
 				B01A10192C72000100A00019 /* HandPose.swift in Sources */,
 				B01A101B2C72000100A0001B /* EnvironmentMaterials.swift in Sources */,
 				B01A10232C72000100A00023 /* StormWind.swift in Sources */,
+				B01A10252C72000100A00025 /* PlayMode.swift in Sources */,
+				B01A10272C72000100A00027 /* DailyChallenge.swift in Sources */,
+				B01A10292C72000100A00029 /* LevelSelectView.swift in Sources */,
+				B01A102B2C72000100A0002B /* LeaderboardPanelView.swift in Sources */,
 				B01A10072C72000100A00008 /* PlayHUDView.swift in Sources */,
 				B01A10092C72000100A0000A /* GameSFX.swift in Sources */,
 				3A9B45292C503B710080BBBE /* Endless_RunnerApp.swift in Sources */,

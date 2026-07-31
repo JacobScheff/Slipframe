@@ -149,6 +149,12 @@ final class GameWorld {
     private static let hudPosition = SIMD3<Float>(0, 2.45, -3.2)
     /// World scale for the SwiftUI attachment (attachments are small by default).
     private static let hudScale: Float = 3.0
+    /// Side panels sit on the track edges, slightly forward of the stand line, facing the player.
+    private static let sidePanelY: Float = 1.55
+    private static let sidePanelZ: Float = -1.15
+    private static let sidePanelScale: Float = 2.15
+    /// Slight yaw so each panel faces the stand-line center.
+    private static let sidePanelYawDegrees: Float = 18
 
     // Duck hazard geometry (Low Crawl).
     /// Bottom of the hanging slab — stand through it = hit; duck under to clear.
@@ -224,6 +230,8 @@ final class GameWorld {
         )
     )
     private let hudAnchor = Entity()
+    private let levelSelectAnchor = Entity()
+    private let leaderboardAnchor = Entity()
     private let trackRoot = Entity()
     /// Holds the portal plane + neon rim in playfield space (always visible).
     private let portalRoot = Entity()
@@ -233,7 +241,7 @@ final class GameWorld {
 
     private weak var gameModel: GameModel?
     private let environmentDirector = EnvironmentDirector()
-    private var lastDebugMode: EnvironmentDebugMode = .normal
+    private var lastPreviewMode: PlayMode?
     private var activeSpawnProfile: EnvironmentProfile = EnvironmentCatalog.profile(for: .emberRun)
 
     private var walls: [WallItem] = []
@@ -306,7 +314,7 @@ final class GameWorld {
         content.add(floorAnchor)
         content.add(wallAnchor)
         isPlayfieldLocked = false
-        lastDebugMode = gameModel.environmentDebugMode
+        lastPreviewMode = gameModel.resolvedPlayMode
         elapsedTime = 0
         GameMaterials.warmTextures()
         visualFX.attach(to: root)
@@ -322,6 +330,7 @@ final class GameWorld {
         buildPortal()
         buildStaticEnvironment()
         ensureHUDAnchor()
+        ensureSidePanelAnchors()
         startARSession()
         // Warm audio before the first coin so setActive does not hitch mid-run.
         GameSFX.shared.prepare()
@@ -343,16 +352,44 @@ final class GameWorld {
         hudAnchor.addChild(hudEntity)
     }
 
+    func attachLevelSelect(_ entity: Entity) {
+        ensureSidePanelAnchors()
+        let yaw = GameWorld.sidePanelYawDegrees * .pi / 180
+        entity.orientation = simd_quatf(angle: yaw, axis: SIMD3(0, 1, 0))
+        entity.scale = SIMD3(repeating: GameWorld.sidePanelScale)
+        guard entity.parent !== levelSelectAnchor else { return }
+        entity.removeFromParent()
+        levelSelectAnchor.addChild(entity)
+    }
+
+    func attachLeaderboard(_ entity: Entity) {
+        ensureSidePanelAnchors()
+        let yaw = -GameWorld.sidePanelYawDegrees * .pi / 180
+        entity.orientation = simd_quatf(angle: yaw, axis: SIMD3(0, 1, 0))
+        entity.scale = SIMD3(repeating: GameWorld.sidePanelScale)
+        guard entity.parent !== leaderboardAnchor else { return }
+        entity.removeFromParent()
+        leaderboardAnchor.addChild(entity)
+    }
+
+    func setSidePanelsVisible(_ visible: Bool) {
+        levelSelectAnchor.isEnabled = visible
+        leaderboardAnchor.isEnabled = visible
+    }
+
+    /// Idle palette preview when the level-select draft changes.
+    func previewPlayMode(_ mode: PlayMode) {
+        guard gameModel?.isPlaying != true else { return }
+        guard mode != lastPreviewMode else { return }
+        lastPreviewMode = mode
+        environmentDirector.previewMode(mode)
+        activeSpawnProfile = environmentDirector.currentProfile
+        applyPalette(environmentDirector.displayedPalette, telegraph: 0)
+        syncRoomDimming()
+    }
+
     func syncRun(with gameModel: GameModel) {
         self.gameModel = gameModel
-        if gameModel.environmentDebugMode != lastDebugMode {
-            lastDebugMode = gameModel.environmentDebugMode
-            environmentDirector.applyDebugMode(gameModel.environmentDebugMode)
-            activeSpawnProfile = environmentDirector.currentProfile
-            if gameModel.environmentDebugMode != .normal || gameModel.isPlaying {
-                dropHeldHalves()
-            }
-        }
         guard gameModel.isPlaying, gameModel.runID != activeRunID else { return }
         beginRun(runID: gameModel.runID)
     }
@@ -380,6 +417,12 @@ final class GameWorld {
         for child in hudAnchor.children {
             child.removeFromParent()
         }
+        for child in levelSelectAnchor.children {
+            child.removeFromParent()
+        }
+        for child in leaderboardAnchor.children {
+            child.removeFromParent()
+        }
         for child in trackRoot.children {
             child.removeFromParent()
         }
@@ -401,6 +444,22 @@ final class GameWorld {
         hudAnchor.position = GameWorld.hudPosition
         if hudAnchor.parent !== root {
             root.addChild(hudAnchor)
+        }
+    }
+
+    private func ensureSidePanelAnchors() {
+        // Center just outside the floor slab so the panel body sits on the track edge.
+        let edgeX = GameWorld.trackWidth * 0.5 + 0.3
+        levelSelectAnchor.name = "levelSelect"
+        levelSelectAnchor.position = SIMD3(-edgeX, GameWorld.sidePanelY, GameWorld.sidePanelZ)
+        if levelSelectAnchor.parent !== root {
+            root.addChild(levelSelectAnchor)
+        }
+
+        leaderboardAnchor.name = "leaderboard"
+        leaderboardAnchor.position = SIMD3(edgeX, GameWorld.sidePanelY, GameWorld.sidePanelZ)
+        if leaderboardAnchor.parent !== root {
+            root.addChild(leaderboardAnchor)
         }
     }
 
@@ -517,7 +576,9 @@ final class GameWorld {
         clearDynamicContent()
         dropHeldHalves()
         resetWind()
-        environmentDirector.beginRun(debugMode: gameModel?.environmentDebugMode ?? .normal)
+        let mode = gameModel?.resolvedPlayMode ?? .normal
+        lastPreviewMode = mode
+        environmentDirector.beginRun(mode: mode)
         activeSpawnProfile = environmentDirector.currentProfile
         if activeSpawnProfile.twist == .windShove {
             timeUntilWind = Float.random(in: 1.0...2.0)
@@ -925,14 +986,6 @@ final class GameWorld {
         }
 
         guard let gameModel else { return }
-
-        if gameModel.environmentDebugMode != lastDebugMode {
-            lastDebugMode = gameModel.environmentDebugMode
-            environmentDirector.applyDebugMode(gameModel.environmentDebugMode)
-            activeSpawnProfile = environmentDirector.currentProfile
-            dropHeldHalves()
-            syncRoomDimming()
-        }
 
         guard gameModel.isPlaying, !gameModel.isGameOver else {
             if gameModel.prefersRoomDimming {

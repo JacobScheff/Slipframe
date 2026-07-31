@@ -270,7 +270,3 @@ enum EnvironmentCatalog {
     }
 }
 
-enum EnvironmentDebugMode: Equatable, Hashable {
-    case normal
-    case force(EnvironmentID)
-}

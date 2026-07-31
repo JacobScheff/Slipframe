@@ -11,70 +11,78 @@ struct PlayHUDView: View {
     @EnvironmentObject private var gameModel: GameModel
     /// Separate from `GameModel` so score/coin ticks do not invalidate RealityView.
     @EnvironmentObject private var stats: RunStats
-    @State private var isEnvironmentMenuOpen = false
 
     private let neon = Color(red: 0.35, green: 0.92, blue: 1.0)
     private let gold = Color(red: 1.0, green: 0.82, blue: 0.32)
     private let hazard = Color(red: 1.0, green: 0.35, blue: 0.32)
 
     var body: some View {
-        VStack(spacing: 22) {
+        VStack(spacing: 18) {
             titleBlock
 
-            HStack(spacing: 40) {
+            HStack(spacing: 28) {
                 metricChip(title: "Score", value: "\(stats.score)", accent: neon)
                 metricChip(title: "Coins", value: "\(stats.coinsCollected)", accent: gold)
             }
 
+            if !gameModel.isPlaying {
+                Text(gameModel.resolvedPlayMode.displayLabel)
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    .foregroundStyle(neon.opacity(0.85))
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 6)
+                    .background {
+                        Capsule(style: .continuous)
+                            .fill(neon.opacity(0.12))
+                            .overlay {
+                                Capsule(style: .continuous)
+                                    .strokeBorder(neon.opacity(0.35), lineWidth: 1)
+                            }
+                    }
+            }
+
             Text(statusText)
-                .font(.system(size: 22, weight: .medium, design: .rounded))
+                .font(.system(size: 18, weight: .medium, design: .rounded))
                 .foregroundStyle(statusColor)
                 .multilineTextAlignment(.center)
-                .frame(maxWidth: 560)
+                .frame(maxWidth: 520)
 
             controls
-
-            debugEnvironmentPicker
         }
-        .padding(.horizontal, 48)
-        .padding(.vertical, 36)
-        .frame(minWidth: 700)
+        .padding(.horizontal, 40)
+        .padding(.vertical, 28)
+        .frame(minWidth: 620)
         .background {
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .strokeBorder(
-                    LinearGradient(
-                        colors: [
-                            neon.opacity(0.7),
-                            neon.opacity(0.15),
-                            gold.opacity(0.35)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 1.5
-                )
+            RoundedRectangle(cornerRadius: 26, style: .continuous)
+                .fill(Color.black.opacity(0.18))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 26, style: .continuous)
+                        .strokeBorder(
+                            LinearGradient(
+                                colors: [
+                                    neon.opacity(0.65),
+                                    Color.white.opacity(0.08),
+                                    gold.opacity(0.35)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1.25
+                        )
+                }
         }
         .glassBackgroundEffect()
-        // Open menu overlays upward above the HUD so it doesn't grow the card.
-        .overlay(alignment: .bottom) {
-            if isEnvironmentMenuOpen {
-                environmentMenuPanel
-                    .padding(.bottom, 96)
-                    .transition(.opacity.combined(with: .move(edge: .bottom)))
-            }
-        }
-        .zIndex(isEnvironmentMenuOpen ? 20 : 0)
     }
 
     private var titleBlock: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: 4) {
             Text("ENDLESS RUNNER")
-                .font(.system(size: 18, weight: .bold, design: .rounded))
-                .tracking(4)
-                .foregroundStyle(neon.opacity(0.85))
+                .font(.system(size: 15, weight: .bold, design: .rounded))
+                .tracking(3.5)
+                .foregroundStyle(neon.opacity(0.8))
 
             Text(gameModel.isGameOver ? "Run Over" : (gameModel.isPlaying ? "In Motion" : "Ready"))
-                .font(.system(size: 44, weight: .semibold, design: .rounded))
+                .font(.system(size: 36, weight: .semibold, design: .rounded))
                 .foregroundStyle(.primary)
         }
     }
@@ -86,176 +94,76 @@ struct PlayHUDView: View {
                 gameModel.startRun()
             } label: {
                 Label("Restart", systemImage: "arrow.counterclockwise")
-                    .font(.system(size: 24, weight: .semibold, design: .rounded))
-                    .frame(minWidth: 220)
+                    .font(.system(size: 22, weight: .semibold, design: .rounded))
+                    .frame(minWidth: 200)
             }
             .buttonStyle(.borderedProminent)
             .tint(hazard)
             .controlSize(.large)
+            .disabled(!gameModel.canStartRun)
         } else if !gameModel.isPlaying {
             Button {
                 gameModel.startRun()
             } label: {
                 Label("Start Run", systemImage: "play.fill")
-                    .font(.system(size: 24, weight: .semibold, design: .rounded))
-                    .frame(minWidth: 220)
+                    .font(.system(size: 22, weight: .semibold, design: .rounded))
+                    .frame(minWidth: 200)
             }
             .buttonStyle(.borderedProminent)
             .tint(neon)
             .controlSize(.large)
+            .disabled(!gameModel.canStartRun)
         } else {
-            Text("Dodge walls with your head and hands.\nGrab gold coins with your hands.")
-                .font(.system(size: 20, weight: .regular, design: .rounded))
+            Text("Dodge with your head · grab coins with your hands")
+                .font(.system(size: 17, weight: .regular, design: .rounded))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
-
-            Button("End Run") {
-                gameModel.endRun()
-            }
-            .controlSize(.large)
-            .font(.system(size: 20, weight: .medium, design: .rounded))
         }
-    }
-
-    /// Temporary test control — keep the closed control compact like the original menu.
-    private var debugEnvironmentPicker: some View {
-        VStack(spacing: 10) {
-            Text("Debug Environment")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-
-            Button {
-                withAnimation(.easeInOut(duration: 0.15)) {
-                    isEnvironmentMenuOpen.toggle()
-                }
-            } label: {
-                HStack(spacing: 10) {
-                    Text(currentEnvironmentLabel)
-                        .font(.title3)
-                    Image(systemName: "chevron.up.chevron.down")
-                        .font(.caption.weight(.semibold))
-                }
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.regular)
-        }
-        .padding(.top, 8)
-    }
-
-    private var environmentMenuPanel: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            environmentOptionButton(title: "Normal (random)", value: .normal)
-            ForEach(EnvironmentID.allCases) { id in
-                environmentOptionButton(
-                    title: "Force: \(id.displayName)",
-                    value: .force(id)
-                )
-            }
-        }
-        .padding(18)
-        .frame(minWidth: 520, alignment: .leading)
-        .glassBackgroundEffect()
-    }
-
-    private func environmentOptionButton(title: String, value: DebugPickerValue) -> some View {
-        let selected = debugModeBinding.wrappedValue == value
-        return Button {
-            debugModeBinding.wrappedValue = value
-            withAnimation(.easeInOut(duration: 0.15)) {
-                isEnvironmentMenuOpen = false
-            }
-        } label: {
-            HStack(spacing: 16) {
-                Text(title)
-                    .font(.system(size: 54, weight: selected ? .bold : .medium))
-                    .multilineTextAlignment(.leading)
-                Spacer(minLength: 8)
-                if selected {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 36, weight: .bold))
-                }
-            }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var currentEnvironmentLabel: String {
-        switch gameModel.environmentDebugMode {
-        case .normal:
-            return "Normal (random)"
-        case .force(let id):
-            return "Force: \(id.displayName)"
-        }
-    }
-
-    private var debugModeBinding: Binding<DebugPickerValue> {
-        Binding(
-            get: {
-                switch gameModel.environmentDebugMode {
-                case .normal: return .normal
-                case .force(let id): return .force(id)
-                }
-            },
-            set: { value in
-                switch value {
-                case .normal:
-                    gameModel.environmentDebugMode = .normal
-                case .force(let id):
-                    gameModel.environmentDebugMode = .force(id)
-                }
-            }
-        )
     }
 
     private func metricChip(title: String, value: String, accent: Color) -> some View {
-        VStack(spacing: 6) {
+        VStack(spacing: 4) {
             Text(title.uppercased())
-                .font(.system(size: 14, weight: .bold, design: .rounded))
-                .tracking(1.5)
+                .font(.system(size: 13, weight: .bold, design: .rounded))
+                .tracking(1.4)
                 .foregroundStyle(accent.opacity(0.9))
             Text(value)
-                .font(.system(size: 52, weight: .bold, design: .rounded))
+                .font(.system(size: 48, weight: .bold, design: .rounded))
                 .monospacedDigit()
                 .foregroundStyle(.primary)
         }
-        .frame(minWidth: 160)
-        .padding(.vertical, 14)
-        .padding(.horizontal, 18)
+        .frame(minWidth: 150)
+        .padding(.vertical, 12)
+        .padding(.horizontal, 16)
         .background {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(accent.opacity(0.12))
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(accent.opacity(0.1))
                 .overlay {
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .strokeBorder(accent.opacity(0.35), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .strokeBorder(accent.opacity(0.3), lineWidth: 1)
                 }
         }
     }
 
     private var statusText: String {
         if gameModel.isGameOver {
-            return "Hit a wall — shake it off and go again."
+            return "Hit a wall — tweak mode on the left, or go again."
         }
         if gameModel.isPlaying {
             return "Obstacles stream from the portal."
         }
-        return "Stand on the line. Obstacles emerge from the portal — dodge and grab coins."
+        if !gameModel.canStartRun {
+            return "Add at least one biome to your playlist."
+        }
+        return "Choose a mode on the left, then start when ready."
     }
 
     private var statusColor: Color {
         if gameModel.isGameOver { return hazard.opacity(0.95) }
         if gameModel.isPlaying { return neon.opacity(0.9) }
+        if !gameModel.canStartRun { return .orange.opacity(0.95) }
         return .secondary
     }
-}
-
-/// Hashable picker tags for the temporary environment debug control.
-private enum DebugPickerValue: Hashable {
-    case normal
-    case force(EnvironmentID)
 }
 
 #Preview {

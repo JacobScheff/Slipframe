@@ -260,22 +260,123 @@ final class Endless_RunnerTests: XCTestCase {
 
     func testEnvironmentDirectorStartsOnEmberRun() {
         let director = EnvironmentDirector()
-        director.beginRun(debugMode: .normal)
+        director.beginRun(mode: .normal)
         XCTAssertEqual(director.currentID, .emberRun)
         XCTAssertEqual(director.currentProfile.twist, .baseline)
     }
 
-    func testEnvironmentDirectorForceModeLocksBiome() {
+    func testEnvironmentDirectorSoloModeLocksBiome() {
         let director = EnvironmentDirector()
-        director.beginRun(debugMode: .force(.fogHollow))
+        director.beginRun(mode: .solo(.fogHollow))
         XCTAssertEqual(director.currentID, .fogHollow)
 
-        // Even after many switch intervals, forced biome should stick.
+        // Even after many switch intervals, solo biome should stick.
         for _ in 0..<5 {
             let frame = director.update(deltaTime: director.currentSwitchInterval + 1)
             XCTAssertEqual(frame.currentID, .fogHollow)
             XCTAssertFalse(frame.didEnterEnvironment)
         }
+    }
+
+    func testEnvironmentDirectorPlaylistStaysInPoolAndAvoidsCurrent() {
+        let pool: Set<EnvironmentID> = [.emberRun, .lowCrawl, .stormPass]
+        let director = EnvironmentDirector()
+        director.beginRun(mode: .playlist(environments: pool, start: .lowCrawl))
+        XCTAssertEqual(director.currentID, .lowCrawl)
+
+        for _ in 0..<12 {
+            let previous = director.currentID
+            let frame = director.update(deltaTime: director.currentSwitchInterval + 1)
+            XCTAssertTrue(frame.didEnterEnvironment)
+            XCTAssertTrue(pool.contains(frame.currentID))
+            XCTAssertNotEqual(frame.currentID, previous)
+        }
+    }
+
+    func testEnvironmentDirectorPlaylistSingleBiomeLoops() {
+        let director = EnvironmentDirector()
+        director.beginRun(mode: .playlist(environments: [.ghostGlass], start: nil))
+        XCTAssertEqual(director.currentID, .ghostGlass)
+        let frame = director.update(deltaTime: director.currentSwitchInterval + 1)
+        // Only one option — stay put (no churn).
+        XCTAssertEqual(frame.currentID, .ghostGlass)
+        XCTAssertFalse(frame.didEnterEnvironment)
+    }
+
+    func testDailyChallengeDayKeyUsesEasternTime() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        // 2026-07-31 03:30 UTC == 2026-07-30 23:30 EDT — still previous Eastern day.
+        let components = DateComponents(year: 2026, month: 7, day: 31, hour: 3, minute: 30)
+        let date = calendar.date(from: components)!
+        XCTAssertEqual(DailyChallenge.dayKey(for: date), "2026-07-30")
+
+        // 2026-07-31 04:30 UTC == 2026-07-31 00:30 EDT — new Eastern day.
+        let after = calendar.date(from: DateComponents(year: 2026, month: 7, day: 31, hour: 4, minute: 30))!
+        XCTAssertEqual(DailyChallenge.dayKey(for: after), "2026-07-31")
+    }
+
+    func testDailyChallengeSeedIsStableAndPreviewMatchesDirector() {
+        let key = "2026-07-31"
+        XCTAssertEqual(DailyChallenge.seed(for: key), DailyChallenge.seed(for: key))
+        XCTAssertNotEqual(DailyChallenge.seed(for: key), DailyChallenge.seed(for: "2026-08-01"))
+
+        let preview = DailyChallenge.previewSequence(dayKey: key, count: 5)
+        XCTAssertEqual(preview.count, 5)
+        for index in 1..<preview.count {
+            XCTAssertNotEqual(preview[index], preview[index - 1])
+        }
+
+        // Same day key → same sequence on a second call (shared worldwide).
+        XCTAssertEqual(preview, DailyChallenge.previewSequence(dayKey: key, count: 5))
+    }
+
+    func testDailyChallengeCountdownFormatsAndRolloverPositive() {
+        XCTAssertEqual(DailyChallenge.formatCountdown(3661), "01:01:01")
+        XCTAssertGreaterThan(DailyChallenge.secondsUntilRollover(), 0)
+    }
+
+    func testPlaylistCannotStartWhenEmpty() {
+        let model = GameModel()
+        model.playKind = .playlist
+        model.playlistEnvironments = []
+        XCTAssertFalse(model.canStartRun)
+        model.startRun()
+        XCTAssertFalse(model.isPlaying)
+        XCTAssertEqual(model.runID, 0)
+
+        model.playlistEnvironments = [.emberRun]
+        XCTAssertTrue(model.canStartRun)
+        model.startRun()
+        XCTAssertTrue(model.isPlaying)
+    }
+
+    func testResolvedPlayModeMappings() {
+        let model = GameModel()
+        model.playKind = .normal
+        XCTAssertEqual(model.resolvedPlayMode, .normal)
+
+        model.playKind = .solo
+        model.soloEnvironment = .crystalCave
+        XCTAssertEqual(model.resolvedPlayMode, .solo(.crystalCave))
+
+        model.playKind = .playlist
+        model.playlistEnvironments = [.fogHollow, .stormPass]
+        model.playlistStart = .stormPass
+        XCTAssertEqual(
+            model.resolvedPlayMode,
+            .playlist(environments: [.fogHollow, .stormPass], start: .stormPass)
+        )
+
+        model.playlistStart = .emberRun // not in set → treated as random
+        if case .playlist(_, let start) = model.resolvedPlayMode {
+            XCTAssertNil(start)
+        } else {
+            XCTFail("Expected playlist mode")
+        }
+
+        model.playKind = .daily
+        XCTAssertEqual(model.resolvedPlayMode, .daily)
     }
 
     func testSwitchIntervalFollowsTrackDurationMinusCrossfade() {
@@ -564,7 +665,7 @@ final class Endless_RunnerTests: XCTestCase {
         XCTAssertEqual(crawl.twist, .lowCrawl)
         XCTAssertGreaterThan(crawl.lowCrawlTeachCount, 0)
         let director = EnvironmentDirector()
-        director.beginRun(debugMode: .force(.lowCrawl))
+        director.beginRun(mode: .solo(.lowCrawl))
         XCTAssertTrue(director.isTeachingLowCrawl)
         for _ in 0..<crawl.lowCrawlTeachCount {
             director.noteDuckGateSpawned()
@@ -590,7 +691,7 @@ final class Endless_RunnerTests: XCTestCase {
 
     func testEnvironmentDirectorUsesMusicDurationForSwitchInterval() {
         let director = EnvironmentDirector()
-        director.beginRun(debugMode: .normal)
+        director.beginRun(mode: .normal)
         let expected = EnvironmentDirector.switchInterval(
             forTrackDuration: GameMusic.fallbackTrackDuration,
             crossfade: EnvironmentCatalog.ambienceLerpSeconds
@@ -764,19 +865,3 @@ final class Endless_RunnerTests: XCTestCase {
     }
 }
 
-/// Deterministic RNG for spawn-rate tests.
-private struct SeededGenerator: RandomNumberGenerator {
-    private var state: UInt64
-
-    init(seed: UInt64) {
-        state = seed == 0 ? 0x4d595df4d0f33173 : seed
-    }
-
-    mutating func next() -> UInt64 {
-        state &+= 0x9e3779b97f4a7c15
-        var z = state
-        z = (z ^ (z >> 30)) &* 0xbf58476d1ce4e5b9
-        z = (z ^ (z >> 27)) &* 0x94d049bb133111eb
-        return z ^ (z >> 31)
-    }
-}
