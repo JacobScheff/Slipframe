@@ -299,6 +299,47 @@ final class Endless_RunnerTests: XCTestCase {
         XCTAssertLessThan(fog.wallOpacity, ember.wallOpacity)
     }
 
+    func testEmberCoinSpawnTintKeepsPolishedGold() {
+        let ember = EnvironmentCatalog.profile(for: .emberRun)
+        let colors = GameCoinTint.tintColors(for: ember)
+        // Matches GamePalette.coinGold / coinGoldHot — not palette.coinTint.
+        XCTAssertEqual(colors.base.r, 1.0, accuracy: 0.001)
+        XCTAssertEqual(colors.base.g, 0.78, accuracy: 0.001)
+        XCTAssertEqual(colors.base.b, 0.22, accuracy: 0.001)
+        XCTAssertEqual(colors.hot.r, 1.0, accuracy: 0.001)
+        XCTAssertEqual(colors.hot.g, 0.92, accuracy: 0.001)
+        XCTAssertEqual(colors.hot.b, 0.55, accuracy: 0.001)
+        XCTAssertFalse(colors.tintsFaceTexture)
+        XCTAssertNotEqual(colors.base, ember.palette.coinTint)
+    }
+
+    func testNonEmberBiomesShiftCoinSpawnTintFromPalette() {
+        for id in EnvironmentID.allCases where id != .emberRun {
+            let profile = EnvironmentCatalog.profile(for: id)
+            let colors = GameCoinTint.tintColors(for: profile)
+            XCTAssertEqual(colors.base, profile.palette.coinTint, "\(id.displayName) should use palette coinTint")
+            XCTAssertTrue(colors.tintsFaceTexture, "\(id.displayName) should tint the coin face")
+            XCTAssertNotEqual(
+                colors.base,
+                GameCoinTint.tintColors(for: EnvironmentCatalog.profile(for: .emberRun)).base,
+                "\(id.displayName) coin tint should differ from Ember gold"
+            )
+        }
+    }
+
+    func testBiomeCoinTintsAreDistinctAcrossEnvironments() {
+        let tints = EnvironmentID.allCases.map { GameCoinTint.tintColors(for: EnvironmentCatalog.profile(for: $0)).base }
+        for i in tints.indices {
+            for j in tints.indices where j > i {
+                XCTAssertNotEqual(
+                    tints[i],
+                    tints[j],
+                    "Coin tints for \(EnvironmentID.allCases[i].displayName) and \(EnvironmentID.allCases[j].displayName) should differ"
+                )
+            }
+        }
+    }
+
     func testGhostGlassUsesWhiteTransparentWalls() {
         let ghost = EnvironmentCatalog.profile(for: .ghostGlass)
         XCTAssertEqual(ghost.twist, .ghostWalls)
