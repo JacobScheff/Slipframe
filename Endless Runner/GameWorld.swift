@@ -153,8 +153,12 @@ final class GameWorld {
     private static let sidePanelY: Float = 1.55
     private static let sidePanelZ: Float = -1.15
     private static let sidePanelScale: Float = 2.15
-    /// Slight yaw so each panel faces the stand-line center.
-    private static let sidePanelYawDegrees: Float = 18
+    /// Yaw so each panel faces inward across the track (±90° from the forward-facing HUD).
+    private static let sidePanelYawDegrees: Float = 90
+    /// Pause after a crash before walls start dissolving.
+    private static let gameOverClearDelay: Float = 2.2
+    /// Duration of the post-game wall sink / squash animation.
+    private static let gameOverClearDuration: Float = 0.9
 
     // Duck hazard geometry (Low Crawl).
     /// Bottom of the hanging slab — stand through it = hit; duck under to clear.
@@ -269,6 +273,11 @@ final class GameWorld {
     private var isPlayfieldLocked = false
     /// Seconds since attach — drives portal pulse / ambient motion.
     private var elapsedTime: Float = 0
+    /// Elapsed time while game-over clear is armed; nil when inactive.
+    private var gameOverClearElapsed: Float?
+    private var gameOverClearFinished = false
+    /// Snapshotted wall poses at the start of the dissolve animation.
+    private var gameOverWallBases: [(entity: Entity, position: SIMD3<Float>, scale: SIMD3<Float>)] = []
 
     // Wind shove state (offsets obstacle boxes only).
     private var windCurrentX: Float = 0
@@ -573,6 +582,7 @@ final class GameWorld {
         updatePortalAndTrack()
         isPlayfieldLocked = true
         visualFX.clear()
+        resetGameOverClear()
         clearDynamicContent()
         dropHeldHalves()
         resetWind()
@@ -759,10 +769,66 @@ final class GameWorld {
         walls.removeAll()
         coins.removeAll()
         halves.removeAll()
+        gameOverWallBases = []
         lastAdjacentDoubleOpenLaneRaw = nil
         patternSpawnZOffset = 0
         gustEntity?.removeFromParent()
         gustEntity = nil
+    }
+
+    private func resetGameOverClear() {
+        gameOverClearElapsed = nil
+        gameOverClearFinished = false
+        gameOverWallBases = []
+    }
+
+    /// After a crash, hold for a beat, then squash/sink walls away and clear the field.
+    private func tickGameOverClear(deltaTime: Float) {
+        guard !gameOverClearFinished else { return }
+        if gameOverClearElapsed == nil {
+            gameOverClearElapsed = 0
+        }
+        gameOverClearElapsed! += max(0, deltaTime)
+        let elapsed = gameOverClearElapsed!
+
+        guard elapsed >= GameWorld.gameOverClearDelay else { return }
+
+        let animT = elapsed - GameWorld.gameOverClearDelay
+        if gameOverWallBases.isEmpty, !walls.isEmpty {
+            gameOverWallBases = walls.map { wall in
+                (wall.entity, wall.entity.position, wall.entity.scale)
+            }
+        }
+
+        if animT >= GameWorld.gameOverClearDuration || walls.isEmpty {
+            clearDynamicContent()
+            gameOverClearFinished = true
+            return
+        }
+
+        let u = min(1, animT / GameWorld.gameOverClearDuration)
+        // Smoothstep ease-in-out.
+        let ease = u * u * (3 - 2 * u)
+        for base in gameOverWallBases {
+            let scaleY = max(0.02, 1 - ease)
+            base.entity.scale = SIMD3(
+                base.scale.x * (1 + ease * 0.2),
+                base.scale.y * scaleY,
+                base.scale.z * (1 + ease * 0.12)
+            )
+            var position = base.position
+            position.y -= ease * 1.5
+            base.entity.position = position
+        }
+
+        // Soften leftover pickups in the same window.
+        let pickupScale = max(0.02, 1 - ease)
+        for coin in coins {
+            coin.entity.scale = SIMD3(repeating: pickupScale)
+        }
+        for half in halves where !half.collected {
+            half.entity.scale = SIMD3(repeating: pickupScale)
+        }
     }
 
     // MARK: - ARKit tracking
@@ -990,6 +1056,11 @@ final class GameWorld {
         guard gameModel.isPlaying, !gameModel.isGameOver else {
             if gameModel.prefersRoomDimming {
                 gameModel.prefersRoomDimming = false
+            }
+            if gameModel.isGameOver {
+                tickGameOverClear(deltaTime: deltaTime)
+            } else {
+                resetGameOverClear()
             }
             return
         }
