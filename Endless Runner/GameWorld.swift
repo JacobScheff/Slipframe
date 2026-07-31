@@ -516,8 +516,6 @@ final class GameWorld {
         if activeSpawnProfile.twist == .windShove {
             timeUntilWind = Float.random(in: 1.0...2.0)
         }
-        leftFistLatch = 0
-        rightFistLatch = 0
         rebuildFixedTrack(force: true)
         buildPortalRim()
         buildPortalInterior()
