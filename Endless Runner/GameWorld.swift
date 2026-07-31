@@ -1447,7 +1447,14 @@ final class GameWorld {
     }
 
     private func spawnCoin(in lane: Lane, underCeiling: Bool = false) {
-        let coin = GameVisualBuilders.makeCoin(radius: GameWorld.coinRadius)
+        // Spawn-time biome tint only (no live retint on switch) — Ember keeps polished gold.
+        let coinColors = GameCoinTint.colors(for: activeSpawnProfile)
+        let coin = GameVisualBuilders.makeCoin(
+            radius: GameWorld.coinRadius,
+            tint: coinColors.base,
+            hot: coinColors.hot,
+            tintsFaceTexture: coinColors.tintsFaceTexture
+        )
         // Mild outward offset — still a reach, but easier to snag mid-dodge.
         let outward: Float = lane == .center ? 0 : (lane.x > 0 ? GameWorld.coinOutwardOffset : -GameWorld.coinOutwardOffset)
         let baseY = underCeiling ? GameWorld.lowCrawlCoinHeight : GameWorld.coinHeight

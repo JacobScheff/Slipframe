@@ -9,6 +9,44 @@
 import RealityKit
 import UIKit
 
+// MARK: - Coin biome tint
+
+/// Spawn-time coin colors per biome. Ember Run keeps the polished gold; other
+/// biomes shift the polished disc to `EnvironmentPalette.coinTint` (old behavior).
+enum GameCoinTint {
+    struct Colors: Equatable {
+        var base: TintColor
+        var hot: TintColor
+        /// Ember keeps an unmultiplied face texture; other biomes tint the face.
+        var tintsFaceTexture: Bool
+    }
+
+    /// Base + hot emissive colors for a coin spawned under `profile`.
+    static func colors(for profile: EnvironmentProfile) -> (base: UIColor, hot: UIColor, tintsFaceTexture: Bool) {
+        let tints = tintColors(for: profile)
+        return (
+            EnvironmentMaterials.uiColor(tints.base),
+            EnvironmentMaterials.uiColor(tints.hot),
+            tints.tintsFaceTexture
+        )
+    }
+
+    /// TintColor form for unit tests and callers that avoid UIKit.
+    static func tintColors(for profile: EnvironmentProfile) -> Colors {
+        // Ember keeps GamePalette gold (slightly different from palette.coinTint).
+        if profile.id == .emberRun {
+            return Colors(
+                base: TintColor(r: 1.0, g: 0.78, b: 0.22, a: 1),
+                hot: TintColor(r: 1.0, g: 0.92, b: 0.55, a: 1),
+                tintsFaceTexture: false
+            )
+        }
+        let base = profile.palette.coinTint
+        let hot = base.mixed(toward: TintColor(r: 1, g: 1, b: 1, a: 1), t: 0.4)
+        return Colors(base: base, hot: hot, tintsFaceTexture: true)
+    }
+}
+
 // MARK: - Palette
 
 enum GamePalette {
@@ -135,15 +173,21 @@ enum GameMaterials {
         UnlitMaterial(color: UIColor(red: 1.0, green: 0.35, blue: 0.28, alpha: 1))
     }
 
-    static func coinMetal() -> any RealityKit.Material {
+    static func coinMetal(
+        tint: UIColor = GamePalette.coinGold,
+        hot: UIColor = GamePalette.coinGoldHot,
+        tintsFaceTexture: Bool = false
+    ) -> any RealityKit.Material {
         warmTextures()
         var material = PhysicallyBasedMaterial()
         if let texture = coinFaceTexture {
-            material.baseColor = .init(tint: .white, texture: .init(texture))
-            material.emissiveColor = .init(color: GamePalette.coinGoldHot, texture: .init(texture))
+            // Ember: white multiply preserves the polished gold face. Other biomes shift it.
+            let faceTint = tintsFaceTexture ? tint : UIColor.white
+            material.baseColor = .init(tint: faceTint, texture: .init(texture))
+            material.emissiveColor = .init(color: hot, texture: .init(texture))
         } else {
-            material.baseColor = .init(tint: GamePalette.coinGold)
-            material.emissiveColor = .init(color: GamePalette.coinGoldHot)
+            material.baseColor = .init(tint: tint)
+            material.emissiveColor = .init(color: hot)
         }
         material.roughness = .init(floatLiteral: 0.28)
         material.metallic = .init(floatLiteral: 0.92)
@@ -151,14 +195,22 @@ enum GameMaterials {
         return material
     }
 
-    static func coinCore() -> UnlitMaterial {
-        UnlitMaterial(color: GamePalette.coinGoldHot)
+    static func coinCore(hot: UIColor = GamePalette.coinGoldHot) -> UnlitMaterial {
+        UnlitMaterial(color: hot)
     }
 
-    static func coinAura() -> any RealityKit.Material {
+    static func coinAura(
+        tint: UIColor = GamePalette.coinGold,
+        hot: UIColor = GamePalette.coinGoldHot,
+        tintsFaceTexture: Bool = false
+    ) -> any RealityKit.Material {
         var material = PhysicallyBasedMaterial()
-        material.baseColor = .init(tint: UIColor(red: 1.0, green: 0.85, blue: 0.35, alpha: 0.22))
-        material.emissiveColor = .init(color: GamePalette.coinGoldHot)
+        // Ember keeps the original soft gold aura; biome-shifted coins derive aura from tint.
+        let auraBase = tintsFaceTexture
+            ? tint.withAlphaComponent(0.22)
+            : UIColor(red: 1.0, green: 0.85, blue: 0.35, alpha: 0.22)
+        material.baseColor = .init(tint: auraBase)
+        material.emissiveColor = .init(color: hot)
         material.emissiveIntensity = 0.4
         material.roughness = .init(floatLiteral: 1.0)
         material.metallic = .init(floatLiteral: 0.0)
@@ -321,14 +373,23 @@ enum GameVisualBuilders {
         return root
     }
 
-    /// Gold disc coin with emissive core + soft aura (spins / bobs via GameWorld).
-    static func makeCoin(radius: Float) -> Entity {
+    /// Disc coin with emissive core + soft aura (spins / bobs via GameWorld).
+    /// Pass biome tints from `GameCoinTint` so non-Ember environments shift color at spawn.
+    static func makeCoin(
+        radius: Float,
+        tint: UIColor = GamePalette.coinGold,
+        hot: UIColor = GamePalette.coinGoldHot,
+        tintsFaceTexture: Bool = false
+    ) -> Entity {
         let root = Entity()
         root.name = "coin"
 
         // Flattened cylinder reads as a collectible disc, not a marble.
         let discMesh = MeshResource.generateCylinder(height: radius * 0.28, radius: radius)
-        let disc = ModelEntity(mesh: discMesh, materials: [GameMaterials.coinMetal()])
+        let disc = ModelEntity(
+            mesh: discMesh,
+            materials: [GameMaterials.coinMetal(tint: tint, hot: hot, tintsFaceTexture: tintsFaceTexture)]
+        )
         disc.name = "coinDisc"
         // Cylinder axis is Y; tip toward player (+Z) so the face is visible.
         disc.orientation = simd_quatf(angle: .pi / 2, axis: SIMD3(1, 0, 0))
@@ -336,14 +397,14 @@ enum GameVisualBuilders {
 
         let core = ModelEntity(
             mesh: MeshResource.generateSphere(radius: radius * 0.35),
-            materials: [GameMaterials.coinCore()]
+            materials: [GameMaterials.coinCore(hot: hot)]
         )
         core.name = "coinCore"
         root.addChild(core)
 
         let aura = ModelEntity(
             mesh: MeshResource.generateSphere(radius: radius * 1.55),
-            materials: [GameMaterials.coinAura()]
+            materials: [GameMaterials.coinAura(tint: tint, hot: hot, tintsFaceTexture: tintsFaceTexture)]
         )
         aura.name = "coinAura"
         root.addChild(aura)
@@ -351,7 +412,7 @@ enum GameVisualBuilders {
         // Tiny orbiting sparkle for life.
         let spark = ModelEntity(
             mesh: MeshResource.generateSphere(radius: radius * 0.14),
-            materials: [UnlitMaterial(color: GamePalette.coinGoldHot)]
+            materials: [UnlitMaterial(color: hot)]
         )
         spark.name = "coinSpark"
         spark.position = SIMD3(radius * 0.85, radius * 0.2, 0)
