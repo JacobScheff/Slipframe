@@ -60,7 +60,7 @@ enum GameMaterials {
         warmTextures()
         if let texture = trackFloorTexture {
             var material = PhysicallyBasedMaterial()
-            material.baseColor = .init(texture: .init(texture), tint: GamePalette.trackInk)
+            material.baseColor = .init(tint: GamePalette.trackInk, texture: .init(texture))
             material.roughness = .init(floatLiteral: 0.78)
             material.metallic = .init(floatLiteral: 0.12)
             material.emissiveColor = .init(
@@ -103,7 +103,7 @@ enum GameMaterials {
         warmTextures()
         var material = PhysicallyBasedMaterial()
         if let texture = wallEnergyTexture {
-            material.baseColor = .init(texture: .init(texture), tint: .white)
+            material.baseColor = .init(tint: .white, texture: .init(texture))
             material.emissiveColor = .init(color: .white, texture: .init(texture))
         } else {
             material.baseColor = .init(tint: GamePalette.hazardRedSoft)
@@ -139,7 +139,7 @@ enum GameMaterials {
         warmTextures()
         var material = PhysicallyBasedMaterial()
         if let texture = coinFaceTexture {
-            material.baseColor = .init(texture: .init(texture), tint: .white)
+            material.baseColor = .init(tint: .white, texture: .init(texture))
             material.emissiveColor = .init(color: GamePalette.coinGoldHot, texture: .init(texture))
         } else {
             material.baseColor = .init(tint: GamePalette.coinGold)
