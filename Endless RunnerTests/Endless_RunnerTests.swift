@@ -230,17 +230,17 @@ final class Endless_RunnerTests: XCTestCase {
     }
 
     func testCrystalMergeCoinAwards() {
-        XCTAssertEqual(CrystalCombine.mergeCoinAward(leftCharged: false, rightCharged: false), 3)
-        XCTAssertEqual(CrystalCombine.mergeCoinAward(leftCharged: true, rightCharged: false), 30)
-        XCTAssertEqual(CrystalCombine.mergeCoinAward(leftCharged: false, rightCharged: true), 30)
-        XCTAssertEqual(CrystalCombine.mergeCoinAward(leftCharged: true, rightCharged: true), 6000)
+        XCTAssertEqual(CrystalCombine.mergeCoinAward(leftCharged: false, rightCharged: false), 5)
+        XCTAssertEqual(CrystalCombine.mergeCoinAward(leftCharged: true, rightCharged: false), 50)
+        XCTAssertEqual(CrystalCombine.mergeCoinAward(leftCharged: false, rightCharged: true), 50)
+        XCTAssertEqual(CrystalCombine.mergeCoinAward(leftCharged: true, rightCharged: true), 10_000)
     }
 
     func testCollectCoinCountOverrideDoesNotAffectScore() {
         let model = GameModel()
         model.startRun()
         model.collectCoin(count: CrystalCombine.mergeCoinAward(leftCharged: true, rightCharged: false))
-        XCTAssertEqual(model.coinsCollected, 30)
+        XCTAssertEqual(model.coinsCollected, 50)
         XCTAssertEqual(model.score, 0)
     }
 

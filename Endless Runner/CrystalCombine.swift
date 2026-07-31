@@ -14,11 +14,11 @@ enum CrystalHalfType: String, CaseIterable, Equatable {
 
 enum CrystalCombine {
     /// Coins awarded for a normal + normal combine.
-    static let baseMergeCoins = 3
+    static let baseMergeCoins = 5
     /// Multiplier when exactly one half is charged.
     static let oneChargedMultiplier = 10
     /// Multiplier when both halves are charged.
-    static let bothChargedMultiplier = 200
+    static let bothChargedMultiplier = 2000
     /// ~1% of spawned halves are charged.
     static let chargedSpawnChance: Float = 0.01
     /// Hands must be within this distance to merge (meters).
@@ -29,9 +29,9 @@ enum CrystalCombine {
     }
 
     /// Coin award for a successful different-type merge (score is distance-only).
-    /// - normal + normal → 3
-    /// - one charged → 30
-    /// - both charged → 6000
+    /// - normal + normal → 5
+    /// - one charged → 50
+    /// - both charged → 10000
     static func mergeCoinAward(leftCharged: Bool, rightCharged: Bool) -> Int {
         switch (leftCharged, rightCharged) {
         case (true, true):
