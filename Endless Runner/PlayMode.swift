@@ -2,7 +2,7 @@
 //  PlayMode.swift
 //  Endless Runner
 //
-//  Player-facing run configuration: Normal, Playlist, Solo Loop, Daily.
+//  Player-facing run configuration: Normal, Playlist, Loop, Daily.
 //
 
 import Foundation
