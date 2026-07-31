@@ -406,6 +406,57 @@ final class Endless_RunnerTests: XCTestCase {
         )
     }
 
+    func testAdjacentDoubleOpenLaneRawDetectsOuterGap() {
+        // Block left+center → only right is open.
+        XCTAssertEqual(
+            ObstacleLayout.adjacentDoubleOpenLaneRaw(blockingLaneRaws: [-1, 0]),
+            1
+        )
+        // Block center+right → only left is open.
+        XCTAssertEqual(
+            ObstacleLayout.adjacentDoubleOpenLaneRaw(blockingLaneRaws: [0, 1]),
+            -1
+        )
+        // Center open (left+right) is not an outer-lane adjacent double.
+        XCTAssertNil(ObstacleLayout.adjacentDoubleOpenLaneRaw(blockingLaneRaws: [-1, 1]))
+        XCTAssertNil(ObstacleLayout.adjacentDoubleOpenLaneRaw(blockingLaneRaws: [0]))
+        XCTAssertNil(ObstacleLayout.adjacentDoubleOpenLaneRaw(blockingLaneRaws: [-1]))
+    }
+
+    func testOppositeOpenLaneSpacingRequiredOnlyOnCrossCorridorFlip() {
+        XCTAssertTrue(
+            ObstacleLayout.requiresOppositeOpenLaneSpacing(
+                previousOpenLaneRaw: -1,
+                nextOpenLaneRaw: 1
+            )
+        )
+        XCTAssertTrue(
+            ObstacleLayout.requiresOppositeOpenLaneSpacing(
+                previousOpenLaneRaw: 1,
+                nextOpenLaneRaw: -1
+            )
+        )
+        // Same-side opens do not need the extra gap.
+        XCTAssertFalse(
+            ObstacleLayout.requiresOppositeOpenLaneSpacing(
+                previousOpenLaneRaw: -1,
+                nextOpenLaneRaw: -1
+            )
+        )
+        XCTAssertFalse(
+            ObstacleLayout.requiresOppositeOpenLaneSpacing(
+                previousOpenLaneRaw: nil,
+                nextOpenLaneRaw: 1
+            )
+        )
+        XCTAssertFalse(
+            ObstacleLayout.requiresOppositeOpenLaneSpacing(
+                previousOpenLaneRaw: 1,
+                nextOpenLaneRaw: nil
+            )
+        )
+    }
+
     func testLowCrawlTeachCountIsPositive() {
         let crawl = EnvironmentCatalog.profile(for: .lowCrawl)
         XCTAssertEqual(crawl.twist, .lowCrawl)

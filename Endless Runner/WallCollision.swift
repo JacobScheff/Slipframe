@@ -30,6 +30,26 @@ enum ObstacleLayout {
         if laneRaw == last { x += adjacentSpread }
         return x
     }
+
+    /// Open outer lane raw (−1 left / +1 right) when exactly one adjacent double leaves one side open.
+    /// `[left, center]` → right; `[center, right]` → left. Center-open or non-doubles → nil.
+    static func adjacentDoubleOpenLaneRaw(blockingLaneRaws: Set<Int>) -> Int? {
+        guard blockingLaneRaws.count == 2 else { return nil }
+        let ordered = blockingLaneRaws.sorted()
+        guard let first = ordered.first, let last = ordered.last, last - first == 1 else { return nil }
+        let open = Set([-1, 0, 1]).subtracting(blockingLaneRaws)
+        guard open.count == 1, let lane = open.first, lane != 0 else { return nil }
+        return lane
+    }
+
+    /// True when two consecutive adjacent doubles force a full cross-corridor dodge (left↔right).
+    static func requiresOppositeOpenLaneSpacing(
+        previousOpenLaneRaw: Int?,
+        nextOpenLaneRaw: Int?
+    ) -> Bool {
+        guard let previousOpenLaneRaw, let nextOpenLaneRaw else { return false }
+        return previousOpenLaneRaw != nextOpenLaneRaw
+    }
 }
 
 enum WallCollision {
