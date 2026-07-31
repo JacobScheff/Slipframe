@@ -8,10 +8,19 @@
 import Foundation
 import SwiftUI
 
+/// Score / coin counters observed by the HUD only.
+/// Kept off `GameModel.objectWillChange` so RealityView is not invalidated mid-tick.
 @MainActor
-final class GameModel: ObservableObject {
+final class RunStats: ObservableObject {
     @Published var score: Int = 0
     @Published var coinsCollected: Int = 0
+}
+
+@MainActor
+final class GameModel: ObservableObject {
+    /// HUD metrics — do not mark these `@Published` on `GameModel` itself.
+    let stats = RunStats()
+
     @Published var isPlaying: Bool = false
     @Published var isGameOver: Bool = false
     @Published var immersiveSpaceOpen: Bool = false
@@ -25,9 +34,20 @@ final class GameModel: ObservableObject {
     /// Bumped on each restart so the immersive session can reset its world.
     @Published private(set) var runID: Int = 0
 
+    /// Convenience accessors for gameplay / tests (not `@Published` on this object).
+    var score: Int {
+        get { stats.score }
+        set { stats.score = newValue }
+    }
+
+    var coinsCollected: Int {
+        get { stats.coinsCollected }
+        set { stats.coinsCollected = newValue }
+    }
+
     func startRun() {
-        score = 0
-        coinsCollected = 0
+        stats.score = 0
+        stats.coinsCollected = 0
         isGameOver = false
         isPlaying = true
         prefersRoomDimming = false
@@ -36,13 +56,13 @@ final class GameModel: ObservableObject {
 
     func addScore(_ points: Int) {
         guard isPlaying else { return }
-        score += points
+        stats.score += points
     }
 
     func collectCoin(points: Int = 10) {
         guard isPlaying else { return }
-        coinsCollected += 1
-        score += points
+        stats.coinsCollected += 1
+        stats.score += points
     }
 
     func endRun() {

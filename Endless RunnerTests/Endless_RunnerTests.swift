@@ -7,6 +7,7 @@
 
 import XCTest
 @testable import Endless_Runner
+import Combine
 import simd
 
 @MainActor
@@ -628,6 +629,37 @@ final class Endless_RunnerTests: XCTestCase {
             XCTAssertTrue(velocity.z.isFinite)
             XCTAssertGreaterThan(velocity.y, 0)
         }
+    }
+
+    func testScoreAndCoinUpdatesDoNotPublishThroughGameModel() {
+        let model = GameModel()
+        var gameModelPublishCount = 0
+        var statsPublishCount = 0
+        let gameModelWatch = model.objectWillChange.sink { _ in
+            gameModelPublishCount += 1
+        }
+        let statsWatch = model.stats.objectWillChange.sink { _ in
+            statsPublishCount += 1
+        }
+
+        model.startRun()
+        // startRun publishes GameModel flags + RunStats resets.
+        XCTAssertGreaterThan(gameModelPublishCount, 0)
+        let publishesAfterStart = gameModelPublishCount
+        let statsAfterStart = statsPublishCount
+
+        model.addScore(5)
+        model.collectCoin(points: 10)
+
+        XCTAssertEqual(gameModelPublishCount, publishesAfterStart,
+                       "Score/coin ticks must not invalidate ImmersiveView/RealityView")
+        // addScore: 1 publish; collectCoin: coins + score = 2 publishes.
+        XCTAssertEqual(statsPublishCount, statsAfterStart + 3)
+        XCTAssertEqual(model.score, 15)
+        XCTAssertEqual(model.coinsCollected, 1)
+
+        _ = gameModelWatch
+        _ = statsWatch
     }
 }
 

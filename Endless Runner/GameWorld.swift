@@ -1612,8 +1612,10 @@ final class GameWorld {
             right.entity.removeFromParent()
             heldLeft = nil
             heldRight = nil
-            gameModel?.collectCoin(points: payout)
             GameSFX.shared.playCoinCollect()
+            DispatchQueue.main.async {
+                gameModel?.collectCoin(points: payout)
+            }
         }
     }
 
@@ -1825,9 +1827,13 @@ final class GameWorld {
                 if distance(hand, coinPos) <= GameWorld.collectDistance {
                     coins[index].collected = true
                     visualFX.spawnCoinBurst(at: coinPos)
-                    coins[index].entity.removeFromParent()
-                    gameModel.collectCoin(points: GameWorld.coinPoints)
+                    // Hide now; removeFromParent happens in prune. HUD/SFX after this tick.
+                    coins[index].entity.isEnabled = false
+                    let points = GameWorld.coinPoints
                     GameSFX.shared.playCoinCollect()
+                    DispatchQueue.main.async {
+                        gameModel.collectCoin(points: points)
+                    }
                     break
                 }
             }
@@ -1843,7 +1849,10 @@ final class GameWorld {
             return false
         }
         coins.removeAll { item in
-            if item.collected { return true }
+            if item.collected {
+                item.entity.removeFromParent()
+                return true
+            }
             if item.entity.position.z > GameWorld.despawnZ {
                 item.entity.removeFromParent()
                 return true

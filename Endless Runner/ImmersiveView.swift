@@ -31,6 +31,7 @@ struct ImmersiveView: View {
             Attachment(id: ImmersiveAttachmentID.playHUD.rawValue) {
                 PlayHUDView()
                     .environmentObject(gameModel)
+                    .environmentObject(gameModel.stats)
             }
         }
         .preferredSurroundingsEffect(gameModel.prefersRoomDimming ? .dark : nil)
@@ -47,6 +48,7 @@ struct ImmersiveView: View {
 }
 
 #Preview(immersionStyle: .mixed) {
-    ImmersiveView()
-        .environmentObject(GameModel())
+    let model = GameModel()
+    return ImmersiveView()
+        .environmentObject(model)
 }
