@@ -2,18 +2,16 @@
 //  GameWorld.swift
 //  Endless Runner
 //
-//  Minimal single-environment endless runner:
+//  Mixed-immersive endless runner with rotating biome environments:
 //  - Playfield sits on the real floor and locks pose when a run starts
 //  - Synth Riders-style portal window at the end of a fixed track
 //  - Obstacles emerge from the portal into the real room
-//  - Track is a static slab (does not scroll or recycle)
-//  - Red walls block 1–2 lanes (head + hand collision)
-//  - Gold coins collected by hand proximity
-//  - Play / score HUD is fixed above the track
-//  Placeholder meshes only (no art assets).
+//  - Biomes tint ambience / walls / coins (ready for custom assets later)
+//  - Each biome applies one gameplay twist via EnvironmentDirector
 //
 
 import ARKit
+import QuartzCore
 import RealityKit
 import SwiftUI
 import UIKit
@@ -32,19 +30,51 @@ final class GameWorld {
 
     private final class WallItem {
         let entity: Entity
-        /// Local X centers of each red slab (playfield / parent space).
-        let slabXs: [Float]
+        /// Local X centers of each slab relative to the wall parent.
+        let localSlabXs: [Float]
+        let kind: WallKind
         var hasResolvedHit = false
+        /// Prior-frame Z for swept head/hand collision (prevents tunneling).
+        var previousZ: Float
 
-        init(entity: Entity, slabXs: [Float]) {
+        init(entity: Entity, localSlabXs: [Float], kind: WallKind) {
             self.entity = entity
-            self.slabXs = slabXs
+            self.localSlabXs = localSlabXs
+            self.kind = kind
+            self.previousZ = entity.position.z
+        }
+
+        func worldSlabXs() -> [Float] {
+            localSlabXs.map { $0 + entity.position.x }
         }
     }
 
     private struct CoinItem {
         let entity: Entity
         var collected = false
+    }
+
+    private final class HalfCrystalItem {
+        let entity: Entity
+        let type: CrystalHalfType
+        let charged: Bool
+        var collected = false
+
+        init(entity: Entity, type: CrystalHalfType, charged: Bool) {
+            self.entity = entity
+            self.type = type
+            self.charged = charged
+        }
+    }
+
+    private struct HeldHalf {
+        let type: CrystalHalfType
+        let charged: Bool
+        let entity: Entity
+        /// True once a fist is detected after grab; opening the hand after this drops it.
+        var confirmedFist: Bool = false
+        /// Seconds since grab — must fist within `crystalGrabConfirmWindow` or it drops.
+        var timeSinceGrab: Float = 0
     }
 
     // Layout
@@ -59,7 +89,8 @@ final class GameWorld {
     private static let coinOutwardOffset: Float = 0.12
     /// Portal / spawn depth when no wall plane is available.
     private static let defaultPortalZ: Float = -8
-    private static let despawnZ: Float = 1.5
+    /// Obstacles stay visible this far past the stand line (+Z) before cleanup.
+    private static let despawnZ: Float = 3.0
     /// Kill-box depth pad beyond the thinned collision half-depth.
     private static let hitZPad: Float = 0.02
     /// Shrink the slab's X kill box so grazing a lane edge is less punishing.
@@ -73,17 +104,37 @@ final class GameWorld {
     private static let headHitMinY: Float = 0.4
     private static let headHitMaxY: Float = wallHeight + 0.35
     private static let collectDistance: Float = 0.24
+    /// Crystal halves use a generous grab radius so fist + reach stays fair.
+    private static let crystalCollectDistance: Float = 0.45
     private static let baseSpeed: Float = 3.0
     private static let maxSpeed: Float = 7.0
     private static let speedRampPerSecond: Float = 0.055
     /// Continuous obstacle stream with a bit of breathing room between beats.
     private static let spawnGapMin: Float = 2.2
     private static let spawnGapMax: Float = 2.9
-    private static let coinPoints = 10
+    /// Ember Run gets a touch more room than the denser biomes.
+    private static let emberSpawnGapMin: Float = 2.55
+    private static let emberSpawnGapMax: Float = 3.25
+    /// Low Crawl needs extra reaction time for duck gates.
+    private static let lowCrawlSpawnGapMin: Float = 3.3
+    private static let lowCrawlSpawnGapMax: Float = 4.2
+    /// Nudge adjacent double-lane slabs slightly farther apart (meters each side).
+    private static let adjacentPairSpread: Float = 0.09
+    private static let coinPoints = CrystalCombine.baseCoinPoints
     /// HUD sits above the corridor, further down the track, clear of the play volume.
     private static let hudPosition = SIMD3<Float>(0, 2.45, -3.2)
     /// World scale for the SwiftUI attachment (attachments are small by default).
     private static let hudScale: Float = 3.0
+
+    // Duck hazard geometry (Low Crawl).
+    /// Bottom of the hanging slab — stand through it = hit; duck under to clear.
+    private static let duckClearanceY: Float = 1.0
+    private static let duckSlabHeight: Float = 0.75
+    private static let duckSlabWidth: Float = 2.5
+    /// Duck gates use a deeper kill volume so fast approach cannot skip the head.
+    private static let duckHitHalfDepth: Float = 0.4
+    /// Coins paired with a duck ceiling sit under it; other Low Crawl coins stay normal height.
+    private static let lowCrawlCoinHeight: Float = duckClearanceY * 0.65
 
     // Synth Riders-style portal aperture (always visible at the track end).
     private static let portalWidth: Float = 3.6
@@ -100,13 +151,31 @@ final class GameWorld {
 
     // Fixed track slab from the stand line to just behind the portal.
     private static let trackWidth: Float = 3.2
-    private static let trackNearZ: Float = 0.55
+    /// Track slab extends this far behind the stand line (+Z).
+    private static let trackNearZ: Float = 1.1
     private static let trackPastPortal: Float = 0.35
     /// Used only when a floor plane has not been found yet.
     private static let fallbackEyeHeight: Float = 1.55
 
-    /// Simple glowing placeholder until real wall art is dropped in.
-    private static let wallBodyMaterial: any RealityKit.Material = makeWallBodyMaterial()
+    // Storm Pass wind.
+    private static let windMinInterval: Float = 2.4
+    private static let windMaxInterval: Float = 4.8
+    /// Visual/audio warning before boxes start drifting (expand then shrink).
+    private static let windTelegraphSeconds: Float = 1.8
+    /// How long the boxes take to finish the shove (slow = easy to correct).
+    private static let windDuration: Float = 4.5
+    private static let windMagnitude: Float = 0.55
+    /// Only skip a shove when a wall is already in this near danger band.
+    private static let windDangerMinZ: Float = -1.1
+    private static let windDangerMaxZ: Float = 0.7
+    /// Storm warning streak size / placement (unit-width mesh, scaled on X).
+    private static let gustBarWidth: Float = 2.8
+    private static let gustBarHeight: Float = 0.08
+    private static let gustBarDepth: Float = 0.35
+    private static let gustBarY: Float = 1.25
+    private static let gustBarZ: Float = -1.4
+    /// Fraction of the telegraph used to finish the expand; remainder shrinks back.
+    private static let gustExpandFinishAt: Float = 0.42
 
     /// Playfield origin: floor at y=0, stand line at z=0, track extends along −Z.
     let root = Entity()
@@ -134,8 +203,16 @@ final class GameWorld {
     private let portalWorld = Entity()
 
     private weak var gameModel: GameModel?
+    private let environmentDirector = EnvironmentDirector()
+    private var lastDebugMode: EnvironmentDebugMode = .normal
+    private var activeSpawnProfile: EnvironmentProfile = EnvironmentCatalog.profile(for: .emberRun)
+
     private var walls: [WallItem] = []
     private var coins: [CoinItem] = []
+    private var halves: [HalfCrystalItem] = []
+    private var heldLeft: HeldHalf?
+    private var heldRight: HeldHalf?
+
     private var speed: Float = GameWorld.baseSpeed
     /// First obstacle spawns on the opening tick of a run.
     private var distanceUntilSpawn: Float = 0
@@ -150,15 +227,47 @@ final class GameWorld {
     /// After Start, playfield pose no longer follows the player.
     private var isPlayfieldLocked = false
 
-    /// ARKit hand tracking — AnchorEntity(.hand) transforms are privacy-locked
-    /// unless a SpatialTrackingSession is running (visionOS 2+), so we read
-    /// joint positions from HandTrackingProvider instead.
+    // Wind shove state (offsets obstacle boxes only).
+    private var windCurrentX: Float = 0
+    private var windFromX: Float = 0
+    private var windToX: Float = 0
+    private var windElapsed: Float = 0
+    private var windDurationActive: Float = 0
+    private var windTelegraphRemaining: Float = 0
+    private var pendingWindDirection: Float = 0
+    /// Discrete lane offset from start: -1, 0, or +1. Never stacks same-side shoves.
+    private var windOffsetStep: Int = 0
+    private var timeUntilWind: Float = GameWorld.windMinInterval
+    private var gustEntity: Entity?
+
+    /// ARKit providers — AnchorEntity(.head/.hand) transforms are privacy-locked
+    /// on visionOS, so gameplay reads DeviceAnchor + HandTrackingProvider instead.
     private let arSession = ARKitSession()
     private let handTracking = HandTrackingProvider()
-    private var handTask: Task<Void, Never>?
+    private let worldTracking = WorldTrackingProvider()
+    private var arTask: Task<Void, Never>?
     /// World-space contact points (wrist + fingertips) for each hand.
     private var leftHandContactsWorld: [SIMD3<Float>] = []
     private var rightHandContactsWorld: [SIMD3<Float>] = []
+    /// World-space grip point (fingertip / palm center), not the wrist.
+    private var leftHandGripWorld: SIMD3<Float>?
+    private var rightHandGripWorld: SIMD3<Float>?
+    private var leftIsFist = false
+    private var rightIsFist = false
+    private var leftIsOpen = false
+    private var rightIsOpen = false
+    /// Brief latch so fist-classifier flicker does not drop after a confirmed grip.
+    private var leftFistLatch: Float = 0
+    private var rightFistLatch: Float = 0
+    private static let fistLatchSeconds: Float = 0.7
+    /// After a proximity grab, must fist quickly or the half drops.
+    private static let crystalGrabConfirmWindow: Float = 0.35
+    /// Crystal Cave half spawn chance per beat (was 0.8; cut ~75%).
+    private static let crystalHalfSpawnChance: Float = 0.2
+    /// Held shards sit this far past the knuckle plane toward the fingertips (meters).
+    private static let crystalGripFingerBias: Float = 0.04
+    /// Lift shards slightly off the knuckle plane so they sit in/on the fingers.
+    private static let crystalGripPalmLift: Float = 0.035
 
     func attach(to content: RealityViewContent, gameModel: GameModel) {
         self.gameModel = gameModel
@@ -167,6 +276,7 @@ final class GameWorld {
         content.add(floorAnchor)
         content.add(wallAnchor)
         isPlayfieldLocked = false
+        lastDebugMode = gameModel.environmentDebugMode
 
         if updateSubscription == nil {
             updateSubscription = content.subscribe(to: SceneEvents.Update.self) { [weak self] event in
@@ -177,9 +287,11 @@ final class GameWorld {
         buildPortal()
         buildStaticEnvironment()
         ensureHUDAnchor()
-        startHandTracking()
+        startARSession()
         // Warm audio before the first coin so setActive does not hitch mid-run.
         GameSFX.shared.prepare()
+        GameMusic.shared.prepare()
+        applyPalette(environmentDirector.displayedPalette, telegraph: 0)
         snapPlayfieldToPlayer()
         updatePortalAndTrack()
     }
@@ -198,21 +310,38 @@ final class GameWorld {
 
     func syncRun(with gameModel: GameModel) {
         self.gameModel = gameModel
+        if gameModel.environmentDebugMode != lastDebugMode {
+            lastDebugMode = gameModel.environmentDebugMode
+            environmentDirector.applyDebugMode(gameModel.environmentDebugMode)
+            activeSpawnProfile = environmentDirector.currentProfile
+            if gameModel.environmentDebugMode != .normal || gameModel.isPlaying {
+                dropHeldHalves()
+            }
+        }
         guard gameModel.isPlaying, gameModel.runID != activeRunID else { return }
         beginRun(runID: gameModel.runID)
     }
 
     func teardown() {
-        handTask?.cancel()
-        handTask = nil
+        arTask?.cancel()
+        arTask = nil
         leftHandContactsWorld = []
         rightHandContactsWorld = []
+        leftHandGripWorld = nil
+        rightHandGripWorld = nil
+        leftIsFist = false
+        rightIsFist = false
+        leftIsOpen = false
+        rightIsOpen = false
         updateSubscription = nil
         isPlayfieldLocked = false
         portalZ = GameWorld.defaultPortalZ
         activeSpawnZ = GameWorld.defaultPortalZ + GameWorld.spawnInFrontOfPortal
         lastBuiltPortalZ = .greatestFiniteMagnitude
         clearDynamicContent()
+        dropHeldHalves()
+        gameModel?.prefersRoomDimming = false
+        GameMusic.shared.stop()
         for child in hudAnchor.children {
             child.removeFromParent()
         }
@@ -266,28 +395,28 @@ final class GameWorld {
         let nearZ = GameWorld.trackNearZ
         let depth = max(1.0, nearZ - farZ)
         let centerZ = (nearZ + farZ) * 0.5
+        let palette = environmentDirector.displayedPalette
 
         let floorMesh = MeshResource.generateBox(
             width: GameWorld.trackWidth,
             height: 0.02,
             depth: depth
         )
-        let floorMaterial = SimpleMaterial(
-            color: UIColor(red: 0.12, green: 0.1, blue: 0.16, alpha: 1),
-            roughness: 0.85,
-            isMetallic: false
+        let floor = ModelEntity(
+            mesh: floorMesh,
+            materials: [EnvironmentMaterials.simple(palette.floor, roughness: 0.85)]
         )
-        let floor = ModelEntity(mesh: floorMesh, materials: [floorMaterial])
         floor.name = "floor"
         floor.position = SIMD3(0, 0, centerZ)
         trackRoot.addChild(floor)
 
-        let stripeMaterial = UnlitMaterial(
-            color: UIColor(red: 0.35, green: 0.95, blue: 1.0, alpha: 0.85)
-        )
         for lane in Lane.allCases {
             let stripeMesh = MeshResource.generateBox(width: 0.07, height: 0.025, depth: depth)
-            let stripe = ModelEntity(mesh: stripeMesh, materials: [stripeMaterial])
+            let stripe = ModelEntity(
+                mesh: stripeMesh,
+                materials: [EnvironmentMaterials.unlit(palette.laneStripe)]
+            )
+            stripe.name = "laneStripe"
             stripe.position = SIMD3(lane.x, 0.02, centerZ)
             trackRoot.addChild(stripe)
         }
@@ -325,7 +454,6 @@ final class GameWorld {
             root.addChild(portalRoot)
         }
 
-        // Also register the world at the RealityView root level via portalRoot parenting.
         layoutPortal()
     }
 
@@ -337,8 +465,8 @@ final class GameWorld {
         let rim = Entity()
         rim.name = "portalRim"
         let t = GameWorld.portalRimThickness
+        let palette = environmentDirector.displayedPalette
 
-        // One rounded neon halo behind the aperture — reads as a clean glowing border.
         let haloMesh = MeshResource.generatePlane(
             width: GameWorld.portalWidth + t * 2,
             height: GameWorld.portalHeight + t * 2,
@@ -346,9 +474,9 @@ final class GameWorld {
         )
         let halo = ModelEntity(
             mesh: haloMesh,
-            materials: [UnlitMaterial(color: UIColor(red: 0.35, green: 0.95, blue: 1.0, alpha: 1))]
+            materials: [EnvironmentMaterials.unlit(palette.portalRim)]
         )
-        // Sit just behind the portal plane so only the border peeks out.
+        halo.name = "portalRimHalo"
         halo.position = SIMD3(0, 0, -0.015)
         rim.addChild(halo)
 
@@ -364,21 +492,21 @@ final class GameWorld {
         let interior = Entity()
         interior.name = "portalInterior"
         interior.position = SIMD3(0, 0, -0.05)
+        let palette = environmentDirector.displayedPalette
 
-        let voidColor = UIColor(red: 0.03, green: 0.04, blue: 0.08, alpha: 1)
-        let voidMat = UnlitMaterial(color: voidColor)
-        let railMat = UnlitMaterial(color: UIColor(red: 0.25, green: 0.9, blue: 1.0, alpha: 1))
-        let accentMat = UnlitMaterial(color: UIColor(red: 0.15, green: 0.55, blue: 0.75, alpha: 1))
+        let voidMat = EnvironmentMaterials.unlit(palette.portalVoid)
+        let railMat = EnvironmentMaterials.unlit(palette.portalRail)
+        let accentMat = EnvironmentMaterials.unlit(palette.portalAccent)
 
         let tunnelW: Float = 4.4
         let tunnelH = GameWorld.portalHeight + 0.4
         let tunnelDepth: Float = 10
 
-        // Closed box so the aperture is a solid window into another space.
         let floor = ModelEntity(
             mesh: MeshResource.generateBox(width: tunnelW, height: 0.06, depth: tunnelDepth),
             materials: [voidMat]
         )
+        floor.name = "portalFloor"
         floor.position = SIMD3(0, -tunnelH * 0.5, -tunnelDepth * 0.5)
         interior.addChild(floor)
 
@@ -386,6 +514,7 @@ final class GameWorld {
             mesh: MeshResource.generateBox(width: tunnelW, height: 0.06, depth: tunnelDepth),
             materials: [voidMat]
         )
+        ceiling.name = "portalCeiling"
         ceiling.position = SIMD3(0, tunnelH * 0.5, -tunnelDepth * 0.5)
         interior.addChild(ceiling)
 
@@ -394,6 +523,7 @@ final class GameWorld {
                 mesh: MeshResource.generateBox(width: 0.06, height: tunnelH, depth: tunnelDepth),
                 materials: [voidMat]
             )
+            wall.name = "portalSide"
             wall.position = SIMD3(sign * tunnelW * 0.5, 0, -tunnelDepth * 0.5)
             interior.addChild(wall)
         }
@@ -402,15 +532,16 @@ final class GameWorld {
             mesh: MeshResource.generateBox(width: tunnelW, height: tunnelH, depth: 0.08),
             materials: [voidMat]
         )
+        back.name = "portalBack"
         back.position = SIMD3(0, 0, -tunnelDepth)
         interior.addChild(back)
 
-        // Quiet depth cues — thin floor rails + a soft far glow (no stacked frames).
         for sign: Float in [-1, 1] {
             let rail = ModelEntity(
                 mesh: MeshResource.generateBox(width: 0.05, height: 0.05, depth: tunnelDepth - 0.5),
                 materials: [railMat]
             )
+            rail.name = "portalRail"
             rail.position = SIMD3(sign * 1.35, -tunnelH * 0.5 + 0.08, -tunnelDepth * 0.5)
             interior.addChild(rail)
         }
@@ -419,6 +550,7 @@ final class GameWorld {
             mesh: MeshResource.generateSphere(radius: 0.45),
             materials: [accentMat]
         )
+        farGlow.name = "portalAccent"
         farGlow.position = SIMD3(0, -0.15, -tunnelDepth + 1.2)
         interior.addChild(farGlow)
 
@@ -426,7 +558,6 @@ final class GameWorld {
     }
 
     private func layoutPortal() {
-        // Center the aperture at standing height, flush with the portal depth.
         portalRoot.position = SIMD3(0, GameWorld.portalHeight * 0.5, portalZ)
         activeSpawnZ = portalZ + GameWorld.spawnInFrontOfPortal
     }
@@ -437,7 +568,6 @@ final class GameWorld {
 
         let marker = Entity()
         marker.name = "startMarker"
-        // Fixed in world space at z = 0 (does not scroll with the ribbon).
         marker.position = SIMD3(0, 0.03, 0)
 
         let lineMesh = MeshResource.generateBox(width: 2.35, height: 0.008, depth: 0.028)
@@ -447,7 +577,6 @@ final class GameWorld {
         let line = ModelEntity(mesh: lineMesh, materials: [lineMaterial])
         marker.addChild(line)
 
-        // Small center tick so the midline is findable at a glance.
         let tickMesh = MeshResource.generateBox(width: 0.1, height: 0.01, depth: 0.1)
         let tickMaterial = UnlitMaterial(
             color: UIColor(red: 1.0, green: 0.86, blue: 0.45, alpha: 0.9)
@@ -461,40 +590,111 @@ final class GameWorld {
 
     private func beginRun(runID: Int) {
         activeRunID = runID
-        // Final snap toward wall (if any) / feet / facing, then freeze pose for the run.
         snapPlayfieldToPlayer()
         updatePortalAndTrack()
         isPlayfieldLocked = true
         clearDynamicContent()
+        dropHeldHalves()
+        resetWind()
+        environmentDirector.beginRun(debugMode: gameModel?.environmentDebugMode ?? .normal)
+        activeSpawnProfile = environmentDirector.currentProfile
+        if activeSpawnProfile.twist == .windShove {
+            timeUntilWind = Float.random(in: 1.0...2.0)
+        }
+        leftFistLatch = 0
+        rightFistLatch = 0
         rebuildFixedTrack(force: true)
+        buildPortalRim()
+        buildPortalInterior()
+        applyPalette(environmentDirector.displayedPalette, telegraph: 0)
         layoutPortal()
         speed = GameWorld.baseSpeed
         distanceUntilSpawn = 0
         distanceAccumulator = 0
         GameSFX.shared.prepare()
+        GameMusic.shared.prepare()
+    }
+
+    // MARK: - Palette / room dimming
+
+    private func applyPalette(_ palette: EnvironmentPalette, telegraph: Float) {
+        for child in trackRoot.children {
+            guard let model = child as? ModelEntity else { continue }
+            if child.name == "floor" {
+                model.model?.materials = [EnvironmentMaterials.simple(palette.floor, roughness: 0.85)]
+            } else if child.name == "laneStripe" {
+                model.model?.materials = [EnvironmentMaterials.unlit(palette.laneStripe)]
+            }
+        }
+
+        if let rim = portalRoot.children.first(where: { $0.name == "portalRim" }) {
+            for child in rim.children {
+                guard let model = child as? ModelEntity else { continue }
+                // Brief rim pulse on biome switch — no full-screen wash in front of the player.
+                var rimTint = palette.portalRim
+                if telegraph > 0.01 {
+                    let boost = 0.35 * telegraph
+                    rimTint = TintColor(
+                        r: min(1, rimTint.r + boost),
+                        g: min(1, rimTint.g + boost),
+                        b: min(1, rimTint.b + boost),
+                        a: rimTint.a
+                    )
+                }
+                model.model?.materials = [EnvironmentMaterials.unlit(rimTint)]
+            }
+        }
+
+        if let interior = portalWorld.children.first(where: { $0.name == "portalInterior" }) {
+            for child in interior.children {
+                guard let model = child as? ModelEntity else { continue }
+                switch child.name {
+                case "portalRail":
+                    model.model?.materials = [EnvironmentMaterials.unlit(palette.portalRail)]
+                case "portalAccent":
+                    model.model?.materials = [EnvironmentMaterials.unlit(palette.portalAccent)]
+                default:
+                    model.model?.materials = [EnvironmentMaterials.unlit(palette.portalVoid)]
+                }
+            }
+        }
+
+        syncRoomDimming()
+    }
+
+    /// Fog Hollow dims the real room via preferredSurroundingsEffect (no fog geometry).
+    private func syncRoomDimming() {
+        guard let gameModel else { return }
+        let wants = gameModel.isPlaying
+            && !gameModel.isGameOver
+            && activeSpawnProfile.twist == .fogVisibility
+        if gameModel.prefersRoomDimming != wants {
+            gameModel.prefersRoomDimming = wants
+        }
     }
 
     // MARK: - Playfield pose
 
-    /// Places the playfield on the real floor. Faces a nearby wall when one is found;
-    /// otherwise faces the player's look direction. Portal stays at the track end either way.
     private func snapPlayfieldToPlayer() {
-        let headWorld = headAnchor.position(relativeTo: nil)
-        let headRotation = headAnchor.orientation(relativeTo: nil)
-
-        let floorY: Float
-        if floorAnchor.isAnchored {
-            floorY = floorAnchor.position(relativeTo: nil).y
-        } else {
-            floorY = headWorld.y - GameWorld.fallbackEyeHeight
-        }
-
-        let position = SIMD3<Float>(headWorld.x, floorY, headWorld.z)
+        let headWorld: SIMD3<Float>
         let flatForward: SIMD3<Float>
 
-        if let towardWall = suitableWallForward(from: position) {
-            flatForward = towardWall
+        if worldTracking.state == .running,
+           let device = worldTracking.queryDeviceAnchor(atTimestamp: CACurrentMediaTime()),
+           device.isTracked {
+            let matrix = device.originFromAnchorTransform
+            headWorld = SIMD3(matrix.columns.3.x, matrix.columns.3.y, matrix.columns.3.z)
+            // Device forward is -Z in the device transform.
+            let forwardWorld = SIMD3(-matrix.columns.2.x, 0, -matrix.columns.2.z)
+            let forwardLength = length(forwardWorld)
+            if forwardLength < 0.05 {
+                flatForward = SIMD3(0, 0, -1)
+            } else {
+                flatForward = forwardWorld / forwardLength
+            }
         } else {
+            headWorld = headAnchor.position(relativeTo: nil)
+            let headRotation = headAnchor.orientation(relativeTo: nil)
             let forwardWorld = headRotation.act(SIMD3<Float>(0, 0, -1))
             var flattened = SIMD3<Float>(forwardWorld.x, 0, forwardWorld.z)
             let forwardLength = length(flattened)
@@ -506,12 +706,20 @@ final class GameWorld {
             flatForward = flattened
         }
 
-        let yaw = atan2(-flatForward.x, -flatForward.z)
+        let floorY: Float
+        if floorAnchor.isAnchored {
+            floorY = floorAnchor.position(relativeTo: nil).y
+        } else {
+            floorY = headWorld.y - GameWorld.fallbackEyeHeight
+        }
+
+        let position = SIMD3<Float>(headWorld.x, floorY, headWorld.z)
+        let facing = suitableWallForward(from: position) ?? flatForward
+        let yaw = atan2(-facing.x, -facing.z)
         root.setPosition(position, relativeTo: nil)
         root.setOrientation(simd_quatf(angle: yaw, axis: SIMD3(0, 1, 0)), relativeTo: nil)
     }
 
-    /// Horizontal unit vector from the player toward a wall in the accepted distance band.
     private func suitableWallForward(from playerPosition: SIMD3<Float>) -> SIMD3<Float>? {
         guard wallAnchor.isAnchored else { return nil }
 
@@ -530,14 +738,12 @@ final class GameWorld {
         return toWall
     }
 
-    /// Portal is always shown. Snap it onto a wall when one is in range; otherwise use default depth.
     private func updatePortalAndTrack() {
         let playerPosition = root.position(relativeTo: nil)
 
         if wallAnchor.isAnchored,
            suitableWallForward(from: playerPosition) != nil {
             let wallInRoot = root.convert(position: wallAnchor.position(relativeTo: nil), from: nil)
-            // Sit the aperture on / just in front of the real wall.
             portalZ = min(-GameWorld.portalMinDistance, wallInRoot.z + 0.05)
         } else {
             portalZ = GameWorld.defaultPortalZ
@@ -556,52 +762,103 @@ final class GameWorld {
         for coin in coins {
             coin.entity.removeFromParent()
         }
+        for half in halves {
+            half.entity.removeFromParent()
+        }
         walls.removeAll()
         coins.removeAll()
+        halves.removeAll()
+        gustEntity?.removeFromParent()
+        gustEntity = nil
     }
 
-    // MARK: - Hand tracking
+    // MARK: - ARKit tracking
 
-    private func startHandTracking() {
-        guard handTask == nil else { return }
-        handTask = Task { @MainActor [weak self] in
+    private func startARSession() {
+        guard arTask == nil else { return }
+        arTask = Task { @MainActor [weak self] in
             guard let self else { return }
-            guard HandTrackingProvider.isSupported else { return }
 
             do {
-                let auth = await arSession.requestAuthorization(for: [.handTracking])
-                guard auth[.handTracking] == .allowed else { return }
-                try await arSession.run([handTracking])
+                var providers: [any DataProvider] = []
+                var handsEnabled = false
+                if WorldTrackingProvider.isSupported {
+                    providers.append(worldTracking)
+                }
+                if HandTrackingProvider.isSupported {
+                    let auth = await arSession.requestAuthorization(for: [.handTracking])
+                    if auth[.handTracking] == .allowed {
+                        providers.append(handTracking)
+                        handsEnabled = true
+                    }
+                }
+                guard !providers.isEmpty else { return }
+                try await arSession.run(providers)
+
+                guard handsEnabled else { return }
 
                 for await update in handTracking.anchorUpdates {
                     guard !Task.isCancelled else { break }
                     let anchor = update.anchor
                     guard anchor.isTracked else {
                         switch anchor.chirality {
-                        case .left: leftHandContactsWorld = []
-                        case .right: rightHandContactsWorld = []
+                        case .left:
+                            leftHandContactsWorld = []
+                            leftHandGripWorld = nil
+                            leftIsFist = false
+                            leftIsOpen = false
+                        case .right:
+                            rightHandContactsWorld = []
+                            rightHandGripWorld = nil
+                            rightIsFist = false
+                            rightIsOpen = false
                         @unknown default: break
                         }
                         continue
                     }
                     let contacts = Self.contactPoints(from: anchor)
+                    let grip = Self.gripPoint(from: anchor)
+                    let pose = HandPose.classify(anchor: anchor)
                     switch anchor.chirality {
                     case .left:
                         leftHandContactsWorld = contacts
+                        leftHandGripWorld = grip
+                        leftIsFist = pose == .fist
+                        leftIsOpen = pose == .open
                     case .right:
                         rightHandContactsWorld = contacts
+                        rightHandGripWorld = grip
+                        rightIsFist = pose == .fist
+                        rightIsOpen = pose == .open
                     @unknown default:
                         break
                     }
                 }
             } catch {
-                // Hand tracking is optional for dodge; walls still work via head.
-                print("Hand tracking failed: \(error)")
+                print("ARKit session failed: \(error)")
             }
         }
     }
 
-    /// Wrist / palm origin plus fingertips — better "touch" than wrist alone.
+    /// Head/device position in playfield space. Prefer ARKit DeviceAnchor because
+    /// AnchorEntity(.head) transforms are not readable for gameplay queries.
+    private func playfieldHeadPosition() -> SIMD3<Float> {
+        if worldTracking.state == .running,
+           let device = worldTracking.queryDeviceAnchor(atTimestamp: CACurrentMediaTime()),
+           device.isTracked {
+            let matrix = device.originFromAnchorTransform
+            let world = SIMD3<Float>(matrix.columns.3.x, matrix.columns.3.y, matrix.columns.3.z)
+            return root.convert(position: world, from: nil)
+        }
+
+        // Fallback if world tracking is unavailable.
+        var head = headAnchor.position(relativeTo: root)
+        if head.y < 0.9 {
+            head.y = GameWorld.fallbackEyeHeight
+        }
+        return head
+    }
+
     private static func contactPoints(from anchor: HandAnchor) -> [SIMD3<Float>] {
         let origin = anchor.originFromAnchorTransform
         var points: [SIMD3<Float>] = [
@@ -623,23 +880,148 @@ final class GameWorld {
         return points
     }
 
+    /// Grip point on the fingers — knuckles + a bit toward the tips.
+    /// Fingertip averages sit under a closed fist, which made shards hang below the hand.
+    private static func gripPoint(from anchor: HandAnchor) -> SIMD3<Float> {
+        let origin = anchor.originFromAnchorTransform
+        let wrist = SIMD3<Float>(origin.columns.3.x, origin.columns.3.y, origin.columns.3.z)
+        guard let skeleton = anchor.handSkeleton else {
+            // No skeleton: nudge from wrist along the hand anchor's local finger axis.
+            let alongFingers = SIMD3<Float>(-origin.columns.2.x, -origin.columns.2.y, -origin.columns.2.z)
+            let palmUp = SIMD3<Float>(origin.columns.1.x, origin.columns.1.y, origin.columns.1.z)
+            return wrist
+                + alongFingers * (0.08 + GameWorld.crystalGripFingerBias)
+                + palmUp * GameWorld.crystalGripPalmLift
+        }
+
+        let knuckleNames: [HandSkeleton.JointName] = [
+            .indexFingerKnuckle, .middleFingerKnuckle, .ringFingerKnuckle
+        ]
+        var knuckleSum = SIMD3<Float>.zero
+        var knuckleCount = 0
+        for name in knuckleNames {
+            let joint = skeleton.joint(name)
+            guard joint.isTracked else { continue }
+            let world = origin * joint.anchorFromJointTransform
+            knuckleSum += SIMD3(world.columns.3.x, world.columns.3.y, world.columns.3.z)
+            knuckleCount += 1
+        }
+
+        let intermediateNames: [HandSkeleton.JointName] = [
+            .indexFingerIntermediateBase, .middleFingerIntermediateBase, .ringFingerIntermediateBase
+        ]
+        var midSum = SIMD3<Float>.zero
+        var midCount = 0
+        for name in intermediateNames {
+            let joint = skeleton.joint(name)
+            guard joint.isTracked else { continue }
+            let world = origin * joint.anchorFromJointTransform
+            midSum += SIMD3(world.columns.3.x, world.columns.3.y, world.columns.3.z)
+            midCount += 1
+        }
+
+        if knuckleCount > 0 {
+            let knuckles = knuckleSum / Float(knuckleCount)
+            // Prefer mid-finger joints when available; otherwise push past knuckles toward tips.
+            let alongFingers: SIMD3<Float>
+            if midCount > 0 {
+                let mids = midSum / Float(midCount)
+                alongFingers = mids - knuckles
+            } else {
+                alongFingers = knuckles - wrist
+            }
+            let fingerDir = length(alongFingers) > 0.001
+                ? normalize(alongFingers)
+                : SIMD3<Float>(0, 0, 0)
+
+            // Palm "up" ≈ wrist→knuckles cross a side finger, falling back to world up.
+            var palmUp = SIMD3<Float>(0, 1, 0)
+            if knuckleCount >= 2 {
+                let index = skeleton.joint(.indexFingerKnuckle)
+                let ring = skeleton.joint(.ringFingerKnuckle)
+                if index.isTracked, ring.isTracked {
+                    let iWorld = origin * index.anchorFromJointTransform
+                    let rWorld = origin * ring.anchorFromJointTransform
+                    let indexPos = SIMD3<Float>(iWorld.columns.3.x, iWorld.columns.3.y, iWorld.columns.3.z)
+                    let ringPos = SIMD3<Float>(rWorld.columns.3.x, rWorld.columns.3.y, rWorld.columns.3.z)
+                    let side = ringPos - indexPos
+                    let candidate = cross(fingerDir, side)
+                    if length(candidate) > 0.001 {
+                        palmUp = normalize(candidate)
+                        // Keep lift toward the back of the hand (away from the palm underside).
+                        if palmUp.y < 0 { palmUp = -palmUp }
+                    }
+                }
+            }
+
+            let base = midCount > 0 ? (midSum / Float(midCount)) : knuckles
+            return base
+                + fingerDir * GameWorld.crystalGripFingerBias
+                + palmUp * GameWorld.crystalGripPalmLift
+        }
+
+        // Fallback: fingertip blend, still lifted so it doesn't hang under the fist.
+        let tipNames: [HandSkeleton.JointName] = [
+            .indexFingerTip, .middleFingerTip, .ringFingerTip
+        ]
+        var tipSum = SIMD3<Float>.zero
+        var tipCount = 0
+        for name in tipNames {
+            let joint = skeleton.joint(name)
+            guard joint.isTracked else { continue }
+            let world = origin * joint.anchorFromJointTransform
+            tipSum += SIMD3(world.columns.3.x, world.columns.3.y, world.columns.3.z)
+            tipCount += 1
+        }
+        if tipCount > 0 {
+            let tips = tipSum / Float(tipCount)
+            return mix(wrist, tips, t: 0.9) + SIMD3<Float>(0, GameWorld.crystalGripPalmLift, 0)
+        }
+
+        return wrist + SIMD3<Float>(0, 0.08, 0)
+    }
+
     // MARK: - Loop
 
     private func tick(deltaTime: Float) {
-        // Before Start, keep the stand line under the player and refresh portal depth.
-        // After Start, pose / portal / track are frozen — only obstacles move.
         if !isPlayfieldLocked {
             snapPlayfieldToPlayer()
             updatePortalAndTrack()
         }
 
-        guard let gameModel, gameModel.isPlaying, !gameModel.isGameOver else { return }
+        guard let gameModel else { return }
+
+        if gameModel.environmentDebugMode != lastDebugMode {
+            lastDebugMode = gameModel.environmentDebugMode
+            environmentDirector.applyDebugMode(gameModel.environmentDebugMode)
+            activeSpawnProfile = environmentDirector.currentProfile
+            dropHeldHalves()
+            syncRoomDimming()
+        }
+
+        guard gameModel.isPlaying, !gameModel.isGameOver else {
+            if gameModel.prefersRoomDimming {
+                gameModel.prefersRoomDimming = false
+            }
+            return
+        }
         guard deltaTime > 0, deltaTime < 0.25 else { return }
+
+        let frame = environmentDirector.update(deltaTime: deltaTime)
+        if frame.didEnterEnvironment {
+            activeSpawnProfile = frame.profile
+            dropHeldHalves()
+            if frame.profile.twist != .windShove {
+                resetWind()
+            } else {
+                timeUntilWind = Float.random(in: 1.2...2.5)
+            }
+        }
+        applyPalette(frame.displayedPalette, telegraph: frame.telegraphStrength)
 
         let travel = speed * deltaTime
         speed = min(GameWorld.maxSpeed, speed + GameWorld.speedRampPerSecond * deltaTime)
 
-        // Distance score: +1 per meter traveled.
         distanceAccumulator += travel
         if distanceAccumulator >= 1 {
             let gained = Int(distanceAccumulator)
@@ -648,40 +1030,360 @@ final class GameWorld {
         }
 
         advanceEntities(by: travel)
+        updateFistLatches(deltaTime: deltaTime)
+        updateWind(deltaTime: deltaTime)
+        // Grab before hold-update so a newly closed hand can pick up this frame.
+        if activeSpawnProfile.twist == .crystalHalves {
+            tryGrabHalves()
+        }
+        updateHeldHalves(deltaTime: deltaTime)
+
         distanceUntilSpawn -= travel
         if distanceUntilSpawn <= 0 {
             spawnNextPattern()
-            distanceUntilSpawn = Float.random(in: GameWorld.spawnGapMin...GameWorld.spawnGapMax)
+            distanceUntilSpawn = Self.spawnGap(for: activeSpawnProfile)
         }
 
         resolveCollisions(gameModel: gameModel)
         pruneEntities()
     }
 
+    private static func spawnGap(for profile: EnvironmentProfile) -> Float {
+        switch profile.twist {
+        case .lowCrawl:
+            return Float.random(in: lowCrawlSpawnGapMin...lowCrawlSpawnGapMax)
+        case .baseline:
+            return Float.random(in: emberSpawnGapMin...emberSpawnGapMax)
+        default:
+            return Float.random(in: spawnGapMin...spawnGapMax)
+        }
+    }
+
+    private func updateFistLatches(deltaTime: Float) {
+        // Fist refreshes the hold latch. Confident open clears it immediately.
+        // Unknown drains slowly — full fists often lose tip tracking for a beat.
+        if leftIsFist {
+            leftFistLatch = GameWorld.fistLatchSeconds
+        } else if leftIsOpen {
+            leftFistLatch = 0
+        } else {
+            leftFistLatch = max(0, leftFistLatch - deltaTime * 0.65)
+        }
+        if rightIsFist {
+            rightFistLatch = GameWorld.fistLatchSeconds
+        } else if rightIsOpen {
+            rightFistLatch = 0
+        } else {
+            rightFistLatch = max(0, rightFistLatch - deltaTime * 0.65)
+        }
+    }
+
     private func advanceEntities(by travel: Float) {
         for wall in walls {
+            wall.previousZ = wall.entity.position.z
             wall.entity.position.z += travel
         }
         for coin in coins {
             coin.entity.position.z += travel
         }
+        for half in halves {
+            half.entity.position.z += travel
+        }
+    }
+
+    // MARK: - Wind (Storm Pass)
+
+    private func resetWind() {
+        windCurrentX = 0
+        windFromX = 0
+        windToX = 0
+        windElapsed = 0
+        windDurationActive = 0
+        windTelegraphRemaining = 0
+        pendingWindDirection = 0
+        windOffsetStep = 0
+        timeUntilWind = Float.random(in: GameWorld.windMinInterval...GameWorld.windMaxInterval)
+        gustEntity?.removeFromParent()
+        gustEntity = nil
+    }
+
+    private func updateWind(deltaTime: Float) {
+        guard activeSpawnProfile.twist == .windShove else { return }
+
+        // Warning phase: expand then shrink the other way; shove starts the instant the line is gone.
+        if windTelegraphRemaining > 0 {
+            windTelegraphRemaining = max(0, windTelegraphRemaining - deltaTime)
+            let warnProgress = 1 - (windTelegraphRemaining / GameWorld.windTelegraphSeconds)
+            updateGustVisual(progress: warnProgress)
+            if StormWind.gustLineDidDisappear(
+                progress: warnProgress,
+                expandFinishAt: GameWorld.gustExpandFinishAt
+            ) || windTelegraphRemaining <= 0 {
+                windTelegraphRemaining = 0
+                startWindDrift()
+            }
+            return
+        }
+
+        if windDurationActive > 0 {
+            windElapsed += deltaTime
+            let t = min(1, windElapsed / windDurationActive)
+            // Smoothstep for non-sudden box motion.
+            let smooth = t * t * (3 - 2 * t)
+            let newX = windFromX + (windToX - windFromX) * smooth
+            let deltaX = newX - windCurrentX
+            windCurrentX = newX
+            shiftDynamicBoxes(by: deltaX)
+            if t >= 1 {
+                windDurationActive = 0
+                windOffsetStep = StormWind.applyStep(
+                    offsetStep: windOffsetStep,
+                    direction: pendingWindDirection
+                )
+                pendingWindDirection = 0
+                timeUntilWind = Float.random(in: GameWorld.windMinInterval...GameWorld.windMaxInterval)
+            }
+            return
+        }
+
+        timeUntilWind -= deltaTime
+        if timeUntilWind <= 0 {
+            beginWindTelegraph()
+        }
+    }
+
+    private func beginWindTelegraph() {
+        // Only defer when a wall is already in the near hit band (not merely "on screen").
+        let imminent = walls.contains {
+            $0.entity.position.z > GameWorld.windDangerMinZ
+                && $0.entity.position.z < GameWorld.windDangerMaxZ
+        }
+        if imminent {
+            timeUntilWind = 0.35
+            return
+        }
+
+        pendingWindDirection = nextWindDirection()
+        windTelegraphRemaining = GameWorld.windTelegraphSeconds
+        spawnGustVisual(direction: pendingWindDirection)
+        GameSFX.shared.playWindWhoosh()
+    }
+
+    private func startWindDrift() {
+        // Warning line is gone — begin the slow shove with no leftover bar.
+        gustEntity?.removeFromParent()
+        gustEntity = nil
+        windFromX = windCurrentX
+        windToX = windCurrentX + pendingWindDirection * GameWorld.windMagnitude
+        windElapsed = 0
+        windDurationActive = GameWorld.windDuration
+    }
+
+    /// From center: left or right. From ±1: must return toward center (no left→left).
+    private func nextWindDirection() -> Float {
+        let preferred: Float?
+        if windOffsetStep == 0 {
+            preferred = windDirectionPreferringSafeGap()
+        } else {
+            preferred = nil
+        }
+        return StormWind.nextDirection(offsetStep: windOffsetStep, preferredFromGap: preferred)
+    }
+
+    private func windDirectionPreferringSafeGap() -> Float {
+        // Look at the nearest upcoming wall and shove away from its blocked center when possible.
+        let ahead = walls
+            .filter { $0.entity.position.z < -1.2 && $0.kind != .duck }
+            .sorted { $0.entity.position.z > $1.entity.position.z }
+        if let nearest = ahead.first {
+            let xs = nearest.worldSlabXs()
+            let blockedCenter = xs.reduce(0, +) / Float(xs.count)
+            if abs(blockedCenter) > 0.05 {
+                return blockedCenter > 0 ? -1 : 1
+            }
+        }
+        return Bool.random() ? 1 : -1
+    }
+
+    private func shiftDynamicBoxes(by deltaX: Float) {
+        guard abs(deltaX) > 0.0001 else { return }
+        for wall in walls {
+            wall.entity.position.x += deltaX
+        }
+        for coin in coins {
+            coin.entity.position.x += deltaX
+        }
+        for half in halves {
+            half.entity.position.x += deltaX
+        }
+    }
+
+    private func spawnGustVisual(direction: Float) {
+        gustEntity?.removeFromParent()
+        let gust = Entity()
+        gust.name = "windGust"
+        gust.position = SIMD3(0, GameWorld.gustBarY, GameWorld.gustBarZ)
+
+        // Unit-width bar; X scale + offset grow/shrink along the shove axis.
+        let mesh = MeshResource.generateBox(
+            width: 1,
+            height: GameWorld.gustBarHeight,
+            depth: GameWorld.gustBarDepth
+        )
+        let mat = UnlitMaterial(color: UIColor(red: 0.55, green: 0.75, blue: 1.0, alpha: 0.2))
+        let model = ModelEntity(mesh: mesh, materials: [mat])
+        model.name = "windGustBar"
+        gust.addChild(model)
+        root.addChild(gust)
+        gustEntity = gust
+        layoutGustBar(progress: 0, direction: direction)
+    }
+
+    private func updateGustVisual(progress: Float) {
+        layoutGustBar(progress: progress, direction: pendingWindDirection)
+    }
+
+    /// Expands toward the shove, then shrinks the other way (wipes onward in shove direction).
+    private func layoutGustBar(progress: Float, direction: Float) {
+        guard let model = gustEntity?.children.first as? ModelEntity else { return }
+
+        let layout = StormWind.gustBarLayout(
+            progress: progress,
+            expandFinishAt: GameWorld.gustExpandFinishAt,
+            direction: direction,
+            fullWidth: GameWorld.gustBarWidth
+        )
+
+        // Hide completely once collapsed so disappearance and shove share the same frame.
+        let visible = layout.width > 0.001
+        model.isEnabled = visible
+        if visible {
+            model.scale = SIMD3(layout.width, 1, 1)
+            model.position = SIMD3(layout.centerX, 0, 0)
+        }
+
+        let settle = CGFloat(min(1, layout.width / max(0.001, GameWorld.gustBarWidth)))
+        let pulse = 0.5 + 0.5 * sin(Double(progress) * .pi * 4)
+        let alpha = visible ? ((0.2 + 0.4 * settle) + 0.2 * pulse * settle) : 0
+        model.model?.materials = [
+            UnlitMaterial(color: UIColor(red: 0.55, green: 0.8, blue: 1.0, alpha: alpha))
+        ]
     }
 
     // MARK: - Spawning
 
     private func spawnNextPattern() {
-        // Always spawn a wall so there are no empty obstacle gaps.
-        let blocking = Self.randomWallLanes()
-        spawnWall(blocking: blocking)
+        let profile = activeSpawnProfile
 
-        // Often place a coin in a safe lane for reach variety.
+        switch profile.twist {
+        case .lowCrawl:
+            spawnLowCrawlPattern(profile: profile)
+        case .crystalHalves:
+            spawnCrystalCavePattern()
+        case .ghostWalls:
+            spawnGhostGlassPattern(profile: profile)
+        case .windShove:
+            spawnStormPattern(profile: profile)
+        case .fogVisibility, .baseline:
+            spawnStandardPattern(preferFairFog: profile.twist == .fogVisibility)
+        }
+    }
+
+    private func spawnStandardPattern(preferFairFog: Bool) {
+        let blocking = preferFairFog ? Self.fairFogWallLanes() : Self.randomWallLanes()
+        spawnWall(blocking: blocking, kind: .standard, profile: activeSpawnProfile)
+
         let safeLanes = Lane.allCases.filter { !blocking.contains($0) }
         if let coinLane = safeLanes.randomElement(), Float.random(in: 0...1) < 0.7 {
             spawnCoin(in: coinLane)
         }
     }
 
-    /// Random 1–2 lane blocks (never all three — always a dodge path).
+    /// Storm Pass: never spawn a wall in the lane the wind is shoving toward.
+    private func spawnStormPattern(profile: EnvironmentProfile) {
+        let rawPatterns = Self.stormWallLaneRawPatterns()
+        let chosen = StormWind.chooseWallLanes(
+            from: rawPatterns,
+            offsetStep: windOffsetStep,
+            pendingDirection: pendingWindDirection
+        )
+        let blocking = Set(chosen.compactMap { Lane(rawValue: $0) })
+        spawnWall(blocking: blocking, kind: .standard, profile: profile)
+
+        let safeLanes = Lane.allCases.filter { !blocking.contains($0) }
+        if let coinLane = safeLanes.randomElement(), Float.random(in: 0...1) < 0.7 {
+            spawnCoin(in: coinLane)
+        }
+    }
+
+    private func spawnGhostGlassPattern(profile: EnvironmentProfile) {
+        let blocking = Self.randomWallLanes()
+        // Every Ghost Glass wall is the white transparent ghost variant.
+        spawnWall(blocking: blocking, kind: .ghost, profile: profile)
+
+        let safeLanes = Lane.allCases.filter { !blocking.contains($0) }
+        if let coinLane = safeLanes.randomElement(), Float.random(in: 0...1) < 0.7 {
+            spawnCoin(in: coinLane)
+        }
+    }
+
+    private func spawnLowCrawlPattern(profile: EnvironmentProfile) {
+        if environmentDirector.isTeachingLowCrawl {
+            spawnDuckWall()
+            environmentDirector.noteDuckGateSpawned()
+            // Coin under the hanging ceiling — lowered so ducking still rewards grabs.
+            if Float.random(in: 0...1) < 0.7, let lane = Lane.allCases.randomElement() {
+                spawnCoin(in: lane, underCeiling: true)
+            }
+            return
+        }
+
+        if Float.random(in: 0...1) < profile.duckHazardChance {
+            // Occasional duck + simple single side wall, otherwise duck alone.
+            var blocked: Set<Lane> = []
+            if Float.random(in: 0...1) < 0.35 {
+                let side: Set<Lane> = Bool.random() ? [.left] : [.right]
+                blocked = side
+                spawnWall(blocking: side, kind: .standard, profile: profile)
+            }
+            spawnDuckWall()
+            let coinLanes = Lane.allCases.filter { !blocked.contains($0) }
+            if Float.random(in: 0...1) < 0.7, let lane = coinLanes.randomElement() {
+                spawnCoin(in: lane, underCeiling: true)
+            }
+        } else {
+            // No ceiling on this beat — normal standing coin height.
+            spawnStandardPattern(preferFairFog: false)
+        }
+    }
+
+    private func spawnCrystalCavePattern() {
+        // Prefer simpler / fewer walls while halves are in play.
+        let patterns: [Set<Lane>] = [
+            [.left], [.center], [.right],
+            [.left], [.right],
+            [.left, .right]
+        ]
+        let blocking = patterns.randomElement() ?? [.center]
+        spawnWall(blocking: blocking, kind: .standard, profile: activeSpawnProfile)
+
+        let safeLanes = Lane.allCases.filter { !blocking.contains($0) }
+        if let lane = safeLanes.randomElement(),
+           Float.random(in: 0...1) < GameWorld.crystalHalfSpawnChance {
+            spawnHalfCrystal(in: lane)
+        }
+    }
+
+    /// Avoid surprise double-blocks while Fog Hollow walls are harder to read.
+    private static func fairFogWallLanes() -> Set<Lane> {
+        let patterns: [Set<Lane>] = [
+            [.left], [.center], [.right],
+            [.left], [.center], [.right],
+            [.left, .right]
+        ]
+        return patterns.randomElement() ?? [.center]
+    }
+
     private static func randomWallLanes() -> Set<Lane> {
         let patterns: [Set<Lane>] = [
             [.left], [.center], [.right],
@@ -693,66 +1395,307 @@ final class GameWorld {
         return patterns.randomElement() ?? [.center]
     }
 
-    private func spawnWall(blocking lanes: Set<Lane>) {
+    /// Lane raw patterns for Storm (-1 left, 0 center, +1 right).
+    private static func stormWallLaneRawPatterns() -> [[Int]] {
+        [
+            [-1], [0], [1],
+            [-1], [0], [1],
+            [-1], [1],
+            [-1, 0], [0, 1], [-1, 1],
+            [-1, 1], [-1, 0], [0, 1]
+        ]
+    }
+
+    private func spawnWall(blocking lanes: Set<Lane>, kind: WallKind, profile: EnvironmentProfile) {
         let parent = Entity()
-        parent.position = SIMD3(0, GameWorld.wallHeight * 0.5, activeSpawnZ)
-        parent.name = "wall"
+        parent.position = SIMD3(windCurrentX, GameWorld.wallHeight * 0.5, activeSpawnZ)
+        parent.name = kind == .ghost ? "wallGhost" : "wall"
 
         var slabXs: [Float] = []
         for lane in lanes {
-            let slab = makeWallSlab()
-            slab.position = SIMD3(lane.x, 0, 0)
+            let x = Self.slabX(for: lane, blocking: lanes)
+            let slab = makeWallSlab(kind: kind, profile: profile)
+            slab.position = SIMD3(x, 0, 0)
             parent.addChild(slab)
-            slabXs.append(lane.x)
+            slabXs.append(x)
         }
 
         root.addChild(parent)
-        walls.append(WallItem(entity: parent, slabXs: slabXs))
+        walls.append(WallItem(entity: parent, localSlabXs: slabXs, kind: kind))
     }
 
-    /// Thick translucent placeholder slab (swap for a real model later).
-    private func makeWallSlab() -> Entity {
+    /// Adjacent double-lane blocks get a slight extra gap so they don't read as one slab.
+    private static func slabX(for lane: Lane, blocking: Set<Lane>) -> Float {
+        ObstacleLayout.slabLocalX(
+            laneRaw: lane.rawValue,
+            blockingLaneRaws: Set(blocking.map(\.rawValue)),
+            laneSpacing: laneSpacing,
+            adjacentSpread: adjacentPairSpread
+        )
+    }
+
+    private func spawnDuckWall() {
+        let parent = Entity()
+        // Center the hanging slab in the upper corridor band.
+        let centerY = GameWorld.duckClearanceY + GameWorld.duckSlabHeight * 0.5
+        parent.position = SIMD3(windCurrentX, centerY, activeSpawnZ)
+        parent.name = "wallDuck"
+
+        let mesh = MeshResource.generateBox(
+            width: GameWorld.duckSlabWidth,
+            height: GameWorld.duckSlabHeight,
+            depth: GameWorld.wallThickness * 0.85
+        )
+        let profile = activeSpawnProfile
+        let material = EnvironmentMaterials.wallBody(
+            tint: TintColor(r: 0.15, g: 0.55, b: 0.95, a: profile.palette.wallOpacity),
+            emissive: TintColor(r: 0.2, g: 0.7, b: 1.0, a: 1),
+            opacity: max(0.35, profile.palette.wallOpacity),
+            emissiveIntensity: 0.7
+        )
+        let body = ModelEntity(mesh: mesh, materials: [material])
+        body.name = "duckSlab"
+        parent.addChild(body)
+
+        root.addChild(parent)
+        walls.append(WallItem(entity: parent, localSlabXs: [0], kind: .duck))
+    }
+
+    private func makeWallSlab(kind: WallKind, profile: EnvironmentProfile) -> Entity {
         let bodyMesh = MeshResource.generateBox(
             width: GameWorld.wallWidth,
             height: GameWorld.wallHeight,
             depth: GameWorld.wallThickness
         )
-        let body = ModelEntity(mesh: bodyMesh, materials: [GameWorld.wallBodyMaterial])
+
+        let material: PhysicallyBasedMaterial
+        switch kind {
+        case .ghost:
+            // No Unlit rim — UnlitMaterial ignores alpha and was painting a solid white shell.
+            material = EnvironmentMaterials.ghostWallBody(opacity: profile.ghostWallOpacity)
+        case .standard, .duck:
+            material = EnvironmentMaterials.wallBody(
+                tint: profile.palette.wallTint,
+                emissive: profile.palette.wallEmissive,
+                opacity: profile.palette.wallOpacity,
+                emissiveIntensity: profile.palette.wallEmissiveIntensity
+            )
+        }
+
+        let body = ModelEntity(mesh: bodyMesh, materials: [material])
         body.name = "wallSlab"
         return body
     }
 
-    private static func makeWallBodyMaterial() -> any RealityKit.Material {
-        var material = PhysicallyBasedMaterial()
-        material.baseColor = .init(tint: UIColor(red: 0.95, green: 0.12, blue: 0.1, alpha: 0.42))
-        material.roughness = .init(floatLiteral: 0.35)
-        material.metallic = .init(floatLiteral: 0.05)
-        material.emissiveColor = .init(color: UIColor(red: 1.0, green: 0.18, blue: 0.12, alpha: 1.0))
-        material.emissiveIntensity = 0.55
-        material.blending = .transparent(opacity: .init(floatLiteral: 0.42))
-        return material
-    }
-
-    private func spawnCoin(in lane: Lane) {
+    private func spawnCoin(in lane: Lane, underCeiling: Bool = false) {
         let mesh = MeshResource.generateSphere(radius: GameWorld.coinRadius)
-        let material = SimpleMaterial(
-            color: UIColor(red: 1, green: 0.84, blue: 0.2, alpha: 1),
-            isMetallic: true
-        )
+        let material = EnvironmentMaterials.coin(activeSpawnProfile.palette.coinTint)
         let coin = ModelEntity(mesh: mesh, materials: [material])
-        // Mild outward offset — still a reach, but easier to snag mid-dodge.
         let outward: Float = lane == .center ? 0 : (lane.x > 0 ? GameWorld.coinOutwardOffset : -GameWorld.coinOutwardOffset)
-        coin.position = SIMD3(lane.x + outward, GameWorld.coinHeight, activeSpawnZ)
+        let height = underCeiling ? GameWorld.lowCrawlCoinHeight : GameWorld.coinHeight
+        coin.position = SIMD3(lane.x + outward + windCurrentX, height, activeSpawnZ)
         coin.name = "coin"
         root.addChild(coin)
         coins.append(CoinItem(entity: coin))
     }
 
+    private func spawnHalfCrystal(in lane: Lane) {
+        var rng = SystemRandomNumberGenerator()
+        let roll = CrystalCombine.makeHalf(rng: &rng)
+        let radius: Float = roll.charged ? 0.09 : 0.075
+        let mesh = MeshResource.generateSphere(radius: radius)
+        let material = EnvironmentMaterials.crystalHalf(type: roll.type, charged: roll.charged)
+        let entity = ModelEntity(mesh: mesh, materials: [material])
+        let outward: Float = lane == .center ? 0 : (lane.x > 0 ? GameWorld.coinOutwardOffset : -GameWorld.coinOutwardOffset)
+        entity.position = SIMD3(lane.x + outward + windCurrentX, GameWorld.coinHeight, activeSpawnZ)
+        entity.name = roll.charged ? "halfCrystalCharged" : "halfCrystal"
+        root.addChild(entity)
+        halves.append(HalfCrystalItem(entity: entity, type: roll.type, charged: roll.charged))
+    }
+
+    // MARK: - Crystal hold / merge
+
+    private func dropHeldHalves() {
+        heldLeft?.entity.removeFromParent()
+        heldRight?.entity.removeFromParent()
+        heldLeft = nil
+        heldRight = nil
+    }
+
+    private func updateHeldHalves(deltaTime: Float) {
+        if var held = heldLeft {
+            held.timeSinceGrab += deltaTime
+            let tracked = leftHandGripWorld != nil || !leftHandContactsWorld.isEmpty
+            if leftIsFist {
+                held.confirmedFist = true
+            }
+
+            let mustDrop: Bool
+            if !tracked {
+                mustDrop = true
+            } else if !held.confirmedFist {
+                // Proximity grab — need a real fist within the confirm window.
+                mustDrop = held.timeSinceGrab >= GameWorld.crystalGrabConfirmWindow
+            } else {
+                // Drop only on a confident open, or after the fist latch expires.
+                mustDrop = leftIsOpen || (!leftIsFist && leftFistLatch <= 0)
+            }
+
+            if mustDrop {
+                held.entity.removeFromParent()
+                heldLeft = nil
+            } else {
+                if let grip = leftHandGripWorld {
+                    held.entity.position = root.convert(position: grip, from: nil)
+                } else if let tip = leftHandContactsWorld.last {
+                    held.entity.position = root.convert(position: tip, from: nil)
+                }
+                heldLeft = held
+            }
+        }
+        if var held = heldRight {
+            held.timeSinceGrab += deltaTime
+            let tracked = rightHandGripWorld != nil || !rightHandContactsWorld.isEmpty
+            if rightIsFist {
+                held.confirmedFist = true
+            }
+
+            let mustDrop: Bool
+            if !tracked {
+                mustDrop = true
+            } else if !held.confirmedFist {
+                mustDrop = held.timeSinceGrab >= GameWorld.crystalGrabConfirmWindow
+            } else {
+                mustDrop = rightIsOpen || (!rightIsFist && rightFistLatch <= 0)
+            }
+
+            if mustDrop {
+                held.entity.removeFromParent()
+                heldRight = nil
+            } else {
+                if let grip = rightHandGripWorld {
+                    held.entity.position = root.convert(position: grip, from: nil)
+                } else if let tip = rightHandContactsWorld.last {
+                    held.entity.position = root.convert(position: tip, from: nil)
+                }
+                heldRight = held
+            }
+        }
+
+        guard let left = heldLeft, let right = heldRight else { return }
+        guard CrystalCombine.canMerge(left: left.type, right: right.type) else { return }
+
+        let leftPos = left.entity.position
+        let rightPos = right.entity.position
+        if distance(leftPos, rightPos) <= CrystalCombine.combineDistance {
+            let payout = CrystalCombine.mergePayout(
+                leftCharged: left.charged,
+                rightCharged: right.charged
+            )
+            left.entity.removeFromParent()
+            right.entity.removeFromParent()
+            heldLeft = nil
+            heldRight = nil
+            gameModel?.collectCoin(points: payout)
+            GameSFX.shared.playCoinCollect()
+        }
+    }
+
+    private func tryGrabHalves() {
+        guard activeSpawnProfile.twist == .crystalHalves else { return }
+
+        // Pickup is proximity-based. Holding requires a fist within one second;
+        // reopening the fist drops the half.
+        if heldLeft == nil {
+            let points = handPointsInRoot(leftHandContactsWorld, gripWorld: leftHandGripWorld)
+            if let index = nearestHalfIndex(toAnyOf: points) {
+                grabHalf(at: index, left: true)
+            }
+        }
+        if heldRight == nil {
+            let points = handPointsInRoot(rightHandContactsWorld, gripWorld: rightHandGripWorld)
+            if let index = nearestHalfIndex(toAnyOf: points) {
+                grabHalf(at: index, left: false)
+            }
+        }
+    }
+
+    private func handPointsInRoot(
+        _ contactsWorld: [SIMD3<Float>],
+        gripWorld: SIMD3<Float>?
+    ) -> [SIMD3<Float>] {
+        var points = contactsWorld.map { root.convert(position: $0, from: nil) }
+        if let gripWorld {
+            let grip = root.convert(position: gripWorld, from: nil)
+            if !points.contains(where: { distance($0, grip) < 0.01 }) {
+                points.append(grip)
+            }
+        }
+        return points
+    }
+
+    private func nearestHalfIndex(toAnyOf points: [SIMD3<Float>]) -> Int? {
+        guard !points.isEmpty else { return nil }
+        var bestIndex: Int?
+        var bestDistance = GameWorld.crystalCollectDistance
+        for (index, half) in halves.enumerated() {
+            guard !half.collected else { continue }
+            let halfPos = half.entity.position(relativeTo: root)
+            for point in points {
+                let d = distance(point, halfPos)
+                if d <= bestDistance {
+                    bestDistance = d
+                    bestIndex = index
+                }
+            }
+        }
+        return bestIndex
+    }
+
+    private func grabHalf(at index: Int, left: Bool) {
+        guard halves.indices.contains(index), !halves[index].collected else { return }
+        halves[index].collected = true
+        let source = halves[index]
+        source.entity.removeFromParent()
+
+        let mesh = MeshResource.generateSphere(radius: source.charged ? 0.08 : 0.065)
+        let heldEntity = ModelEntity(
+            mesh: mesh,
+            materials: [EnvironmentMaterials.crystalHalf(type: source.type, charged: source.charged)]
+        )
+        heldEntity.name = "heldHalf"
+        root.addChild(heldEntity)
+        var held = HeldHalf(type: source.type, charged: source.charged, entity: heldEntity)
+        if left {
+            if leftIsFist {
+                held.confirmedFist = true
+                leftFistLatch = GameWorld.fistLatchSeconds
+            }
+            if let grip = leftHandGripWorld {
+                held.entity.position = root.convert(position: grip, from: nil)
+            }
+            heldLeft = held
+        } else {
+            if rightIsFist {
+                held.confirmedFist = true
+                rightFistLatch = GameWorld.fistLatchSeconds
+            }
+            if let grip = rightHandGripWorld {
+                held.entity.position = root.convert(position: grip, from: nil)
+            }
+            heldRight = held
+        }
+    }
+
     // MARK: - Collisions
 
     private func resolveCollisions(gameModel: GameModel) {
-        let head = headAnchor.position(relativeTo: root)
-        // ARKit hand joints are world-space; convert into the locked playfield.
+        let head = playfieldHeadPosition()
+        // Also test a slightly lower "chin/neck" sample so tall duck slabs are harder to skim.
+        let headSamples = [
+            head,
+            SIMD3<Float>(head.x, head.y - 0.12, head.z)
+        ]
         let handsWorld = leftHandContactsWorld + rightHandContactsWorld
         let hands = handsWorld.map { root.convert(position: $0, from: nil) }
 
@@ -766,49 +1709,92 @@ final class GameWorld {
         )
         let handHalfDepth = halfDepth + GameWorld.handHitRadius
         let handHalfWidth = halfWidth + GameWorld.handHitRadius
+        let duckHalfWidth = GameWorld.duckSlabWidth * 0.5 - 0.05
 
         for wall in walls {
             guard !wall.hasResolvedHit else { continue }
             let wallZ = wall.entity.position.z
+            let previousZ = wall.previousZ
 
-            let headHit = WallCollision.pointHitsSlabs(
-                point: head,
-                wallZ: wallZ,
-                slabXs: wall.slabXs,
-                halfWidth: halfWidth,
-                halfDepth: halfDepth,
-                minY: GameWorld.headHitMinY,
-                maxY: GameWorld.headHitMaxY
-            )
-            let handHit = hands.contains { hand in
-                WallCollision.pointHitsSlabs(
-                    point: hand,
-                    wallZ: wallZ,
-                    slabXs: wall.slabXs,
-                    halfWidth: handHalfWidth,
-                    halfDepth: handHalfDepth,
-                    minY: GameWorld.handHitMinY,
-                    maxY: GameWorld.handHitMaxY
-                )
+            let hit: Bool
+            if wall.kind == .duck {
+                let centerX = wall.entity.position.x
+                let headHit = headSamples.contains { sample in
+                    WallCollision.pointHitsDuckBarrier(
+                        point: sample,
+                        wallZ: wallZ,
+                        previousWallZ: previousZ,
+                        centerX: centerX,
+                        halfWidth: duckHalfWidth,
+                        halfDepth: GameWorld.duckHitHalfDepth,
+                        clearanceY: GameWorld.duckClearanceY,
+                        maxY: GameWorld.headHitMaxY
+                    )
+                }
+                let handHit = hands.contains { hand in
+                    WallCollision.pointHitsDuckBarrier(
+                        point: hand,
+                        wallZ: wallZ,
+                        previousWallZ: previousZ,
+                        centerX: centerX,
+                        halfWidth: duckHalfWidth + GameWorld.handHitRadius,
+                        halfDepth: GameWorld.duckHitHalfDepth + GameWorld.handHitRadius,
+                        clearanceY: GameWorld.duckClearanceY,
+                        maxY: GameWorld.handHitMaxY
+                    )
+                }
+                hit = headHit || handHit
+            } else {
+                let slabXs = wall.worldSlabXs()
+                let headHit = headSamples.contains { sample in
+                    WallCollision.pointHitsSlabs(
+                        point: sample,
+                        wallZ: wallZ,
+                        previousWallZ: previousZ,
+                        slabXs: slabXs,
+                        halfWidth: halfWidth,
+                        halfDepth: halfDepth,
+                        minY: GameWorld.headHitMinY,
+                        maxY: GameWorld.headHitMaxY
+                    )
+                }
+                let handHit = hands.contains { hand in
+                    WallCollision.pointHitsSlabs(
+                        point: hand,
+                        wallZ: wallZ,
+                        previousWallZ: previousZ,
+                        slabXs: slabXs,
+                        halfWidth: handHalfWidth,
+                        halfDepth: handHalfDepth,
+                        minY: GameWorld.handHitMinY,
+                        maxY: GameWorld.handHitMaxY
+                    )
+                }
+                hit = headHit || handHit
             }
 
-            if headHit || handHit {
+            if hit {
                 wall.hasResolvedHit = true
                 GameSFX.shared.playWallHit()
+                dropHeldHalves()
                 gameModel.endRun()
                 return
             }
 
-            // Keep testing while any contact (including a forward-reaching hand)
-            // could still overlap the slab.
-            let farthestContactZ = hands.map(\.z).min().map { min($0, head.z) } ?? head.z
+            // Retire only after the slab clears the head. Using a forward hand Z here
+            // used to mark walls "passed" before the head could collide (bad for duck gates).
             if WallCollision.hasPassedContact(
                 wallZ: wallZ,
-                contactZ: farthestContactZ,
+                contactZ: head.z,
                 halfDepth: handHalfDepth
             ) {
                 wall.hasResolvedHit = true
             }
+        }
+
+        // Crystal grabs run in tick(); coins only apply outside Crystal Cave.
+        if activeSpawnProfile.twist == .crystalHalves {
+            return
         }
 
         guard !hands.isEmpty else { return }
@@ -837,6 +1823,14 @@ final class GameWorld {
             return false
         }
         coins.removeAll { item in
+            if item.collected { return true }
+            if item.entity.position.z > GameWorld.despawnZ {
+                item.entity.removeFromParent()
+                return true
+            }
+            return false
+        }
+        halves.removeAll { item in
             if item.collected { return true }
             if item.entity.position.z > GameWorld.despawnZ {
                 item.entity.removeFromParent()

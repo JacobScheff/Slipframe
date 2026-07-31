@@ -33,12 +33,14 @@ struct ImmersiveView: View {
                     .environmentObject(gameModel)
             }
         }
+        .preferredSurroundingsEffect(gameModel.prefersRoomDimming ? .dark : nil)
         .onAppear {
             gameModel.immersiveSpaceOpen = true
         }
         .onDisappear {
             gameModel.immersiveSpaceOpen = false
             gameModel.isPlaying = false
+            gameModel.prefersRoomDimming = false
             gameWorld.teardown()
         }
     }
