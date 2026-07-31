@@ -735,29 +735,16 @@ enum GameVisualBuilders {
         return flash
     }
 
-    /// Small burst of sparks for coin collects.
-    static func makeCollectBurst(at position: SIMD3<Float>, parent: Entity) -> [BurstSpark] {
-        var sparks: [BurstSpark] = []
-        let colors = [GamePalette.coinGoldHot, GamePalette.coinGold, GamePalette.neonCyanHot]
-        for i in 0..<10 {
-            let color = colors[i % colors.count]
-            let sphere = ModelEntity(
-                mesh: MeshResource.generateSphere(radius: Float.random(in: 0.012...0.028)),
-                materials: [GameMaterials.spark(color: color)]
-            )
-            sphere.position = position
-            parent.addChild(sphere)
-
-            let angle = Float(i) / 10.0 * (.pi * 2) + Float.random(in: -0.2...0.2)
-            let speed = Float.random(in: 0.9...1.6)
-            let velocity = SIMD3<Float>(
-                cos(angle) * speed,
-                Float.random(in: 0.4...1.2),
-                sin(angle) * speed * 0.35
-            )
-            sparks.append(BurstSpark(entity: sphere, velocity: velocity, age: 0, lifetime: 0.35))
-        }
-        return sparks
+    /// One collect-burst spark mesh. Prefer `VisualFXController` pooling at runtime —
+    /// mesh generation mid-tick hitchs the runner and freezes obstacle motion.
+    static func makeCollectSpark(color: UIColor, radius: Float) -> ModelEntity {
+        let sphere = ModelEntity(
+            mesh: MeshResource.generateSphere(radius: radius),
+            materials: [GameMaterials.spark(color: color)]
+        )
+        sphere.name = "collectSpark"
+        sphere.isEnabled = false
+        return sphere
     }
 }
 
@@ -770,9 +757,35 @@ struct BurstSpark {
     let lifetime: Float
 }
 
+/// Kinematics for a single collect-burst spark (pure; shared by pool spawn + tests).
+enum CollectBurstMotion {
+    static let sparkCount = 10
+    static let lifetime: Float = 0.35
+    static let colors: [UIColor] = [
+        GamePalette.coinGoldHot,
+        GamePalette.coinGold,
+        GamePalette.neonCyanHot
+    ]
+
+    static func velocity(index: Int) -> SIMD3<Float> {
+        let angle = Float(index) / Float(sparkCount) * (.pi * 2) + Float.random(in: -0.2...0.2)
+        let speed = Float.random(in: 0.9...1.6)
+        return SIMD3<Float>(
+            cos(angle) * speed,
+            Float.random(in: 0.4...1.2),
+            sin(angle) * speed * 0.35
+        )
+    }
+}
+
 @MainActor
 final class VisualFXController {
+    /// Enough for several overlapping collects without allocating meshes mid-run.
+    private static let poolCapacity = CollectBurstMotion.sparkCount * 8
+
     private var sparks: [BurstSpark] = []
+    private var sparkPool: [ModelEntity] = []
+    private var didWarmSparkPool = false
     private var hitFlash: Entity?
     private var hitFlashAge: Float = 0
     private let hitFlashLifetime: Float = 0.28
@@ -780,11 +793,17 @@ final class VisualFXController {
 
     func attach(to parent: Entity) {
         self.parent = parent
+        warmSparkPoolIfNeeded()
+    }
+
+    /// Pre-build spark meshes/materials so the first coin collect stays hitch-free.
+    func prepare() {
+        warmSparkPoolIfNeeded()
     }
 
     func clear() {
         for spark in sparks {
-            spark.entity.removeFromParent()
+            recycleSpark(spark.entity)
         }
         sparks.removeAll()
         hitFlash?.removeFromParent()
@@ -794,7 +813,27 @@ final class VisualFXController {
 
     func spawnCoinBurst(at position: SIMD3<Float>) {
         guard let parent else { return }
-        sparks.append(contentsOf: GameVisualBuilders.makeCollectBurst(at: position, parent: parent))
+        warmSparkPoolIfNeeded()
+
+        for i in 0..<CollectBurstMotion.sparkCount {
+            let color = CollectBurstMotion.colors[i % CollectBurstMotion.colors.count]
+            let sphere = acquireSpark(color: color)
+            sphere.position = position
+            sphere.scale = SIMD3(repeating: 1)
+            sphere.isEnabled = true
+            if sphere.parent !== parent {
+                parent.addChild(sphere)
+            }
+
+            sparks.append(
+                BurstSpark(
+                    entity: sphere,
+                    velocity: CollectBurstMotion.velocity(index: i),
+                    age: 0,
+                    lifetime: CollectBurstMotion.lifetime
+                )
+            )
+        }
     }
 
     func spawnHitFlash(near position: SIMD3<Float>) {
@@ -814,7 +853,7 @@ final class VisualFXController {
         for var spark in sparks {
             spark.age += deltaTime
             if spark.age >= spark.lifetime {
-                spark.entity.removeFromParent()
+                recycleSpark(spark.entity)
                 continue
             }
             spark.velocity.y -= 2.8 * deltaTime
@@ -839,6 +878,41 @@ final class VisualFXController {
                 flash.position.z += deltaTime * 0.2
                 _ = fade
             }
+        }
+    }
+
+    private func warmSparkPoolIfNeeded() {
+        guard !didWarmSparkPool else { return }
+        didWarmSparkPool = true
+        sparkPool.reserveCapacity(Self.poolCapacity)
+        for i in 0..<Self.poolCapacity {
+            let color = CollectBurstMotion.colors[i % CollectBurstMotion.colors.count]
+            let radius = Float.random(in: 0.012...0.028)
+            sparkPool.append(GameVisualBuilders.makeCollectSpark(color: color, radius: radius))
+        }
+    }
+
+    private func acquireSpark(color: UIColor) -> ModelEntity {
+        let sphere: ModelEntity
+        if let pooled = sparkPool.popLast() {
+            sphere = pooled
+        } else {
+            // Fallback keeps full burst visuals if overlapping collects exhaust the pool.
+            sphere = GameVisualBuilders.makeCollectSpark(
+                color: color,
+                radius: Float.random(in: 0.012...0.028)
+            )
+        }
+        sphere.model?.materials = [GameMaterials.spark(color: color)]
+        return sphere
+    }
+
+    private func recycleSpark(_ entity: Entity) {
+        entity.isEnabled = false
+        entity.removeFromParent()
+        entity.scale = SIMD3(repeating: 1)
+        if let model = entity as? ModelEntity {
+            sparkPool.append(model)
         }
     }
 }

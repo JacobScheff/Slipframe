@@ -17,6 +17,18 @@ import RealityKit
 import SwiftUI
 import UIKit
 
+/// Frame timing helpers for the runner tick.
+enum GameTiming {
+    /// Cap hitch frames so obstacles keep advancing instead of freezing.
+    static let maxGameplayDeltaTime: Float = 1.0 / 15.0
+
+    /// Returns nil when the frame should be ignored; otherwise a hitch-clamped delta.
+    static func clampedGameplayDelta(_ deltaTime: Float) -> Float? {
+        guard deltaTime > 0, deltaTime.isFinite else { return nil }
+        return min(deltaTime, maxGameplayDeltaTime)
+    }
+}
+
 @MainActor
 final class GameWorld {
     private enum Lane: Int, CaseIterable {
@@ -296,6 +308,8 @@ final class GameWorld {
         elapsedTime = 0
         GameMaterials.warmTextures()
         visualFX.attach(to: root)
+        // Pre-build collect-burst meshes so the first coin does not hitch the tick.
+        visualFX.prepare()
 
         if updateSubscription == nil {
             updateSubscription = content.subscribe(to: SceneEvents.Update.self) { [weak self] event in
@@ -520,6 +534,7 @@ final class GameWorld {
         distanceAccumulator = 0
         lastAdjacentDoubleOpenLaneRaw = nil
         patternSpawnZOffset = 0
+        visualFX.prepare()
         GameSFX.shared.prepare()
         GameMusic.shared.prepare()
     }
@@ -931,9 +946,10 @@ final class GameWorld {
             }
             return
         }
-        guard deltaTime > 0, deltaTime < 0.25 else { return }
+        // Clamp hitch frames instead of skipping them — a discarded tick freezes walls.
+        guard let dt = GameTiming.clampedGameplayDelta(deltaTime) else { return }
 
-        let frame = environmentDirector.update(deltaTime: deltaTime)
+        let frame = environmentDirector.update(deltaTime: dt)
         if frame.didEnterEnvironment {
             activeSpawnProfile = frame.profile
             dropHeldHalves()
@@ -945,8 +961,8 @@ final class GameWorld {
         }
         applyPalette(frame.displayedPalette, telegraph: frame.telegraphStrength)
 
-        let travel = speed * deltaTime
-        speed = min(GameWorld.maxSpeed, speed + GameWorld.speedRampPerSecond * deltaTime)
+        let travel = speed * dt
+        speed = min(GameWorld.maxSpeed, speed + GameWorld.speedRampPerSecond * dt)
 
         distanceAccumulator += travel
         if distanceAccumulator >= 1 {
@@ -956,13 +972,13 @@ final class GameWorld {
         }
 
         advanceEntities(by: travel)
-        updateFistLatches(deltaTime: deltaTime)
-        updateWind(deltaTime: deltaTime)
+        updateFistLatches(deltaTime: dt)
+        updateWind(deltaTime: dt)
         // Grab before hold-update so a newly closed hand can pick up this frame.
         if activeSpawnProfile.twist == .crystalHalves {
             tryGrabHalves()
         }
-        updateHeldHalves(deltaTime: deltaTime)
+        updateHeldHalves(deltaTime: dt)
 
         distanceUntilSpawn -= travel
         if distanceUntilSpawn <= 0 {

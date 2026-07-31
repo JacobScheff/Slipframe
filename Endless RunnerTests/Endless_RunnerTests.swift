@@ -596,6 +596,39 @@ final class Endless_RunnerTests: XCTestCase {
             XCTAssertFalse(rightShift.contains(1), "Right shove must not spawn a right wall: \(rightShift)")
         }
     }
+
+    func testGameplayDeltaClampsHitchFramesInsteadOfDiscarding() {
+        XCTAssertNil(GameTiming.clampedGameplayDelta(0))
+        XCTAssertNil(GameTiming.clampedGameplayDelta(-0.016))
+        XCTAssertNil(GameTiming.clampedGameplayDelta(.nan))
+
+        XCTAssertEqual(GameTiming.clampedGameplayDelta(1.0 / 90.0)!, 1.0 / 90.0, accuracy: 0.0001)
+        // Previously deltaTime >= 0.25 skipped the whole tick (walls froze).
+        XCTAssertEqual(
+            GameTiming.clampedGameplayDelta(0.30)!,
+            GameTiming.maxGameplayDeltaTime,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            GameTiming.clampedGameplayDelta(1.0)!,
+            GameTiming.maxGameplayDeltaTime,
+            accuracy: 0.0001
+        )
+    }
+
+    func testCollectBurstKeepsFullSparkCountAndLifetime() {
+        XCTAssertEqual(CollectBurstMotion.sparkCount, 10)
+        XCTAssertEqual(CollectBurstMotion.lifetime, 0.35, accuracy: 0.0001)
+        XCTAssertEqual(CollectBurstMotion.colors.count, 3)
+
+        for i in 0..<CollectBurstMotion.sparkCount {
+            let velocity = CollectBurstMotion.velocity(index: i)
+            XCTAssertTrue(velocity.x.isFinite)
+            XCTAssertTrue(velocity.y.isFinite)
+            XCTAssertTrue(velocity.z.isFinite)
+            XCTAssertGreaterThan(velocity.y, 0)
+        }
+    }
 }
 
 /// Deterministic RNG for spawn-rate tests.
