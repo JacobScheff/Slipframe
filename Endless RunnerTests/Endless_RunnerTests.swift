@@ -234,6 +234,15 @@ final class Endless_RunnerTests: XCTestCase {
         XCTAssertEqual(CrystalCombine.mergePayout(leftCharged: true, rightCharged: false), 100)
         XCTAssertEqual(CrystalCombine.mergePayout(leftCharged: false, rightCharged: true), 100)
         XCTAssertEqual(CrystalCombine.mergePayout(leftCharged: true, rightCharged: true), 10_000)
+        XCTAssertEqual(CrystalCombine.mergeCoinCount, 3)
+    }
+
+    func testCollectCoinCountOverride() {
+        let model = GameModel()
+        model.startRun()
+        model.collectCoin(points: 50, coinCount: CrystalCombine.mergeCoinCount)
+        XCTAssertEqual(model.coinsCollected, 3)
+        XCTAssertEqual(model.score, 50)
     }
 
     func testCrystalChargedSpawnRateAroundOnePercent() {
