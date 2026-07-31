@@ -1613,8 +1613,8 @@ final class GameWorld {
             heldLeft = nil
             heldRight = nil
             GameSFX.shared.playCoinCollect()
-            DispatchQueue.main.async {
-                gameModel?.collectCoin(points: payout)
+            DispatchQueue.main.async { [weak self] in
+                self?.gameModel?.collectCoin(points: payout)
             }
         }
     }
@@ -1831,7 +1831,7 @@ final class GameWorld {
                     coins[index].entity.isEnabled = false
                     let points = GameWorld.coinPoints
                     GameSFX.shared.playCoinCollect()
-                    DispatchQueue.main.async {
+                    DispatchQueue.main.async { [gameModel] in
                         gameModel.collectCoin(points: points)
                     }
                     break
