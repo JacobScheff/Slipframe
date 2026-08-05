@@ -63,11 +63,25 @@ enum LeaderboardBoard: Hashable, Identifiable {
         }
     }
 
-    /// Boards players can browse: Normal, every Loop biome, and today's Daily.
+    /// Compact label for board chips (avoids long Daily dates in the grid).
+    var chipTitle: String {
+        switch self {
+        case .normal:
+            return "Normal"
+        case .loop(let id):
+            return id.displayName
+        case .daily:
+            return "Daily"
+        }
+    }
+
+    /// Boards players can browse: Normal → Daily → each Loop biome.
     static func browseable(on date: Date = Date()) -> [LeaderboardBoard] {
-        var boards: [LeaderboardBoard] = [.normal]
+        var boards: [LeaderboardBoard] = [
+            .normal,
+            .daily(dayKey: DailyChallenge.dayKey(for: date))
+        ]
         boards.append(contentsOf: EnvironmentID.allCases.map { .loop($0) })
-        boards.append(.daily(dayKey: DailyChallenge.dayKey(for: date)))
         return boards
     }
 

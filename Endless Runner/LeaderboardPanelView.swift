@@ -25,29 +25,41 @@ struct LeaderboardPanelView: View {
         LeaderboardBoard.browseable()
     }
 
+    private let boardColumns = [
+        GridItem(.flexible(), spacing: 8),
+        GridItem(.flexible(), spacing: 8),
+        GridItem(.flexible(), spacing: 8),
+        GridItem(.flexible(), spacing: 8)
+    ]
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 0) {
             header
 
             metricPicker
+                .padding(.top, 18)
+                .padding(.bottom, 22)
 
-            audiencePicker
+            VStack(alignment: .leading, spacing: 12) {
+                audiencePicker
 
-            boardPicker
+                boardPicker
 
-            Divider().opacity(0.35)
+                Divider().opacity(0.35)
 
-            localBestRow
+                localBestRow
 
-            remoteBlock
+                remoteBlock
+            }
 
             Spacer(minLength: 0)
 
             footerNote
+                .padding(.top, 12)
         }
         .padding(.horizontal, 28)
         .padding(.vertical, 22)
-        .frame(width: 420, height: 520, alignment: .topLeading)
+        .frame(width: 620, height: 560, alignment: .topLeading)
         .background {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .strokeBorder(gold.opacity(0.4), lineWidth: 1.2)
@@ -113,18 +125,58 @@ struct LeaderboardPanelView: View {
         }
     }
 
+    /// Primary Score / Coins sections — large, visual, spaced away from filters below.
     private var metricPicker: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 12) {
             ForEach(LeaderboardMetric.allCases) { option in
-                pickerButton(
-                    title: option.title,
-                    selected: metric == option,
-                    accent: accent(for: option)
-                ) {
-                    metric = option
-                }
+                metricSectionButton(option)
             }
         }
+    }
+
+    private func metricSectionButton(_ option: LeaderboardMetric) -> some View {
+        let selected = metric == option
+        let color = accent(for: option)
+
+        return Button {
+            metric = option
+        } label: {
+            VStack(spacing: 8) {
+                Image(systemName: metricSymbol(for: option))
+                    .font(.system(size: 26, weight: .semibold))
+                    .foregroundStyle(selected ? color : color.opacity(0.55))
+                    .symbolRenderingMode(.hierarchical)
+
+                Text(option.title.uppercased())
+                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .tracking(1.6)
+                    .foregroundStyle(selected ? color : .secondary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 18)
+            .background {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: selected
+                                ? [color.opacity(0.28), color.opacity(0.1)]
+                                : [Color.white.opacity(0.07), Color.white.opacity(0.03)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .strokeBorder(
+                                selected ? color.opacity(0.85) : Color.white.opacity(0.12),
+                                lineWidth: selected ? 1.6 : 1
+                            )
+                    }
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(option.title)
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     private var audiencePicker: some View {
@@ -142,31 +194,32 @@ struct LeaderboardPanelView: View {
     }
 
     private var boardPicker: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(boards) { board in
-                    let selected = selectedBoard == board
-                    Button {
-                        selectedBoard = board
-                    } label: {
-                        Text(board.title)
-                            .font(.system(size: 14, weight: selected ? .bold : .medium, design: .rounded))
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 7)
-                            .background {
-                                Capsule(style: .continuous)
-                                    .fill(selected ? gold.opacity(0.22) : Color.white.opacity(0.06))
-                            }
-                            .overlay {
-                                Capsule(style: .continuous)
-                                    .strokeBorder(
-                                        selected ? gold.opacity(0.7) : Color.white.opacity(0.12),
-                                        lineWidth: 1
-                                    )
-                            }
-                    }
-                    .buttonStyle(.plain)
+        LazyVGrid(columns: boardColumns, spacing: 8) {
+            ForEach(boards) { board in
+                let selected = selectedBoard == board
+                Button {
+                    selectedBoard = board
+                } label: {
+                    Text(board.chipTitle)
+                        .font(.system(size: 13, weight: selected ? .bold : .medium, design: .rounded))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 9)
+                        .frame(maxWidth: .infinity)
+                        .background {
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(selected ? gold.opacity(0.22) : Color.white.opacity(0.06))
+                        }
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .strokeBorder(
+                                    selected ? gold.opacity(0.7) : Color.white.opacity(0.12),
+                                    lineWidth: 1
+                                )
+                        }
                 }
+                .buttonStyle(.plain)
             }
         }
     }
@@ -282,7 +335,7 @@ struct LeaderboardPanelView: View {
             Text(title)
                 .font(.system(size: 14, weight: selected ? .bold : .medium, design: .rounded))
                 .padding(.horizontal, 12)
-                .padding(.vertical, 7)
+                .padding(.vertical, 8)
                 .frame(maxWidth: .infinity)
                 .background {
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -305,6 +358,13 @@ struct LeaderboardPanelView: View {
         switch metric {
         case .score: return neon
         case .coins: return gold
+        }
+    }
+
+    private func metricSymbol(for metric: LeaderboardMetric) -> String {
+        switch metric {
+        case .score: return "flag.checkered"
+        case .coins: return "circle.circle.fill"
         }
     }
 

@@ -144,16 +144,21 @@ final class Endless_RunnerTests: XCTestCase {
 
     func testLeaderboardBoardBrowseableAndMatching() {
         let boards = LeaderboardBoard.browseable()
+        let dayKey = DailyChallenge.dayKey()
         XCTAssertEqual(boards.first, .normal)
-        XCTAssertEqual(boards.count, 1 + EnvironmentID.allCases.count + 1)
-        XCTAssertEqual(boards.last, .daily(dayKey: DailyChallenge.dayKey()))
+        XCTAssertEqual(boards.dropFirst().first, .daily(dayKey: dayKey))
+        XCTAssertEqual(
+            Array(boards.dropFirst(2)),
+            EnvironmentID.allCases.map { LeaderboardBoard.loop($0) }
+        )
+        XCTAssertEqual(boards.count, 1 + 1 + EnvironmentID.allCases.count)
 
         XCTAssertEqual(LeaderboardBoard.matching(.normal)?.categoryKey, "normal")
         XCTAssertEqual(LeaderboardBoard.matching(.solo(.stormPass))?.categoryKey, "stormPass")
         XCTAssertNil(LeaderboardBoard.matching(.playlist(environments: [.emberRun], start: nil)))
         XCTAssertEqual(
             LeaderboardBoard.matching(.daily)?.categoryKey,
-            "daily.\(DailyChallenge.dayKey())"
+            "daily.\(dayKey)"
         )
     }
 
