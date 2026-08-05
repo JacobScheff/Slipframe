@@ -21,6 +21,9 @@ final class GameModel: ObservableObject {
     /// HUD metrics — do not mark these `@Published` on `GameModel` itself.
     let stats = RunStats()
 
+    /// Local personal bests for Normal / Loop / Daily. Observed separately by the leaderboard panel.
+    let personalBests: PersonalBestStore
+
     @Published var isPlaying: Bool = false
     @Published var isGameOver: Bool = false
     @Published var immersiveSpaceOpen: Bool = false
@@ -38,6 +41,13 @@ final class GameModel: ObservableObject {
 
     /// Bumped on each restart so the immersive session can reset its world.
     @Published private(set) var runID: Int = 0
+
+    /// Which metrics improved on the most recent finished run (nil if playlist / no board).
+    @Published private(set) var lastPersonalBestUpdate: PersonalBestUpdate?
+
+    init(personalBests: PersonalBestStore = PersonalBestStore()) {
+        self.personalBests = personalBests
+    }
 
     /// Convenience accessors for gameplay / tests (not `@Published` on this object).
     var score: Int {
@@ -82,6 +92,7 @@ final class GameModel: ObservableObject {
         isGameOver = false
         isPlaying = true
         prefersRoomDimming = false
+        lastPersonalBestUpdate = nil
         runID += 1
     }
 
@@ -101,5 +112,19 @@ final class GameModel: ObservableObject {
         isPlaying = false
         isGameOver = true
         prefersRoomDimming = false
+        recordPersonalBestsIfNeeded()
+    }
+
+    /// Persists score/coin bests for Normal, Loop, and Daily. Playlists stay off the board.
+    private func recordPersonalBestsIfNeeded() {
+        guard let category = resolvedPlayMode.leaderboardCategory else {
+            lastPersonalBestUpdate = nil
+            return
+        }
+        lastPersonalBestUpdate = personalBests.record(
+            category: category,
+            score: stats.score,
+            coins: stats.coinsCollected
+        )
     }
 }

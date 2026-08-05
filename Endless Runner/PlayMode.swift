@@ -72,13 +72,8 @@ enum PlayMode: Equatable {
         }
     }
 
-    /// Leaderboard category key (no playlist — those are local-only later).
+    /// Leaderboard category key. Playlists stay off the board.
     var leaderboardCategory: String? {
-        switch self {
-        case .normal: return "normal"
-        case .solo(let id): return id.rawValue
-        case .playlist: return nil
-        case .daily: return "daily.\(DailyChallenge.dayKey())"
-        }
+        LeaderboardBoard.matching(self)?.categoryKey
     }
 }

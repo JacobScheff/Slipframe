@@ -45,6 +45,8 @@ struct ImmersiveView: View {
             }
             Attachment(id: ImmersiveAttachmentID.leaderboard.rawValue) {
                 LeaderboardPanelView()
+                    .environmentObject(gameModel)
+                    .environmentObject(gameModel.personalBests)
                     .opacity(showSidePanels ? 1 : 0)
                     .allowsHitTesting(showSidePanels)
             }

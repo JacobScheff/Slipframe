@@ -53,7 +53,7 @@ final class Endless_RunnerTests: XCTestCase {
     }
 
     func testEndRunStopsPlayback() {
-        let model = GameModel()
+        let model = makeIsolatedGameModel()
         model.startRun()
         model.addScore(5)
         model.collectCoin()
@@ -64,6 +64,97 @@ final class Endless_RunnerTests: XCTestCase {
         XCTAssertTrue(model.isGameOver)
         XCTAssertEqual(model.score, 5)
         XCTAssertEqual(model.coinsCollected, 1)
+    }
+
+    func testPersonalBestStoreRecordsIndependentScoreAndCoinBests() {
+        let store = makeIsolatedBestStore()
+        let first = store.record(category: "normal", score: 100, coins: 3)
+        XCTAssertTrue(first.scoreImproved)
+        XCTAssertTrue(first.coinsImproved)
+        XCTAssertEqual(store.best(for: "normal"), PersonalBest(bestScore: 100, bestCoins: 3))
+
+        let scoreOnly = store.record(category: "normal", score: 150, coins: 1)
+        XCTAssertTrue(scoreOnly.scoreImproved)
+        XCTAssertFalse(scoreOnly.coinsImproved)
+        XCTAssertEqual(store.best(for: "normal"), PersonalBest(bestScore: 150, bestCoins: 3))
+
+        let coinsOnly = store.record(category: "normal", score: 120, coins: 8)
+        XCTAssertFalse(coinsOnly.scoreImproved)
+        XCTAssertTrue(coinsOnly.coinsImproved)
+        XCTAssertEqual(store.best(for: "normal"), PersonalBest(bestScore: 150, bestCoins: 8))
+
+        let noChange = store.record(category: "normal", score: 150, coins: 8)
+        XCTAssertFalse(noChange.anyImproved)
+    }
+
+    func testPersonalBestStorePersistsAcrossInstances() {
+        let suite = "test.personalBests.persist.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let writer = PersonalBestStore(defaults: defaults, storageKey: suite)
+        writer.record(category: "emberRun", score: 88, coins: 4)
+
+        let reader = PersonalBestStore(defaults: defaults, storageKey: suite)
+        XCTAssertEqual(reader.best(for: "emberRun"), PersonalBest(bestScore: 88, bestCoins: 4))
+    }
+
+    func testEndRunRecordsBestsForNormalLoopAndDailyButNotPlaylist() {
+        let store = makeIsolatedBestStore()
+        let model = GameModel(personalBests: store)
+
+        model.playKind = .normal
+        model.startRun()
+        model.addScore(40)
+        model.collectCoin(count: 2)
+        model.endRun()
+        XCTAssertEqual(store.best(for: "normal"), PersonalBest(bestScore: 40, bestCoins: 2))
+        XCTAssertEqual(model.lastPersonalBestUpdate, PersonalBestUpdate(scoreImproved: true, coinsImproved: true))
+
+        model.playKind = .solo
+        model.soloEnvironment = .crystalCave
+        model.startRun()
+        XCTAssertNil(model.lastPersonalBestUpdate)
+        model.addScore(12)
+        model.collectCoin(count: 5)
+        model.endRun()
+        XCTAssertEqual(store.best(for: "crystalCave"), PersonalBest(bestScore: 12, bestCoins: 5))
+        XCTAssertEqual(store.best(for: "normal").bestScore, 40)
+        XCTAssertEqual(store.best(for: "fogHollow").bestScore, 0)
+
+        model.playKind = .daily
+        model.startRun()
+        model.addScore(7)
+        model.collectCoin()
+        model.endRun()
+        let dailyKey = "daily.\(DailyChallenge.dayKey())"
+        XCTAssertEqual(store.best(for: dailyKey), PersonalBest(bestScore: 7, bestCoins: 1))
+
+        model.playKind = .playlist
+        model.playlistEnvironments = [.emberRun]
+        model.startRun()
+        model.addScore(999)
+        model.collectCoin(count: 99)
+        model.endRun()
+        XCTAssertNil(model.lastPersonalBestUpdate)
+        XCTAssertNil(PlayMode.playlist(environments: [.emberRun], start: nil).leaderboardCategory)
+        XCTAssertEqual(store.best(for: "normal").bestScore, 40)
+        XCTAssertEqual(store.best(for: dailyKey).bestScore, 7)
+    }
+
+    func testLeaderboardBoardBrowseableAndMatching() {
+        let boards = LeaderboardBoard.browseable()
+        XCTAssertEqual(boards.first, .normal)
+        XCTAssertEqual(boards.count, 1 + EnvironmentID.allCases.count + 1)
+        XCTAssertEqual(boards.last, .daily(dayKey: DailyChallenge.dayKey()))
+
+        XCTAssertEqual(LeaderboardBoard.matching(.normal)?.categoryKey, "normal")
+        XCTAssertEqual(LeaderboardBoard.matching(.solo(.stormPass))?.categoryKey, "stormPass")
+        XCTAssertNil(LeaderboardBoard.matching(.playlist(environments: [.emberRun], start: nil)))
+        XCTAssertEqual(
+            LeaderboardBoard.matching(.daily)?.categoryKey,
+            "daily.\(DailyChallenge.dayKey())"
+        )
     }
 
     func testCenterSlabDoesNotHitDodgedHead() {
@@ -917,6 +1008,19 @@ final class Endless_RunnerTests: XCTestCase {
 
         _ = gameModelWatch
         _ = statsWatch
+    }
+
+    // MARK: - Helpers
+
+    private func makeIsolatedBestStore() -> PersonalBestStore {
+        let suite = "test.personalBests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        return PersonalBestStore(defaults: defaults, storageKey: suite)
+    }
+
+    private func makeIsolatedGameModel() -> GameModel {
+        GameModel(personalBests: makeIsolatedBestStore())
     }
 }
 

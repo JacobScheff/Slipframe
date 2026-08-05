@@ -147,6 +147,18 @@ struct PlayHUDView: View {
 
     private var statusText: String {
         if gameModel.isGameOver {
+            if let update = gameModel.lastPersonalBestUpdate, update.anyImproved {
+                switch (update.scoreImproved, update.coinsImproved) {
+                case (true, true):
+                    return "New personal best — score and coins! Check the board on the right."
+                case (true, false):
+                    return "New personal best score — check the board on the right."
+                case (false, true):
+                    return "New personal best coins — check the board on the right."
+                case (false, false):
+                    break
+                }
+            }
             return "Hit a wall — tweak mode on the left, or go again."
         }
         if gameModel.isPlaying {
