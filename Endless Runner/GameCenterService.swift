@@ -227,11 +227,11 @@ final class GameCenterService: NSObject, ObservableObject, GameCenterSubmitting 
                 return
             }
 
-            let end = max(1, count)
+            let length = max(1, count)
             let (localEntry, entries, _) = try await leaderboard.loadEntries(
                 for: audience.playerScope,
                 timeScope: .allTime,
-                range: 1...end
+                range: NSRange(location: 1, length: length)
             )
 
             if Task.isCancelled { return }
