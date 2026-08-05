@@ -34,7 +34,7 @@ enum LeaderboardAudience: String, CaseIterable, Identifiable {
     var playerScope: GKLeaderboard.PlayerScope {
         switch self {
         case .allPlayers: return .global
-        case .friends: return .friends
+        case .friends: return .friendsOnly
         }
     }
 }
