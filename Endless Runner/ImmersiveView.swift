@@ -47,6 +47,7 @@ struct ImmersiveView: View {
                 LeaderboardPanelView()
                     .environmentObject(gameModel)
                     .environmentObject(gameModel.personalBests)
+                    .environmentObject(gameModel.gameCenter)
                     .opacity(showSidePanels ? 1 : 0)
                     .allowsHitTesting(showSidePanels)
             }
@@ -54,6 +55,7 @@ struct ImmersiveView: View {
         .preferredSurroundingsEffect(gameModel.prefersRoomDimming ? .dark : nil)
         .onAppear {
             gameModel.immersiveSpaceOpen = true
+            gameModel.gameCenter.start()
         }
         .onDisappear {
             gameModel.immersiveSpaceOpen = false

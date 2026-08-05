@@ -17,6 +17,11 @@ struct Endless_RunnerApp: App {
         ImmersiveSpace(id: "RunnerSpace") {
             ImmersiveView()
                 .environmentObject(gameModel)
+                .environmentObject(gameModel.personalBests)
+                .environmentObject(gameModel.gameCenter)
+                .onAppear {
+                    gameModel.gameCenter.start()
+                }
         }
         .immersionStyle(selection: $immersionState, in: .mixed)
     }

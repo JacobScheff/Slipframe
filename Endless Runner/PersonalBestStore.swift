@@ -3,7 +3,7 @@
 //  Endless Runner
 //
 //  Local personal bests per leaderboard category (Normal, each Loop biome, Daily).
-//  Game Center submission is intentionally separate and still deferred.
+//  Game Center submission / remote loads live in GameCenterService.
 //
 
 import Foundation

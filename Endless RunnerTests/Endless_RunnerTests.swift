@@ -157,6 +157,60 @@ final class Endless_RunnerTests: XCTestCase {
         )
     }
 
+    func testGameCenterLeaderboardIDsAreStable() {
+        XCTAssertEqual(
+            GameCenterLeaderboardID.identifier(metric: .score, board: .normal),
+            "score.normal"
+        )
+        XCTAssertEqual(
+            GameCenterLeaderboardID.identifier(metric: .coins, board: .loop(.crystalCave)),
+            "coins.crystalCave"
+        )
+        // Daily ASC boards are recurring — day key is not part of the ID.
+        XCTAssertEqual(
+            GameCenterLeaderboardID.identifier(metric: .score, board: .daily(dayKey: "2026-08-05")),
+            "score.daily"
+        )
+        XCTAssertEqual(
+            GameCenterLeaderboardID.identifier(metric: .coins, board: .daily(dayKey: "2099-01-01")),
+            "coins.daily"
+        )
+        XCTAssertEqual(GameCenterLeaderboardID.allConfiguredIDs.count, 16)
+        XCTAssertTrue(Set(GameCenterLeaderboardID.allConfiguredIDs).count == 16)
+    }
+
+    func testEndRunSubmitsScoreAndCoinsToGameCenterExceptPlaylist() {
+        let store = makeIsolatedBestStore()
+        let submitter = MockGameCenterSubmitter()
+        let model = GameModel(personalBests: store, scoreSubmitter: submitter)
+
+        model.playKind = .normal
+        model.startRun()
+        model.addScore(33)
+        model.collectCoin(count: 4)
+        model.endRun()
+        XCTAssertEqual(submitter.submissions.count, 1)
+        XCTAssertEqual(submitter.submissions[0].board, .normal)
+        XCTAssertEqual(submitter.submissions[0].score, 33)
+        XCTAssertEqual(submitter.submissions[0].coins, 4)
+
+        model.playKind = .solo
+        model.soloEnvironment = .emberRun
+        model.startRun()
+        model.addScore(10)
+        model.endRun()
+        XCTAssertEqual(submitter.submissions.count, 2)
+        XCTAssertEqual(submitter.submissions[1].board, .loop(.emberRun))
+
+        model.playKind = .playlist
+        model.playlistEnvironments = [.fogHollow]
+        model.startRun()
+        model.addScore(500)
+        model.collectCoin(count: 50)
+        model.endRun()
+        XCTAssertEqual(submitter.submissions.count, 2, "Playlist runs must not submit")
+    }
+
     func testCenterSlabDoesNotHitDodgedHead() {
         let halfWidth = WallCollision.halfWidth(visualWidth: 0.7, inset: 0.12)
         let halfDepth = WallCollision.halfDepth(visualThickness: 0.7)
@@ -1020,7 +1074,25 @@ final class Endless_RunnerTests: XCTestCase {
     }
 
     private func makeIsolatedGameModel() -> GameModel {
-        GameModel(personalBests: makeIsolatedBestStore())
+        GameModel(
+            personalBests: makeIsolatedBestStore(),
+            scoreSubmitter: MockGameCenterSubmitter()
+        )
+    }
+}
+
+@MainActor
+private final class MockGameCenterSubmitter: GameCenterSubmitting {
+    struct Submission: Equatable {
+        let board: LeaderboardBoard
+        let score: Int
+        let coins: Int
+    }
+
+    private(set) var submissions: [Submission] = []
+
+    func submitRun(board: LeaderboardBoard, score: Int, coins: Int) {
+        submissions.append(Submission(board: board, score: score, coins: coins))
     }
 }
 

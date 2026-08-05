@@ -24,6 +24,10 @@ final class GameModel: ObservableObject {
     /// Local personal bests for Normal / Loop / Daily. Observed separately by the leaderboard panel.
     let personalBests: PersonalBestStore
 
+    /// Game Center submit/load. Tests may override submission via `scoreSubmitter`.
+    let gameCenter: GameCenterService
+    private let scoreSubmitterOverride: (any GameCenterSubmitting)?
+
     @Published var isPlaying: Bool = false
     @Published var isGameOver: Bool = false
     @Published var immersiveSpaceOpen: Bool = false
@@ -45,8 +49,19 @@ final class GameModel: ObservableObject {
     /// Which metrics improved on the most recent finished run (nil if playlist / no board).
     @Published private(set) var lastPersonalBestUpdate: PersonalBestUpdate?
 
-    init(personalBests: PersonalBestStore = PersonalBestStore()) {
+    init(
+        personalBests: PersonalBestStore = PersonalBestStore(),
+        gameCenter: GameCenterService = GameCenterService(),
+        scoreSubmitter: (any GameCenterSubmitting)? = nil
+    ) {
         self.personalBests = personalBests
+        self.gameCenter = gameCenter
+        self.scoreSubmitterOverride = scoreSubmitter
+        gameCenter.attachPersonalBests(personalBests)
+    }
+
+    private var activeScoreSubmitter: any GameCenterSubmitting {
+        scoreSubmitterOverride ?? gameCenter
     }
 
     /// Convenience accessors for gameplay / tests (not `@Published` on this object).
@@ -115,16 +130,17 @@ final class GameModel: ObservableObject {
         recordPersonalBestsIfNeeded()
     }
 
-    /// Persists score/coin bests for Normal, Loop, and Daily. Playlists stay off the board.
+    /// Persists local bests and submits to Game Center for Normal, Loop, and Daily.
     private func recordPersonalBestsIfNeeded() {
-        guard let category = resolvedPlayMode.leaderboardCategory else {
+        guard let board = LeaderboardBoard.matching(resolvedPlayMode) else {
             lastPersonalBestUpdate = nil
             return
         }
         lastPersonalBestUpdate = personalBests.record(
-            category: category,
+            category: board.categoryKey,
             score: stats.score,
             coins: stats.coinsCollected
         )
+        scoreSubmitter?.submitRun(board: board, score: stats.score, coins: stats.coinsCollected)
     }
 }

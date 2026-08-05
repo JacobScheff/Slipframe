@@ -34,6 +34,8 @@
 		B01A10292C72000100A00029 /* LevelSelectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A10282C72000100A00028 /* LevelSelectView.swift */; };
 		B01A102B2C72000100A0002B /* LeaderboardPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A102A2C72000100A0002A /* LeaderboardPanelView.swift */; };
 		B01A102D2C72000100A0002D /* PersonalBestStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A102C2C72000100A0002C /* PersonalBestStore.swift */; };
+		B01A102F2C72000100A0002F /* GameCenterService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A102E2C72000100A0002E /* GameCenterService.swift */; };
+		B01A10312C72000100A00031 /* GameKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B01A10302C72000100A00030 /* GameKit.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -77,6 +79,9 @@
 		B01A10282C72000100A00028 /* LevelSelectView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LevelSelectView.swift; sourceTree = "<group>"; };
 		B01A102A2C72000100A0002A /* LeaderboardPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LeaderboardPanelView.swift; sourceTree = "<group>"; };
 		B01A102C2C72000100A0002C /* PersonalBestStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalBestStore.swift; sourceTree = "<group>"; };
+		B01A102E2C72000100A0002E /* GameCenterService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameCenterService.swift; sourceTree = "<group>"; };
+		B01A10302C72000100A00030 /* GameKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = GameKit.framework; path = System/Library/Frameworks/GameKit.framework; sourceTree = SDKROOT; };
+		B01A10322C72000100A00032 /* Endless_Runner.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Endless_Runner.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -85,6 +90,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				3AFD51F82C52E2EE0022AE11 /* ARKit.framework in Frameworks */,
+				B01A10312C72000100A00031 /* GameKit.framework in Frameworks */,
 				3A9B45272C503B710080BBBE /* RealityKitContent in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -141,11 +147,13 @@
 				B01A10282C72000100A00028 /* LevelSelectView.swift */,
 				B01A102A2C72000100A0002A /* LeaderboardPanelView.swift */,
 				B01A102C2C72000100A0002C /* PersonalBestStore.swift */,
+				B01A102E2C72000100A0002E /* GameCenterService.swift */,
 				B01A10062C72000100A00007 /* PlayHUDView.swift */,
 				B01A10082C72000100A00009 /* GameSFX.swift */,
 				B01A10202C72000100A00020 /* Music */,
 				3A9B452E2C503B7D0080BBBE /* Assets.xcassets */,
 				3A9B45332C503B7D0080BBBE /* Info.plist */,
+				B01A10322C72000100A00032 /* Endless_Runner.entitlements */,
 				3A9B45302C503B7D0080BBBE /* Preview Content */,
 			);
 			path = "Endless Runner";
@@ -179,6 +187,7 @@
 			isa = PBXGroup;
 			children = (
 				3AFD51F72C52E2ED0022AE11 /* ARKit.framework */,
+				B01A10302C72000100A00030 /* GameKit.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -305,6 +314,7 @@
 				B01A10292C72000100A00029 /* LevelSelectView.swift in Sources */,
 				B01A102B2C72000100A0002B /* LeaderboardPanelView.swift in Sources */,
 				B01A102D2C72000100A0002D /* PersonalBestStore.swift in Sources */,
+				B01A102F2C72000100A0002F /* GameCenterService.swift in Sources */,
 				B01A10072C72000100A00008 /* PlayHUDView.swift in Sources */,
 				B01A10092C72000100A0000A /* GameSFX.swift in Sources */,
 				3A9B45292C503B710080BBBE /* Endless_RunnerApp.swift in Sources */,
@@ -454,6 +464,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "Endless Runner/Endless_Runner.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"Endless Runner/Preview Content\"";
@@ -481,6 +492,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "Endless Runner/Endless_Runner.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"Endless Runner/Preview Content\"";

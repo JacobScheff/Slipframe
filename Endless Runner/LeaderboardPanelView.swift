@@ -2,18 +2,21 @@
 //  LeaderboardPanelView.swift
 //  Endless Runner
 //
-//  Right-track local personal bests for Normal, each Loop biome, and Daily.
-//  Game Center (All Players / Friends) is deferred until wired up separately.
+//  Right-track leaderboard: local personal bests always, plus Game Center
+//  All Players / Friends when signed in.
 //
 
 import SwiftUI
+import UIKit
 
 struct LeaderboardPanelView: View {
     @EnvironmentObject private var gameModel: GameModel
     @EnvironmentObject private var personalBests: PersonalBestStore
+    @EnvironmentObject private var gameCenter: GameCenterService
 
     @State private var selectedBoard: LeaderboardBoard = .normal
     @State private var metric: LeaderboardMetric = .score
+    @State private var audience: LeaderboardAudience = .allPlayers
 
     private let neon = Color(red: 0.35, green: 0.92, blue: 1.0)
     private let gold = Color(red: 1.0, green: 0.82, blue: 0.32)
@@ -23,24 +26,28 @@ struct LeaderboardPanelView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 12) {
             header
 
             metricPicker
+
+            audiencePicker
 
             boardPicker
 
             Divider().opacity(0.35)
 
-            bestBlock
+            localBestRow
+
+            remoteBlock
 
             Spacer(minLength: 0)
 
             footerNote
         }
         .padding(.horizontal, 28)
-        .padding(.vertical, 24)
-        .frame(width: 420, height: 420, alignment: .topLeading)
+        .padding(.vertical, 22)
+        .frame(width: 420, height: 520, alignment: .topLeading)
         .background {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .strokeBorder(gold.opacity(0.4), lineWidth: 1.2)
@@ -48,6 +55,7 @@ struct LeaderboardPanelView: View {
         .glassBackgroundEffect()
         .onAppear {
             syncBoardToPlayMode()
+            reloadRemote()
         }
         .onChange(of: gameModel.playKind) { _, _ in
             syncBoardToPlayMode()
@@ -55,6 +63,38 @@ struct LeaderboardPanelView: View {
         .onChange(of: gameModel.soloEnvironment) { _, _ in
             syncBoardToPlayMode()
         }
+        .onChange(of: selectedBoard) { _, _ in
+            reloadRemote()
+        }
+        .onChange(of: metric) { _, _ in
+            reloadRemote()
+        }
+        .onChange(of: audience) { _, _ in
+            reloadRemote()
+        }
+        .onChange(of: gameCenter.isAuthenticated) { _, _ in
+            reloadRemote()
+        }
+        .onChange(of: gameModel.isGameOver) { _, isOver in
+            if isOver { reloadRemote() }
+        }
+        .sheet(isPresented: authSheetBinding) {
+            if let viewController = gameCenter.authenticationViewController {
+                GameCenterAuthPresenter(viewController: viewController)
+                    .ignoresSafeArea()
+            }
+        }
+    }
+
+    private var authSheetBinding: Binding<Bool> {
+        Binding(
+            get: { gameCenter.authenticationViewController != nil },
+            set: { presented in
+                if !presented {
+                    gameCenter.authenticationViewController = nil
+                }
+            }
+        )
     }
 
     private var header: some View {
@@ -66,34 +106,37 @@ struct LeaderboardPanelView: View {
             Text("Leaderboard")
                 .font(.system(size: 28, weight: .semibold, design: .rounded))
                 .foregroundStyle(.primary)
+            Text(gameCenter.statusMessage)
+                .font(.system(size: 13, weight: .medium, design: .rounded))
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
         }
     }
 
     private var metricPicker: some View {
         HStack(spacing: 8) {
             ForEach(LeaderboardMetric.allCases) { option in
-                let selected = metric == option
-                Button {
+                pickerButton(
+                    title: option.title,
+                    selected: metric == option,
+                    accent: accent(for: option)
+                ) {
                     metric = option
-                } label: {
-                    Text(option.title)
-                        .font(.system(size: 15, weight: selected ? .bold : .medium, design: .rounded))
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
-                        .frame(maxWidth: .infinity)
-                        .background {
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(selected ? accent(for: option).opacity(0.22) : Color.white.opacity(0.06))
-                        }
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .strokeBorder(
-                                    selected ? accent(for: option).opacity(0.7) : Color.white.opacity(0.12),
-                                    lineWidth: 1
-                                )
-                        }
                 }
-                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    private var audiencePicker: some View {
+        HStack(spacing: 8) {
+            ForEach(LeaderboardAudience.allCases) { option in
+                pickerButton(
+                    title: option.title,
+                    selected: audience == option,
+                    accent: gold
+                ) {
+                    audience = option
+                }
             }
         }
     }
@@ -128,59 +171,134 @@ struct LeaderboardPanelView: View {
         }
     }
 
-    private var bestBlock: some View {
+    private var localBestRow: some View {
         let value = personalBests.value(metric, for: selectedBoard)
-        let otherMetric: LeaderboardMetric = metric == .score ? .coins : .score
-        let otherValue = personalBests.value(otherMetric, for: selectedBoard)
         let highlightNew = isHighlightingNewBest(for: metric)
 
-        return VStack(alignment: .leading, spacing: 12) {
-            Text(selectedBoard.subtitle.uppercased())
-                .font(.system(size: 12, weight: .bold, design: .rounded))
-                .tracking(1.4)
-                .foregroundStyle(accent(for: metric).opacity(0.85))
+        return HStack(alignment: .firstTextBaseline) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("YOUR BEST · \(selectedBoard.title.uppercased())")
+                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .tracking(1.2)
+                    .foregroundStyle(accent(for: metric).opacity(0.85))
+                Text(value > 0 ? "\(value)" : "—")
+                    .font(.system(size: 34, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(highlightNew ? accent(for: metric) : .primary)
+            }
+            Spacer()
+            if highlightNew {
+                Text("NEW")
+                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .tracking(1.1)
+                    .foregroundStyle(accent(for: metric))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background {
+                        Capsule(style: .continuous)
+                            .fill(accent(for: metric).opacity(0.18))
+                    }
+            }
+        }
+    }
 
-            Text(selectedBoard.title)
-                .font(.system(size: 20, weight: .semibold, design: .rounded))
-                .foregroundStyle(.primary)
+    @ViewBuilder
+    private var remoteBlock: some View {
+        if !gameCenter.isAuthenticated {
+            Text(
+                audience == .friends
+                ? "Sign in to Game Center to see Friends."
+                : "Sign in to Game Center for All Players rankings."
+            )
+            .font(.system(size: 14, weight: .regular, design: .rounded))
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+        } else if gameCenter.isLoadingRemote {
+            Text("Loading \(audience.title.lowercased())…")
+                .font(.system(size: 14, weight: .medium, design: .rounded))
+                .foregroundStyle(.secondary)
+        } else if let error = gameCenter.remoteErrorMessage, (gameCenter.remoteSnapshot?.entries.isEmpty ?? true) {
+            Text(error)
+                .font(.system(size: 13, weight: .regular, design: .rounded))
+                .foregroundStyle(.orange.opacity(0.95))
+                .fixedSize(horizontal: false, vertical: true)
+        } else if let snapshot = gameCenter.remoteSnapshot {
+            VStack(alignment: .leading, spacing: 8) {
+                if let rank = snapshot.localRank, let value = snapshot.localValue {
+                    Text("Your rank: #\(rank) · \(value)")
+                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .foregroundStyle(accent(for: metric).opacity(0.9))
+                }
 
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Your best \(metric.title.lowercased())")
-                    .font(.system(size: 14, weight: .medium, design: .rounded))
-                    .foregroundStyle(.secondary)
-
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    Text(value > 0 ? "\(value)" : "—")
-                        .font(.system(size: 48, weight: .bold, design: .rounded))
-                        .monospacedDigit()
-                        .foregroundStyle(highlightNew ? accent(for: metric) : .primary)
-
-                    if highlightNew {
-                        Text("NEW")
-                            .font(.system(size: 13, weight: .bold, design: .rounded))
-                            .tracking(1.2)
-                            .foregroundStyle(accent(for: metric))
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background {
-                                Capsule(style: .continuous)
-                                    .fill(accent(for: metric).opacity(0.18))
-                            }
+                if snapshot.entries.isEmpty {
+                    Text("No scores yet for \(audience.title.lowercased()).")
+                        .font(.system(size: 14, weight: .regular, design: .rounded))
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(snapshot.entries.prefix(8)) { entry in
+                        HStack(spacing: 10) {
+                            Text("#\(entry.rank)")
+                                .font(.system(size: 13, weight: .bold, design: .rounded))
+                                .foregroundStyle(.secondary)
+                                .frame(width: 36, alignment: .leading)
+                            Text(entry.displayName)
+                                .font(.system(
+                                    size: 14,
+                                    weight: entry.isLocalPlayer ? .bold : .medium,
+                                    design: .rounded
+                                ))
+                                .foregroundStyle(entry.isLocalPlayer ? accent(for: metric) : .primary)
+                                .lineLimit(1)
+                            Spacer(minLength: 8)
+                            Text("\(entry.value)")
+                                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                .monospacedDigit()
+                        }
                     }
                 }
             }
-
-            Text("Best \(otherMetric.title.lowercased()): \(otherValue > 0 ? "\(otherValue)" : "—")")
+        } else {
+            Text("Pulling \(audience.title.lowercased()) scores…")
                 .font(.system(size: 14, weight: .medium, design: .rounded))
-                .foregroundStyle(.secondary.opacity(0.9))
+                .foregroundStyle(.secondary)
         }
     }
 
     private var footerNote: some View {
-        Text("Local bests for now. Playlists stay off the board. Game Center All Players / Friends comes next.")
-            .font(.system(size: 13, weight: .regular, design: .rounded))
+        Text("Playlists stay off the board. Daily uses a recurring Game Center board.")
+            .font(.system(size: 12, weight: .regular, design: .rounded))
             .foregroundStyle(.secondary.opacity(0.9))
             .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func pickerButton(
+        title: String,
+        selected: Bool,
+        accent: Color,
+        enabled: Bool = true,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 14, weight: selected ? .bold : .medium, design: .rounded))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .frame(maxWidth: .infinity)
+                .background {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(selected ? accent.opacity(0.22) : Color.white.opacity(0.06))
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(
+                            selected ? accent.opacity(0.7) : Color.white.opacity(0.12),
+                            lineWidth: 1
+                        )
+                }
+                .opacity(enabled ? 1 : 0.45)
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
     }
 
     private func accent(for metric: LeaderboardMetric) -> Color {
@@ -194,6 +312,14 @@ struct LeaderboardPanelView: View {
         if let match = LeaderboardBoard.matching(gameModel.resolvedPlayMode) {
             selectedBoard = match
         }
+    }
+
+    private func reloadRemote() {
+        guard gameCenter.isAuthenticated else {
+            gameCenter.clearRemote()
+            return
+        }
+        gameCenter.loadRemoteScores(board: selectedBoard, metric: metric, audience: audience)
     }
 
     private func isHighlightingNewBest(for metric: LeaderboardMetric) -> Bool {
@@ -210,12 +336,23 @@ struct LeaderboardPanelView: View {
     }
 }
 
+/// Hosts GameKit’s sign-in view controller when authentication needs UI.
+private struct GameCenterAuthPresenter: UIViewControllerRepresentable {
+    let viewController: UIViewController
+
+    func makeUIViewController(context: Context) -> UIViewController {
+        viewController
+    }
+
+    func updateUIViewController(_ uiViewController: UIViewController, context: Context) {}
+}
+
 #Preview {
-    let model = GameModel(
-        personalBests: PersonalBestStore(defaults: UserDefaults(suiteName: "preview.leaderboard")!)
-    )
-    model.personalBests.record(category: "normal", score: 420, coins: 12)
+    let bests = PersonalBestStore(defaults: UserDefaults(suiteName: "preview.leaderboard.gc")!)
+    let model = GameModel(personalBests: bests)
+    bests.record(category: "normal", score: 420, coins: 12)
     return LeaderboardPanelView()
         .environmentObject(model)
         .environmentObject(model.personalBests)
+        .environmentObject(model.gameCenter)
 }
