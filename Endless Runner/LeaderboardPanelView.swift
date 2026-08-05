@@ -33,33 +33,27 @@ struct LeaderboardPanelView: View {
     ]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: 16) {
             header
 
             metricPicker
-                .padding(.top, 18)
-                .padding(.bottom, 22)
 
-            VStack(alignment: .leading, spacing: 12) {
-                audiencePicker
+            audiencePicker
 
-                boardPicker
+            boardPicker
+                .padding(.top, 4)
 
-                Divider().opacity(0.35)
+            Divider().opacity(0.35)
 
-                localBestRow
+            localBestRow
 
-                remoteBlock
-            }
-
-            Spacer(minLength: 0)
+            remoteBlock
 
             footerNote
-                .padding(.top, 12)
         }
         .padding(.horizontal, 28)
         .padding(.vertical, 22)
-        .frame(width: 620, height: 560, alignment: .topLeading)
+        .frame(width: 620, alignment: .topLeading)
         .background {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .strokeBorder(gold.opacity(0.4), lineWidth: 1.2)
@@ -141,19 +135,19 @@ struct LeaderboardPanelView: View {
         return Button {
             metric = option
         } label: {
-            VStack(spacing: 8) {
+            VStack(spacing: 6) {
                 Image(systemName: metricSymbol(for: option))
-                    .font(.system(size: 26, weight: .semibold))
+                    .font(.system(size: 22, weight: .semibold))
                     .foregroundStyle(selected ? color : color.opacity(0.55))
                     .symbolRenderingMode(.hierarchical)
 
                 Text(option.title.uppercased())
-                    .font(.system(size: 15, weight: .bold, design: .rounded))
-                    .tracking(1.6)
+                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                    .tracking(1.4)
                     .foregroundStyle(selected ? color : .secondary)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 18)
+            .padding(.vertical, 14)
             .background {
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .fill(
