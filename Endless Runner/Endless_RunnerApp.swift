@@ -8,9 +8,14 @@
 import SwiftUI
 
 @main
+@MainActor
 struct Endless_RunnerApp: App {
-    @StateObject private var gameModel = GameModel()
+    @StateObject private var gameModel: GameModel
     @State private var immersionState: ImmersionStyle = .mixed
+
+    init() {
+        _gameModel = StateObject(wrappedValue: GameModel())
+    }
 
     var body: some SwiftUI.Scene {
         // Immersive-first: Info.plist preferred scene role launches this space.

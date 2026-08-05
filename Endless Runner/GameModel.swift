@@ -49,15 +49,19 @@ final class GameModel: ObservableObject {
     /// Which metrics improved on the most recent finished run (nil if playlist / no board).
     @Published private(set) var lastPersonalBestUpdate: PersonalBestUpdate?
 
+    /// Default args are created inside the body — default-parameter expressions are nonisolated
+    /// and cannot call `@MainActor` initializers like `PersonalBestStore()` / `GameCenterService()`.
     init(
-        personalBests: PersonalBestStore = PersonalBestStore(),
-        gameCenter: GameCenterService = GameCenterService(),
+        personalBests: PersonalBestStore? = nil,
+        gameCenter: GameCenterService? = nil,
         scoreSubmitter: (any GameCenterSubmitting)? = nil
     ) {
-        self.personalBests = personalBests
-        self.gameCenter = gameCenter
+        let bests = personalBests ?? PersonalBestStore()
+        let center = gameCenter ?? GameCenterService()
+        self.personalBests = bests
+        self.gameCenter = center
         self.scoreSubmitterOverride = scoreSubmitter
-        gameCenter.attachPersonalBests(personalBests)
+        center.attachPersonalBests(bests)
     }
 
     private var activeScoreSubmitter: any GameCenterSubmitting {
@@ -141,6 +145,6 @@ final class GameModel: ObservableObject {
             score: stats.score,
             coins: stats.coinsCollected
         )
-        scoreSubmitter?.submitRun(board: board, score: stats.score, coins: stats.coinsCollected)
+        activeScoreSubmitter.submitRun(board: board, score: stats.score, coins: stats.coinsCollected)
     }
 }
