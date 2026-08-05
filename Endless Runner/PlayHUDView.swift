@@ -90,35 +90,57 @@ struct PlayHUDView: View {
     @ViewBuilder
     private var controls: some View {
         if gameModel.isGameOver {
-            Button {
-                gameModel.startRun()
-            } label: {
-                Label("Restart", systemImage: "arrow.counterclockwise")
-                    .font(.system(size: 22, weight: .semibold, design: .rounded))
-                    .frame(minWidth: 200)
+            VStack(spacing: 12) {
+                Button {
+                    gameModel.startRun()
+                } label: {
+                    Label("Restart", systemImage: "arrow.counterclockwise")
+                        .font(.system(size: 22, weight: .semibold, design: .rounded))
+                        .frame(minWidth: 200)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(hazard)
+                .controlSize(.large)
+                .disabled(!gameModel.canStartRun)
+
+                recenterButton
             }
-            .buttonStyle(.borderedProminent)
-            .tint(hazard)
-            .controlSize(.large)
-            .disabled(!gameModel.canStartRun)
         } else if !gameModel.isPlaying {
-            Button {
-                gameModel.startRun()
-            } label: {
-                Label("Start Run", systemImage: "play.fill")
-                    .font(.system(size: 22, weight: .semibold, design: .rounded))
-                    .frame(minWidth: 200)
+            VStack(spacing: 12) {
+                Button {
+                    gameModel.startRun()
+                } label: {
+                    Label("Start Run", systemImage: "play.fill")
+                        .font(.system(size: 22, weight: .semibold, design: .rounded))
+                        .frame(minWidth: 200)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(neon)
+                .controlSize(.large)
+                .disabled(!gameModel.canStartRun)
+
+                recenterButton
             }
-            .buttonStyle(.borderedProminent)
-            .tint(neon)
-            .controlSize(.large)
-            .disabled(!gameModel.canStartRun)
         } else {
             Text("Dodge with your head · grab coins with your hands")
                 .font(.system(size: 17, weight: .regular, design: .rounded))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
         }
+    }
+
+    private var recenterButton: some View {
+        Button {
+            gameModel.requestPlayfieldRecenter()
+        } label: {
+            Label("Recenter Track", systemImage: "location.north.line")
+                .font(.system(size: 17, weight: .semibold, design: .rounded))
+                .frame(minWidth: 200)
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.regular)
+        .tint(neon.opacity(0.9))
+        .help("Snap the track to your current headset pose after resetting your origin.")
     }
 
     private func metricChip(title: String, value: String, accent: Color) -> some View {

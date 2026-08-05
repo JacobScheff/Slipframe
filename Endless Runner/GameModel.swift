@@ -43,11 +43,20 @@ final class GameModel: ObservableObject {
     /// Fog Hollow asks ImmersiveView to dim passthrough (Vision Pro room dimming).
     @Published var prefersRoomDimming: Bool = false
 
-    /// Bumped on each restart so the immersive session can reset its world.
+    /// Bumped on each restart so the immersive session can reset run content (not pose).
     @Published private(set) var runID: Int = 0
+
+    /// Bumped to ask GameWorld to re-snap the track to the current headset pose.
+    @Published private(set) var playfieldRecenterID: Int = 0
 
     /// Which metrics improved on the most recent finished run (nil if playlist / no board).
     @Published private(set) var lastPersonalBestUpdate: PersonalBestUpdate?
+
+    /// Recenter the track under the headset (e.g. after the user resets their origin).
+    func requestPlayfieldRecenter() {
+        guard !isPlaying else { return }
+        playfieldRecenterID += 1
+    }
 
     /// Default args are created inside the body — default-parameter expressions are nonisolated
     /// and cannot call `@MainActor` initializers like `PersonalBestStore()` / `GameCenterService()`.

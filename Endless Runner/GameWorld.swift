@@ -269,8 +269,10 @@ final class GameWorld {
     private var lastBuiltPortalZ: Float = .greatestFiniteMagnitude
     private var updateSubscription: EventSubscription?
     private var activeRunID: Int = -1
-    /// After Start, playfield pose no longer follows the player.
+    /// After the initial placement (or an explicit recenter), pose stays fixed.
     private var isPlayfieldLocked = false
+    /// True once we've placed using a tracked WorldTracking device anchor.
+    private var didSnapWithWorldTracking = false
     /// Seconds since attach — drives portal pulse / ambient motion.
     private var elapsedTime: Float = 0
     /// Elapsed time while game-over clear is armed; nil when inactive.
@@ -325,6 +327,7 @@ final class GameWorld {
         content.add(floorAnchor)
         content.add(wallAnchor)
         isPlayfieldLocked = false
+        didSnapWithWorldTracking = false
         lastPreviewMode = gameModel.resolvedPlayMode
         elapsedTime = 0
         GameMaterials.warmTextures()
@@ -347,8 +350,8 @@ final class GameWorld {
         GameSFX.shared.prepare()
         GameMusic.shared.prepare()
         applyPalette(environmentDirector.displayedPalette, telegraph: 0)
-        snapPlayfieldToPlayer()
-        updatePortalAndTrack()
+        // Place once from the current headset pose; do not follow afterward.
+        placePlayfield()
     }
 
     /// Parents the SwiftUI play/score attachment so it stays fixed with the track.
@@ -416,6 +419,7 @@ final class GameWorld {
         rightIsOpen = false
         updateSubscription = nil
         isPlayfieldLocked = false
+        didSnapWithWorldTracking = false
         elapsedTime = 0
         portalZ = GameWorld.defaultPortalZ
         activeSpawnZ = GameWorld.defaultPortalZ + GameWorld.spawnInFrontOfPortal
@@ -582,9 +586,10 @@ final class GameWorld {
 
     private func beginRun(runID: Int) {
         activeRunID = runID
-        snapPlayfieldToPlayer()
-        updatePortalAndTrack()
-        isPlayfieldLocked = true
+        // Restart must not move the track — pose stays from session start / last recenter.
+        if !isPlayfieldLocked {
+            placePlayfield()
+        }
         visualFX.clear()
         resetGameOverClear()
         clearDynamicContent()
@@ -611,6 +616,11 @@ final class GameWorld {
         visualFX.prepare()
         GameSFX.shared.prepare()
         GameMusic.shared.prepare()
+    }
+
+    /// Re-snap the track to the current headset pose (use after the user recenters their origin).
+    func recalibratePlayfield() {
+        placePlayfield()
     }
 
     // MARK: - Palette / room dimming
@@ -680,6 +690,32 @@ final class GameWorld {
     }
 
     // MARK: - Playfield pose
+
+    private var hasTrackedDeviceAnchor: Bool {
+        worldTracking.state == .running
+            && worldTracking.queryDeviceAnchor(atTimestamp: CACurrentMediaTime())?.isTracked == true
+    }
+
+    /// Places the playfield from the current headset pose and locks it in place.
+    private func placePlayfield() {
+        let usedWorldTracking = hasTrackedDeviceAnchor
+        snapPlayfieldToPlayer()
+        updatePortalAndTrack()
+        rebuildFixedTrack(force: true)
+        isPlayfieldLocked = true
+        didSnapWithWorldTracking = usedWorldTracking
+    }
+
+    /// One-time upgrade from head-anchor fallback → WorldTracking once the device is tracked.
+    /// Only before a run starts — never mid-run or after the player has already begun.
+    private func upgradePlayfieldWithWorldTrackingIfNeeded() {
+        guard isPlayfieldLocked,
+              !didSnapWithWorldTracking,
+              gameModel?.isPlaying != true,
+              hasTrackedDeviceAnchor
+        else { return }
+        placePlayfield()
+    }
 
     private func snapPlayfieldToPlayer() {
         let headWorld: SIMD3<Float>
@@ -1049,12 +1085,9 @@ final class GameWorld {
         animateCoins(deltaTime: deltaTime)
         visualFX.tick(deltaTime: deltaTime)
 
-        // Before Start, keep the stand line under the player and refresh portal depth.
-        // After Start, pose / portal / track are frozen — only obstacles move.
-        if !isPlayfieldLocked {
-            snapPlayfieldToPlayer()
-            updatePortalAndTrack()
-        }
+        // Pose is fixed after the initial placement. Allow a single upgrade from
+        // head-anchor fallback to WorldTracking before the first run starts.
+        upgradePlayfieldWithWorldTrackingIfNeeded()
 
         guard let gameModel else { return }
 

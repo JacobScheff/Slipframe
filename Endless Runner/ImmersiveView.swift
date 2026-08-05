@@ -75,6 +75,9 @@ struct ImmersiveView: View {
         .onChange(of: gameModel.playlistStart) { _, _ in
             gameWorld.previewPlayMode(gameModel.resolvedPlayMode)
         }
+        .onChange(of: gameModel.playfieldRecenterID) { _, _ in
+            gameWorld.recalibratePlayfield()
+        }
     }
 
     private func attachPanels(from attachments: RealityViewAttachments) {
