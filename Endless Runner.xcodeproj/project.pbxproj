@@ -36,6 +36,7 @@
 		B01A102D2C72000100A0002D /* PersonalBestStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A102C2C72000100A0002C /* PersonalBestStore.swift */; };
 		B01A102F2C72000100A0002F /* GameCenterService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A102E2C72000100A0002E /* GameCenterService.swift */; };
 		B01A10312C72000100A00031 /* GameKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B01A10302C72000100A00030 /* GameKit.framework */; };
+		B01A10342C72000100A00034 /* GameCenterAuthWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A10332C72000100A00033 /* GameCenterAuthWindow.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -82,6 +83,7 @@
 		B01A102E2C72000100A0002E /* GameCenterService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameCenterService.swift; sourceTree = "<group>"; };
 		B01A10302C72000100A00030 /* GameKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = GameKit.framework; path = System/Library/Frameworks/GameKit.framework; sourceTree = SDKROOT; };
 		B01A10322C72000100A00032 /* Endless_Runner.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Endless_Runner.entitlements; sourceTree = "<group>"; };
+		B01A10332C72000100A00033 /* GameCenterAuthWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameCenterAuthWindow.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -148,6 +150,7 @@
 				B01A102A2C72000100A0002A /* LeaderboardPanelView.swift */,
 				B01A102C2C72000100A0002C /* PersonalBestStore.swift */,
 				B01A102E2C72000100A0002E /* GameCenterService.swift */,
+				B01A10332C72000100A00033 /* GameCenterAuthWindow.swift */,
 				B01A10062C72000100A00007 /* PlayHUDView.swift */,
 				B01A10082C72000100A00009 /* GameSFX.swift */,
 				B01A10202C72000100A00020 /* Music */,
@@ -315,6 +318,7 @@
 				B01A102B2C72000100A0002B /* LeaderboardPanelView.swift in Sources */,
 				B01A102D2C72000100A0002D /* PersonalBestStore.swift in Sources */,
 				B01A102F2C72000100A0002F /* GameCenterService.swift in Sources */,
+				B01A10342C72000100A00034 /* GameCenterAuthWindow.swift in Sources */,
 				B01A10072C72000100A00008 /* PlayHUDView.swift in Sources */,
 				B01A10092C72000100A0000A /* GameSFX.swift in Sources */,
 				3A9B45292C503B710080BBBE /* Endless_RunnerApp.swift in Sources */,

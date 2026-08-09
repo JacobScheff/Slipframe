@@ -7,7 +7,6 @@
 //
 
 import SwiftUI
-import UIKit
 
 struct LeaderboardPanelView: View {
     @EnvironmentObject private var gameModel: GameModel
@@ -84,23 +83,6 @@ struct LeaderboardPanelView: View {
         .onChange(of: gameModel.isGameOver) { _, isOver in
             if isOver { reloadRemote() }
         }
-        .sheet(isPresented: authSheetBinding) {
-            if let viewController = gameCenter.authenticationViewController {
-                GameCenterAuthPresenter(viewController: viewController)
-                    .ignoresSafeArea()
-            }
-        }
-    }
-
-    private var authSheetBinding: Binding<Bool> {
-        Binding(
-            get: { gameCenter.authenticationViewController != nil },
-            set: { presented in
-                if !presented {
-                    gameCenter.authenticationViewController = nil
-                }
-            }
-        )
     }
 
     private var header: some View {
@@ -388,17 +370,6 @@ struct LeaderboardPanelView: View {
         case .coins: return update.coinsImproved
         }
     }
-}
-
-/// Hosts GameKit’s sign-in view controller when authentication needs UI.
-private struct GameCenterAuthPresenter: UIViewControllerRepresentable {
-    let viewController: UIViewController
-
-    func makeUIViewController(context: Context) -> UIViewController {
-        viewController
-    }
-
-    func updateUIViewController(_ uiViewController: UIViewController, context: Context) {}
 }
 
 #Preview {
