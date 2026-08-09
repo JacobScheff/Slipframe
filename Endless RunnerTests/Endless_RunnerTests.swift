@@ -120,7 +120,7 @@ final class Endless_RunnerTests: XCTestCase {
         model.endRun()
         XCTAssertEqual(store.best(for: "crystalCave"), PersonalBest(bestScore: 12, bestCoins: 5))
         XCTAssertEqual(store.best(for: "normal").bestScore, 40)
-        XCTAssertEqual(store.best(for: "fogHollow").bestScore, 0)
+        XCTAssertEqual(store.best(for: "summitStep").bestScore, 0)
 
         model.playKind = .daily
         model.startRun()
@@ -208,7 +208,7 @@ final class Endless_RunnerTests: XCTestCase {
         XCTAssertEqual(submitter.submissions[1].board, .loop(.emberRun))
 
         model.playKind = .playlist
-        model.playlistEnvironments = [.fogHollow]
+        model.playlistEnvironments = [.summitStep]
         model.startRun()
         model.addScore(500)
         model.collectCoin(count: 50)
@@ -345,6 +345,51 @@ final class Endless_RunnerTests: XCTestCase {
         XCTAssertFalse(hit)
     }
 
+    func testJumpBodyProbeUsesUniversalDownNotHeadsetTilt() {
+        // Probe must stay on the headset XZ even if a local-down cast would drift.
+        let head = SIMD3<Float>(0.4, 1.55, -0.2)
+        let probe = JumpHeightDetection.bodyProbe(fromHead: head, eyeHeight: 1.55)
+        XCTAssertEqual(probe.x, head.x, accuracy: 0.0001)
+        XCTAssertEqual(probe.z, head.z, accuracy: 0.0001)
+        XCTAssertEqual(probe.y, 0, accuracy: 0.0001)
+        XCTAssertEqual(JumpHeightDetection.universalDown, SIMD3<Float>(0, -1, 0))
+    }
+
+    func testJumpBarrierHitsStandingBodyProbe() {
+        let feet = JumpHeightDetection.bodyProbe(
+            fromHead: SIMD3(0, 1.55, 0),
+            eyeHeight: 1.55
+        )
+        let hit = WallCollision.pointHitsJumpBarrier(
+            point: feet,
+            wallZ: 0,
+            centerX: 0,
+            halfWidth: 1.1,
+            halfDepth: 0.2,
+            clearanceY: 0.25,
+            minY: -0.5
+        )
+        XCTAssertTrue(hit)
+    }
+
+    func testJumpBarrierClearedWhenBodyProbeIsHigh() {
+        // ~0.3 m jump raises the universal-down feet probe above the hurdle.
+        let feet = JumpHeightDetection.bodyProbe(
+            fromHead: SIMD3(0, 1.85, 0),
+            eyeHeight: 1.55
+        )
+        let hit = WallCollision.pointHitsJumpBarrier(
+            point: feet,
+            wallZ: 0,
+            centerX: 0,
+            halfWidth: 1.1,
+            halfDepth: 0.2,
+            clearanceY: 0.25,
+            minY: -0.5
+        )
+        XCTAssertFalse(hit)
+    }
+
     func testSweptZCatchesTunnelingWall() {
         // Wall jumped from z=-0.4 to z=0.4 in one frame past a head at z=0.
         XCTAssertTrue(
@@ -441,13 +486,13 @@ final class Endless_RunnerTests: XCTestCase {
 
     func testEnvironmentDirectorSoloModeLocksBiome() {
         let director = EnvironmentDirector()
-        director.beginRun(mode: .solo(.fogHollow))
-        XCTAssertEqual(director.currentID, .fogHollow)
+        director.beginRun(mode: .solo(.summitStep))
+        XCTAssertEqual(director.currentID, .summitStep)
 
         // Even after many switch intervals, solo biome should stick.
         for _ in 0..<5 {
             let frame = director.update(deltaTime: director.currentSwitchInterval + 1)
-            XCTAssertEqual(frame.currentID, .fogHollow)
+            XCTAssertEqual(frame.currentID, .summitStep)
             XCTAssertFalse(frame.didEnterEnvironment)
         }
     }
@@ -590,11 +635,11 @@ final class Endless_RunnerTests: XCTestCase {
         XCTAssertEqual(model.resolvedPlayMode, .solo(.crystalCave))
 
         model.playKind = .playlist
-        model.playlistEnvironments = [.fogHollow, .stormPass]
+        model.playlistEnvironments = [.summitStep, .stormPass]
         model.playlistStart = .stormPass
         XCTAssertEqual(
             model.resolvedPlayMode,
-            .playlist(environments: [.fogHollow, .stormPass], start: .stormPass)
+            .playlist(environments: [.summitStep, .stormPass], start: .stormPass)
         )
 
         model.playlistStart = .emberRun // not in set → treated as random
@@ -630,12 +675,14 @@ final class Endless_RunnerTests: XCTestCase {
         }
     }
 
-    func testFogHollowPaletteIsDarkerAndFoggierThanEmber() {
-        let ember = EnvironmentCatalog.profile(for: .emberRun).palette
-        let fog = EnvironmentCatalog.profile(for: .fogHollow).palette
-        XCTAssertLessThan(fog.ambienceBrightness, ember.ambienceBrightness)
-        XCTAssertGreaterThan(fog.fogDensity, ember.fogDensity)
-        XCTAssertLessThan(fog.wallOpacity, ember.wallOpacity)
+    func testSummitStepPaletteIsWarmAndDistinctFromLowCrawl() {
+        let summit = EnvironmentCatalog.profile(for: .summitStep).palette
+        let crawl = EnvironmentCatalog.profile(for: .lowCrawl).palette
+        XCTAssertEqual(EnvironmentCatalog.profile(for: .summitStep).twist, .summitStep)
+        // Warm gold vs cool blue portal accents.
+        XCTAssertGreaterThan(summit.portalRim.r, summit.portalRim.b)
+        XCTAssertGreaterThan(crawl.portalRim.b, crawl.portalRim.r)
+        XCTAssertNotEqual(summit.coinTint, crawl.coinTint)
     }
 
     func testEmberCoinSpawnTintKeepsPolishedGold() {
@@ -689,27 +736,22 @@ final class Endless_RunnerTests: XCTestCase {
         XCTAssertGreaterThan(ghost.palette.wallTint.r, 0.9)
         XCTAssertGreaterThan(ghost.palette.wallTint.g, 0.9)
         XCTAssertGreaterThan(ghost.palette.wallTint.b, 0.9)
-        // No room-dimming flag outside Fog Hollow.
+        // No biome uses fogDensity as a gameplay / room-dimming flag.
         XCTAssertEqual(ghost.palette.fogDensity, 0)
     }
 
-    func testOnlyFogHollowUsesFogDensity() {
+    func testNoBiomeUsesFogDensity() {
         for id in EnvironmentID.allCases {
             let density = EnvironmentCatalog.profile(for: id).palette.fogDensity
-            if id == .fogHollow {
-                // Fog Hollow dims passthrough; density is the biome flag (no fog boxes).
-                XCTAssertGreaterThan(density, 0)
-            } else {
-                XCTAssertEqual(density, 0, "Unexpected fog on \(id.displayName)")
-            }
+            XCTAssertEqual(density, 0, "Unexpected fog on \(id.displayName)")
         }
     }
 
-    func testFogHollowWallsAreMoreOpaqueThanGhostGlass() {
-        let fog = EnvironmentCatalog.profile(for: .fogHollow).palette
+    func testSummitStepWallsAreMoreOpaqueThanGhostGlass() {
+        let summit = EnvironmentCatalog.profile(for: .summitStep).palette
         let ghost = EnvironmentCatalog.profile(for: .ghostGlass)
-        XCTAssertGreaterThan(fog.wallOpacity, 0.25)
-        XCTAssertGreaterThan(fog.wallOpacity, ghost.ghostWallOpacity)
+        XCTAssertGreaterThan(summit.wallOpacity, 0.25)
+        XCTAssertGreaterThan(summit.wallOpacity, ghost.ghostWallOpacity)
     }
 
     func testAdjacentDoubleLaneWallsSpreadApartSlightly() {
@@ -900,6 +942,20 @@ final class Endless_RunnerTests: XCTestCase {
             director.noteDuckGateSpawned()
         }
         XCTAssertFalse(director.isTeachingLowCrawl)
+    }
+
+    func testSummitStepTeachCountIsPositive() {
+        let summit = EnvironmentCatalog.profile(for: .summitStep)
+        XCTAssertEqual(summit.twist, .summitStep)
+        XCTAssertGreaterThan(summit.summitStepTeachCount, 0)
+        XCTAssertGreaterThan(summit.jumpHazardChance, 0)
+        let director = EnvironmentDirector()
+        director.beginRun(mode: .solo(.summitStep))
+        XCTAssertTrue(director.isTeachingSummitStep)
+        for _ in 0..<summit.summitStepTeachCount {
+            director.noteJumpGateSpawned()
+        }
+        XCTAssertFalse(director.isTeachingSummitStep)
     }
 
     func testGameMusicCrossfadeRecordsCueAndFallbackDuration() {

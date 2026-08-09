@@ -2,8 +2,9 @@
 //  WallCollision.swift
 //  Endless Runner
 //
-//  Pure AABB helpers for wall / duck-hazard hits. A contact (head or hand)
-//  only counts when it overlaps a slab's kill box — not merely the same lane.
+//  Pure AABB helpers for wall / duck / jump-hazard hits. A contact (head, hand,
+//  or body probe) only counts when it overlaps a slab's kill box — not merely
+//  the same lane.
 //
 
 import simd
@@ -12,6 +13,18 @@ enum WallKind: Equatable {
     case standard
     case ghost
     case duck
+    case jump
+}
+
+enum JumpHeightDetection {
+    /// Playfield / world down. Never use headset-local down — tilting the
+    /// device must not walk the body probe sideways.
+    static let universalDown = SIMD3<Float>(0, -1, 0)
+
+    /// Body/feet probe from headset translation along universal down.
+    static func bodyProbe(fromHead head: SIMD3<Float>, eyeHeight: Float) -> SIMD3<Float> {
+        head + universalDown * eyeHeight
+    }
 }
 
 enum ObstacleLayout {
@@ -129,6 +142,30 @@ enum WallCollision {
         maxY: Float
     ) -> Bool {
         guard point.y >= clearanceY, point.y <= maxY else { return false }
+        let prior = previousWallZ ?? wallZ
+        guard overlapsSweptZ(
+            pointZ: point.z,
+            wallZ: wallZ,
+            previousWallZ: prior,
+            halfDepth: halfDepth
+        ) else { return false }
+        return abs(point.x - centerX) <= halfWidth
+    }
+
+    /// Low ground hurdle: hit if the contact (usually a feet/body probe cast
+    /// straight down from the headset) is inside the XZ box and still at or
+    /// below `clearanceY` (player must jump over).
+    static func pointHitsJumpBarrier(
+        point: SIMD3<Float>,
+        wallZ: Float,
+        previousWallZ: Float? = nil,
+        centerX: Float,
+        halfWidth: Float,
+        halfDepth: Float,
+        clearanceY: Float,
+        minY: Float
+    ) -> Bool {
+        guard point.y <= clearanceY, point.y >= minY else { return false }
         let prior = previousWallZ ?? wallZ
         guard overlapsSweptZ(
             pointZ: point.z,

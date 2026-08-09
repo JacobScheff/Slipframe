@@ -31,6 +31,7 @@ final class EnvironmentDirector {
     private var blendFrom: EnvironmentPalette
     private var telegraphRemaining: Float = 0
     private var duckGatesSpawnedThisVisit = 0
+    private var jumpGatesSpawnedThisVisit = 0
     private var playMode: PlayMode = .normal
     private var dailyRNG: SeededGenerator?
 
@@ -50,8 +51,17 @@ final class EnvironmentDirector {
             && duckGatesSpawnedThisVisit < currentProfile.lowCrawlTeachCount
     }
 
+    var isTeachingSummitStep: Bool {
+        currentProfile.twist == .summitStep
+            && jumpGatesSpawnedThisVisit < currentProfile.summitStepTeachCount
+    }
+
     func noteDuckGateSpawned() {
         duckGatesSpawnedThisVisit += 1
+    }
+
+    func noteJumpGateSpawned() {
+        jumpGatesSpawnedThisVisit += 1
     }
 
     func beginRun(mode: PlayMode) {
@@ -208,6 +218,7 @@ final class EnvironmentDirector {
         currentID = id
         elapsedInEnvironment = 0
         duckGatesSpawnedThisVisit = 0
+        jumpGatesSpawnedThisVisit = 0
         blendFrom = displayedPalette
         targetPalette = EnvironmentCatalog.profile(for: id).palette
         blendElapsed = 0
