@@ -363,25 +363,25 @@ final class Endless_RunnerTests: XCTestCase {
             wallZ: 0,
             centerX: 0,
             halfWidth: 1.1,
-            halfDepth: 0.2,
+            halfDepth: 0.16,
             headRise: rise,
-            minRise: 0.08
+            minRise: 0.04
         )
         XCTAssertTrue(hit)
     }
 
     func testJumpBarrierClearedWithSmallHeadsetRise() {
-        let head = SIMD3<Float>(0, 1.64, 0)
+        let head = SIMD3<Float>(0, 1.60, 0)
         let rise = JumpHeightDetection.headRise(headY: head.y, standingEyeHeight: 1.55)
-        XCTAssertGreaterThanOrEqual(rise, 0.08)
+        XCTAssertGreaterThanOrEqual(rise, 0.04)
         let hit = WallCollision.pointHitsJumpBarrier(
             point: head,
             wallZ: 0,
             centerX: 0,
             halfWidth: 1.1,
-            halfDepth: 0.2,
+            halfDepth: 0.16,
             headRise: rise,
-            minRise: 0.08
+            minRise: 0.04
         )
         XCTAssertFalse(hit)
     }

@@ -174,12 +174,14 @@ final class GameWorld {
     private static let lowCrawlCoinHeight: Float = duckClearanceY * 0.65
 
     // Jump hazard geometry (Summit Step) — Low Crawl's vertical twin.
-    /// Small headset rise above standing eye height that clears a hurdle.
-    private static let jumpMinRise: Float = 0.08
+    /// Very small headset rise above standing eye height that clears a hurdle.
+    private static let jumpMinRise: Float = 0.04
     /// Visual hurdle height (short — reads as a step, not a wall).
     private static let jumpSlabHeight: Float = 0.14
     private static let jumpSlabWidth: Float = 2.5
-    private static let jumpHitHalfDepth: Float = 0.4
+    /// Thin along the track (toward the portal) so the step is a narrow strip.
+    private static let jumpSlabDepth: Float = 0.22
+    private static let jumpHitHalfDepth: Float = 0.16
 
     // Synth Riders-style portal aperture (always visible at the track end).
     private static let portalWidth: Float = 3.6
@@ -1760,7 +1762,7 @@ final class GameWorld {
         let mesh = MeshResource.generateBox(
             width: GameWorld.jumpSlabWidth,
             height: GameWorld.jumpSlabHeight,
-            depth: GameWorld.wallThickness * 0.85
+            depth: GameWorld.jumpSlabDepth
         )
         let profile = activeSpawnProfile
         let material = EnvironmentMaterials.wallBody(
