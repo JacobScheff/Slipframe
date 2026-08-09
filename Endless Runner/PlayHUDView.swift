@@ -62,7 +62,7 @@ struct PlayHUDView: View {
     }
 
     private var centerHUDOpacity: Double {
-        if gameModel.tutorialBannerText != nil { return 0 }
+        if gameModel.tutorialBannerOpacity > 0.05 { return 0 }
         if gameModel.isTutorialRun, gameModel.tutorialOverlayOpacity < 0.15 { return 0 }
         return 1
     }

@@ -269,6 +269,10 @@ final class GameWorld {
     private var tutorialSpeedMultiplier: Float = 1
     private var tutorialPortalPulse: Float = 0
     private var tutorialSpawningEnabled = true
+    /// nil = settled at rest poses; otherwise seconds into the post-tutorial menu rise.
+    private var menuRevealElapsed: Float?
+    private static let menuRevealDuration: Float = 1.25
+    private static let menuRevealRise: Float = 0.7
 
     private var walls: [WallItem] = []
     private var coins: [CoinItem] = []
@@ -426,9 +430,24 @@ final class GameWorld {
         tutorialOverlayAnchor.addChild(entity)
     }
 
-    func setSidePanelsVisible(_ visible: Bool) {
+    /// Show / hide Ready-state chrome (side panels + center HUD).
+    /// When becoming visible after a tutorial, plays a rise-and-scale reveal.
+    func setMenuChromeVisible(_ visible: Bool) {
+        ensureHUDAnchor()
+        ensureSidePanelAnchors()
         levelSelectAnchor.isEnabled = visible
         leaderboardAnchor.isEnabled = visible
+        hudAnchor.isEnabled = true
+
+        if visible, gameModel?.pendingMenuReveal == true {
+            gameModel?.consumeMenuReveal()
+            beginMenuReveal()
+        } else if !visible {
+            menuRevealElapsed = nil
+            applyMenuRevealPose(progress: 1)
+        } else if menuRevealElapsed == nil {
+            applyMenuRevealPose(progress: 1)
+        }
     }
 
     func setTutorialOverlayVisible(_ visible: Bool) {
@@ -507,7 +526,11 @@ final class GameWorld {
 
     private func ensureHUDAnchor() {
         hudAnchor.name = "playHUD"
-        hudAnchor.position = GameWorld.hudPosition
+        // Don't stomp an in-flight post-tutorial reveal pose.
+        if menuRevealElapsed == nil {
+            hudAnchor.position = GameWorld.hudPosition
+            hudAnchor.scale = SIMD3(repeating: 1)
+        }
         if hudAnchor.parent !== root {
             root.addChild(hudAnchor)
         }
@@ -517,13 +540,16 @@ final class GameWorld {
         // Center just outside the floor slab so the panel body sits on the track edge.
         let edgeX = GameWorld.trackWidth * 0.5 + 0.3
         levelSelectAnchor.name = "levelSelect"
-        levelSelectAnchor.position = SIMD3(-edgeX, GameWorld.sidePanelY, GameWorld.sidePanelZ)
+        leaderboardAnchor.name = "leaderboard"
+        if menuRevealElapsed == nil {
+            levelSelectAnchor.position = SIMD3(-edgeX, GameWorld.sidePanelY, GameWorld.sidePanelZ)
+            levelSelectAnchor.scale = SIMD3(repeating: 1)
+            leaderboardAnchor.position = SIMD3(edgeX, GameWorld.sidePanelY, GameWorld.sidePanelZ)
+            leaderboardAnchor.scale = SIMD3(repeating: 1)
+        }
         if levelSelectAnchor.parent !== root {
             root.addChild(levelSelectAnchor)
         }
-
-        leaderboardAnchor.name = "leaderboard"
-        leaderboardAnchor.position = SIMD3(edgeX, GameWorld.sidePanelY, GameWorld.sidePanelZ)
         if leaderboardAnchor.parent !== root {
             root.addChild(leaderboardAnchor)
         }
@@ -1215,18 +1241,17 @@ final class GameWorld {
                 gameModel.prefersRoomDimming = false
             }
             if tutorialDirector.isActive {
-                // Skip / finish / immersive dismiss — stop master track and clear coaching UI.
+                // Interrupted exit (skip / dismiss). Natural finish already stopped the director.
                 tutorialDirector.stop()
                 tutorialPortalPulse = 0
                 tutorialSpeedMultiplier = 1
                 tutorialSpawningEnabled = true
                 lazyLockPose = nil
                 setTutorialOverlayVisible(false)
-                if GameMusic.shared.currentCue == TutorialMusic.cue {
-                    GameMusic.shared.stopAbruptly()
-                }
                 gameModel.clearTutorialOverlay()
             }
+            // Keep animating the post-tutorial menu rise while idle.
+            tickMenuReveal(deltaTime: deltaTime)
             if gameModel.isGameOver {
                 tickGameOverClear(deltaTime: deltaTime)
             } else {
@@ -1325,25 +1350,80 @@ final class GameWorld {
         }
 
         tutorialPortalPulse = frame.portalPulse
-        let banner = frame.showTestRunBanner ? frame.section.title : nil
         gameModel.applyTutorialOverlay(
             title: frame.section.title,
             body: frame.section.body,
             opacity: frame.overlayOpacity,
-            banner: banner
+            banner: frame.successBanner
         )
 
-        if frame.shouldStopMusic {
-            GameMusic.shared.stopAbruptly()
-        }
         if frame.shouldFinish {
+            // Leave the master track alone — it already hard-cuts to silence in-file.
             tutorialDirector.stop()
             tutorialPortalPulse = 0
             tutorialSpeedMultiplier = 1
             tutorialSpawningEnabled = true
             setTutorialOverlayVisible(false)
-            gameModel.finishTutorial(markCompleted: true)
+            gameModel.finishTutorial(markCompleted: true, revealMenu: true)
         }
+    }
+
+    private func beginMenuReveal() {
+        menuRevealElapsed = 0
+        applyMenuRevealPose(progress: 0)
+        levelSelectAnchor.isEnabled = true
+        leaderboardAnchor.isEnabled = true
+        hudAnchor.isEnabled = true
+    }
+
+    private func tickMenuReveal(deltaTime: Float) {
+        guard var elapsed = menuRevealElapsed else { return }
+        elapsed += deltaTime
+        let t = min(1, elapsed / GameWorld.menuRevealDuration)
+        applyMenuRevealPose(progress: easeOutBack(t))
+        if t >= 1 {
+            menuRevealElapsed = nil
+            applyMenuRevealPose(progress: 1)
+        } else {
+            menuRevealElapsed = elapsed
+        }
+    }
+
+    /// `progress` 0 = hidden below / tiny, 1 = rest pose.
+    private func applyMenuRevealPose(progress: Float) {
+        let p = max(0, min(1, progress))
+        let rise = GameWorld.menuRevealRise * (1 - p)
+        let scaleFactor = max(0.04, p)
+
+        hudAnchor.position = SIMD3(
+            GameWorld.hudPosition.x,
+            GameWorld.hudPosition.y - rise,
+            GameWorld.hudPosition.z
+        )
+        // Attachment scale is applied on the child; nudge the anchor for the grow.
+        hudAnchor.scale = SIMD3(repeating: scaleFactor)
+
+        let edgeX = GameWorld.trackWidth * 0.5 + 0.3
+        levelSelectAnchor.position = SIMD3(
+            -edgeX,
+            GameWorld.sidePanelY - rise * 1.15,
+            GameWorld.sidePanelZ
+        )
+        levelSelectAnchor.scale = SIMD3(repeating: scaleFactor)
+
+        leaderboardAnchor.position = SIMD3(
+            edgeX,
+            GameWorld.sidePanelY - rise * 1.15,
+            GameWorld.sidePanelZ
+        )
+        leaderboardAnchor.scale = SIMD3(repeating: scaleFactor)
+    }
+
+    private func easeOutBack(_ t: Float) -> Float {
+        let c1: Float = 1.70158
+        let c3 = c1 + 1
+        let u = t - 1
+        return 1 + c3 * u * u * u + c1 * u * u
     }
 
     private func updateLazyLockedTutorialOverlay(deltaTime: Float) {

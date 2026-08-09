@@ -203,18 +203,42 @@ final class Endless_RunnerTests: XCTestCase {
         _ = director.update(deltaTime: 145) // past silence
         frame = director.update(deltaTime: 0.05)
         XCTAssertEqual(frame.section.id, .outro)
-        XCTAssertTrue(frame.shouldStopMusic || frame.showTestRunBanner)
+        XCTAssertNotNil(frame.successBanner)
+        XCTAssertEqual(frame.successBanner?.text, "TEST RUN SUCCEEDED")
+        XCTAssertFalse(frame.shouldFinish)
 
-        // Hold through outro banner.
+        // Appear + hold + exit is ~5.3s — step through it.
         var finished = false
-        for _ in 0..<60 {
+        var sawFullAppear = false
+        for _ in 0..<80 {
             let step = director.update(deltaTime: 0.1)
+            if let banner = step.successBanner, banner.appear > 0.95, banner.exit < 0.05 {
+                sawFullAppear = true
+            }
             if step.shouldFinish {
                 finished = true
                 break
             }
         }
+        XCTAssertTrue(sawFullAppear)
         XCTAssertTrue(finished)
+    }
+
+    func testTutorialFinishRequestsMenuRevealWithoutCuttingMusicCue() {
+        let suite = "test.tutorial.reveal.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let model = GameModel(
+            personalBests: makeIsolatedBestStore(),
+            scoreSubmitter: MockGameCenterSubmitter(),
+            defaults: defaults,
+            tutorialCompletedKey: suite
+        )
+        model.startTutorial()
+        model.finishTutorial(markCompleted: true, revealMenu: true)
+        XCTAssertTrue(model.pendingMenuReveal)
+        XCTAssertEqual(TutorialCatalog.sections.last?.title, "TEST RUN SUCCEEDED")
     }
 
     func testLazyLockHoldsWithinThresholdThenFollows() {

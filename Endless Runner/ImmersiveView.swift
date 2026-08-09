@@ -33,7 +33,7 @@ struct ImmersiveView: View {
     private var showTutorialOverlay: Bool {
         gameModel.isTutorialRun
             || gameModel.tutorialOverlayOpacity > 0.02
-            || gameModel.tutorialBannerText != nil
+            || gameModel.tutorialBannerOpacity > 0.02
     }
 
     var body: some View {
@@ -43,7 +43,7 @@ struct ImmersiveView: View {
         } update: { _, attachments in
             gameWorld.syncRun(with: gameModel)
             attachPanels(from: attachments)
-            gameWorld.setSidePanelsVisible(showSidePanels)
+            gameWorld.setMenuChromeVisible(showSidePanels)
             gameWorld.setTutorialOverlayVisible(showTutorialOverlay)
         } attachments: {
             Attachment(id: ImmersiveAttachmentID.playHUD.rawValue) {

@@ -43,6 +43,12 @@ final class GameModel: ObservableObject {
     @Published var tutorialOverlayBody: String = ""
     @Published var tutorialOverlayOpacity: Float = 0
     @Published var tutorialBannerText: String? = nil
+    @Published var tutorialBannerScale: Float = 1
+    @Published var tutorialBannerOpacity: Float = 0
+    @Published var tutorialBannerGlow: Float = 0
+    @Published var tutorialBannerExit: Float = 0
+    /// After tutorial outro, menu chrome rises into place once.
+    @Published var pendingMenuReveal: Bool = false
 
     // MARK: - Level select draft (committed via resolvedPlayMode on Start)
 
@@ -137,20 +143,29 @@ final class GameModel: ObservableObject {
     }
 
     /// Soft exit from tutorial — returns to Ready (not game-over).
-    func finishTutorial(markCompleted: Bool = true) {
+    func finishTutorial(markCompleted: Bool = true, revealMenu: Bool = true) {
         guard isTutorialRun else { return }
         isPlaying = false
         isGameOver = false
         isTutorialRun = false
         prefersRoomDimming = false
         clearTutorialOverlay()
+        pendingMenuReveal = revealMenu
         if markCompleted {
             hasCompletedTutorial = true
         }
     }
 
     func skipTutorial() {
-        finishTutorial(markCompleted: true)
+        // Leaving mid-track — fade the master cue so the menu isn't under a half-song.
+        if GameMusic.shared.currentCue == TutorialMusic.cue {
+            GameMusic.shared.stop()
+        }
+        finishTutorial(markCompleted: true, revealMenu: true)
+    }
+
+    func consumeMenuReveal() {
+        pendingMenuReveal = false
     }
 
     func addScore(_ points: Int) {
@@ -177,11 +192,28 @@ final class GameModel: ObservableObject {
         recordPersonalBestsIfNeeded()
     }
 
-    func applyTutorialOverlay(title: String, body: String, opacity: Float, banner: String?) {
+    func applyTutorialOverlay(
+        title: String,
+        body: String,
+        opacity: Float,
+        banner: TutorialSuccessBanner?
+    ) {
         if tutorialOverlayTitle != title { tutorialOverlayTitle = title }
         if tutorialOverlayBody != body { tutorialOverlayBody = body }
         if tutorialOverlayOpacity != opacity { tutorialOverlayOpacity = opacity }
-        if tutorialBannerText != banner { tutorialBannerText = banner }
+        if let banner {
+            if tutorialBannerText != banner.text { tutorialBannerText = banner.text }
+            if tutorialBannerScale != banner.scale { tutorialBannerScale = banner.scale }
+            if tutorialBannerOpacity != banner.opacity { tutorialBannerOpacity = banner.opacity }
+            if tutorialBannerGlow != banner.pulse { tutorialBannerGlow = banner.pulse }
+            if tutorialBannerExit != banner.exit { tutorialBannerExit = banner.exit }
+        } else {
+            if tutorialBannerText != nil { tutorialBannerText = nil }
+            if tutorialBannerOpacity != 0 { tutorialBannerOpacity = 0 }
+            if tutorialBannerGlow != 0 { tutorialBannerGlow = 0 }
+            if tutorialBannerExit != 0 { tutorialBannerExit = 0 }
+            if tutorialBannerScale != 1 { tutorialBannerScale = 1 }
+        }
     }
 
     func clearTutorialOverlay() {
@@ -189,6 +221,10 @@ final class GameModel: ObservableObject {
         tutorialOverlayBody = ""
         tutorialOverlayOpacity = 0
         tutorialBannerText = nil
+        tutorialBannerScale = 1
+        tutorialBannerOpacity = 0
+        tutorialBannerGlow = 0
+        tutorialBannerExit = 0
     }
 
     private func beginPlayback(tutorial: Bool) {

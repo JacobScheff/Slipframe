@@ -7,6 +7,28 @@
 
 import Foundation
 
+struct TutorialSuccessBanner: Equatable {
+    var text: String
+    /// 0…1 entrance (scale / fade in).
+    var appear: Float
+    /// Soft breathing pulse while held (0…1).
+    var pulse: Float
+    /// 0…1 exit (fade / lift away). 0 = fully present.
+    var exit: Float
+
+    var opacity: Float {
+        let enter = appear
+        let leave = 1 - exit
+        return max(0, min(1, enter * leave))
+    }
+
+    var scale: Float {
+        let enter = 0.72 + 0.28 * appear
+        let leave = 1 + 0.12 * exit
+        return enter * leave
+    }
+}
+
 struct TutorialFrame: Equatable {
     var section: TutorialSection
     var didEnterSection: Bool
@@ -15,9 +37,8 @@ struct TutorialFrame: Equatable {
     var overlayOpacity: Float
     /// Extra portal rim pulse (0…1) during overdrive.
     var portalPulse: Float
-    var shouldStopMusic: Bool
     var shouldFinish: Bool
-    var showTestRunBanner: Bool
+    var successBanner: TutorialSuccessBanner?
 }
 
 @MainActor
@@ -26,10 +47,13 @@ final class TutorialDirector {
     private(set) var sectionIndex: Int = 0
     private(set) var isActive = false
 
-    /// Seconds to hold the "TEST RUN INITIATED" banner before returning to the menu.
-    private static let outroHold: Float = 2.4
+    /// Appear + hold + exit for "TEST RUN SUCCEEDED".
+    private static let outroAppear: Float = 0.85
+    private static let outroHold: Float = 3.6
+    private static let outroExit: Float = 0.9
+    private static var outroTotal: Float { outroAppear + outroHold + outroExit }
+
     private var outroElapsed: Float = 0
-    private var didRequestMusicStop = false
     private var didRequestFinish = false
     private var overlayFade: Float = 1
 
@@ -42,7 +66,6 @@ final class TutorialDirector {
         elapsed = 0
         sectionIndex = 0
         outroElapsed = 0
-        didRequestMusicStop = false
         didRequestFinish = false
         overlayFade = 1
     }
@@ -50,7 +73,6 @@ final class TutorialDirector {
     func stop() {
         isActive = false
         didRequestFinish = false
-        didRequestMusicStop = false
     }
 
     func update(deltaTime: Float) -> TutorialFrame {
@@ -61,9 +83,8 @@ final class TutorialDirector {
                 elapsed: elapsed,
                 overlayOpacity: 0,
                 portalPulse: 0,
-                shouldStopMusic: false,
                 shouldFinish: false,
-                showTestRunBanner: false
+                successBanner: nil
             )
         }
 
@@ -85,21 +106,14 @@ final class TutorialDirector {
             overlayFade = max(overlayTarget, overlayFade - deltaTime * fadeSpeed)
         }
 
-        var shouldStopMusic = false
-        if section.isOutro, !didRequestMusicStop {
-            didRequestMusicStop = true
-            shouldStopMusic = true
-        }
-
         var shouldFinish = false
-        var showBanner = false
+        var banner: TutorialSuccessBanner?
         if section.isOutro {
-            showBanner = true
-            // On the enter frame, hold the banner before counting down.
             if !didEnter {
                 outroElapsed += deltaTime
             }
-            if outroElapsed >= Self.outroHold, !didRequestFinish {
+            banner = makeSuccessBanner(text: section.title, time: outroElapsed)
+            if outroElapsed >= Self.outroTotal, !didRequestFinish {
                 didRequestFinish = true
                 shouldFinish = true
             }
@@ -109,7 +123,6 @@ final class TutorialDirector {
 
         let portalPulse: Float
         if section.portalOverdrive {
-            // Violent pulse keyed to elapsed time.
             portalPulse = 0.55 + 0.45 * Float(sin(Double(elapsed) * 9.0))
         } else if didEnter {
             portalPulse = 1
@@ -123,9 +136,46 @@ final class TutorialDirector {
             elapsed: elapsed,
             overlayOpacity: overlayFade,
             portalPulse: portalPulse,
-            shouldStopMusic: shouldStopMusic,
             shouldFinish: shouldFinish,
-            showTestRunBanner: showBanner
+            successBanner: banner
         )
+    }
+
+    private static func makeSuccessBanner(text: String, time: Float) -> TutorialSuccessBanner {
+        let appear: Float
+        if time <= 0 {
+            appear = 0
+        } else if time < outroAppear {
+            // Ease-out cubic for a confident pop-in.
+            let u = time / outroAppear
+            appear = 1 - pow(1 - u, 3)
+        } else {
+            appear = 1
+        }
+
+        let holdStart = outroAppear
+        let exitStart = outroAppear + outroHold
+        let pulse: Float
+        if time >= holdStart, time < exitStart {
+            let holdT = time - holdStart
+            pulse = 0.5 + 0.5 * Float(sin(Double(holdT) * 3.2))
+        } else if time < holdStart {
+            pulse = appear
+        } else {
+            pulse = 0
+        }
+
+        let exit: Float
+        if time < exitStart {
+            exit = 0
+        } else if time >= outroTotal {
+            exit = 1
+        } else {
+            let u = (time - exitStart) / outroExit
+            // Ease-in so it hangs, then lifts away.
+            exit = u * u
+        }
+
+        return TutorialSuccessBanner(text: text, appear: appear, pulse: pulse, exit: exit)
     }
 }

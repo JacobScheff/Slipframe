@@ -10,7 +10,7 @@ import Foundation
 /// Filename stem for `Endless Runner/Music/tutorial.m4a` (or .mp3 / .wav / …).
 enum TutorialMusic {
     static let cue = "tutorial"
-    /// Absolute silence / hand-off beat in the master track.
+    /// Built-in silence / hand-off beat in the master track (do not cut playback early).
     static let silenceAt: Float = 171
 }
 
@@ -41,7 +41,7 @@ struct TutorialSection: Equatable {
     var hidesOverlay: Bool
     /// Violent portal pulse for the finale.
     var portalOverdrive: Bool
-    /// Flash "TEST RUN INITIATED" and return to the menu.
+    /// Flash success banner, then reveal the main menu.
     var isOutro: Bool
 }
 
@@ -137,7 +137,7 @@ enum TutorialCatalog {
             startTime: 171,
             endTime: 176,
             environment: nil,
-            title: "TEST RUN INITIATED",
+            title: "TEST RUN SUCCEEDED",
             body: "",
             speedMultiplier: 0,
             hidesOverlay: true,
