@@ -47,8 +47,6 @@ struct LeaderboardPanelView: View {
             localBestRow
 
             remoteBlock
-
-            footerNote
         }
         .padding(.horizontal, 28)
         .padding(.vertical, 22)
@@ -291,13 +289,6 @@ struct LeaderboardPanelView: View {
                 .font(.system(size: 14, weight: .medium, design: .rounded))
                 .foregroundStyle(.secondary)
         }
-    }
-
-    private var footerNote: some View {
-        Text("Playlists stay off the board. Daily uses a recurring Game Center board.")
-            .font(.system(size: 12, weight: .regular, design: .rounded))
-            .foregroundStyle(.secondary.opacity(0.9))
-            .fixedSize(horizontal: false, vertical: true)
     }
 
     private func pickerButton(

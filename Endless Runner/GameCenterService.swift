@@ -5,7 +5,7 @@
 //  Game Center auth, score submission, and leaderboard loads.
 //
 //  App Store Connect setup (manual):
-//  1. Enable Game Center on App ID `Jacob-Scheff.Endless-Runner-1`.
+//  1. Enable Game Center on App ID `Jacob-Scheff.Slipframe`.
 //  2. In the app’s Game Center section, create leaderboards with these IDs:
 //     Classic (score + coins): normal, emberRun, fogHollow, ghostGlass,
 //     lowCrawl, stormPass, crystalCave → e.g. `score.normal`, `coins.emberRun`.

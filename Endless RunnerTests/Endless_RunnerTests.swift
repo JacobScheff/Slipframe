@@ -379,6 +379,30 @@ final class Endless_RunnerTests: XCTestCase {
         XCTAssertFalse(CrystalCombine.canMerge(left: .blue, right: .blue))
     }
 
+    func testCrystalGrabIgnoresWristKeepsHandAndGrip() {
+        let wrist = SIMD3<Float>(0, 1.0, 0)
+        let indexTip = SIMD3<Float>(0.05, 1.05, -0.08)
+        let middleTip = SIMD3<Float>(0.02, 1.06, -0.09)
+        let thumbTip = SIMD3<Float>(-0.03, 1.04, -0.06)
+        let grip = SIMD3<Float>(0.01, 1.03, -0.05)
+        let contacts = [wrist, indexTip, middleTip, thumbTip]
+
+        let grabPoints = CrystalCombine.handOnlyContacts(from: contacts, grip: grip)
+
+        XCTAssertFalse(grabPoints.contains(where: { distance($0, wrist) < 0.001 }))
+        XCTAssertTrue(grabPoints.contains(where: { distance($0, indexTip) < 0.001 }))
+        XCTAssertTrue(grabPoints.contains(where: { distance($0, middleTip) < 0.001 }))
+        XCTAssertTrue(grabPoints.contains(where: { distance($0, thumbTip) < 0.001 }))
+        XCTAssertTrue(grabPoints.contains(where: { distance($0, grip) < 0.001 }))
+        XCTAssertEqual(grabPoints.count, 4)
+    }
+
+    func testCrystalGrabHandOnlyContactsEmptyWithoutTips() {
+        let wristOnly = [SIMD3<Float>(0, 1.0, 0)]
+        XCTAssertTrue(CrystalCombine.handOnlyContacts(from: wristOnly).isEmpty)
+        XCTAssertTrue(CrystalCombine.handOnlyContacts(from: []).isEmpty)
+    }
+
     func testCrystalMergeCoinAwards() {
         XCTAssertEqual(CrystalCombine.mergeCoinAward(leftCharged: false, rightCharged: false), 5)
         XCTAssertEqual(CrystalCombine.mergeCoinAward(leftCharged: true, rightCharged: false), 50)
