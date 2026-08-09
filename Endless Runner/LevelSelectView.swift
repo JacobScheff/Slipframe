@@ -9,6 +9,7 @@ import SwiftUI
 
 struct LevelSelectView: View {
     @EnvironmentObject private var gameModel: GameModel
+    @State private var showReplayConfirm = false
 
     private let neon = Color(red: 0.35, green: 0.92, blue: 1.0)
     private let gold = Color(red: 1.0, green: 0.82, blue: 0.32)
@@ -18,13 +19,20 @@ struct LevelSelectView: View {
         VStack(alignment: .leading, spacing: 18) {
             header
 
-            tutorialButton
+            // First-time only — once completed, tutorial moves to a quiet footer control.
+            if !gameModel.hasCompletedTutorial {
+                playTutorialButton
+            }
 
             modePicker
 
             Divider().opacity(0.35)
 
             modeBody
+
+            if gameModel.hasCompletedTutorial {
+                replayTutorialLink
+            }
         }
         .padding(.horizontal, 28)
         .padding(.vertical, 24)
@@ -34,6 +42,18 @@ struct LevelSelectView: View {
                 .strokeBorder(neon.opacity(0.45), lineWidth: 1.2)
         }
         .glassBackgroundEffect()
+        .confirmationDialog(
+            "Replay the tutorial?",
+            isPresented: $showReplayConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Replay Tutorial") {
+                gameModel.startTutorial()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This runs the full guided calibration again from the start.")
+        }
     }
 
     private var header: some View {
@@ -42,7 +62,7 @@ struct LevelSelectView: View {
             .foregroundStyle(.primary)
     }
 
-    private var tutorialButton: some View {
+    private var playTutorialButton: some View {
         Button {
             gameModel.startTutorial()
         } label: {
@@ -50,7 +70,7 @@ struct LevelSelectView: View {
                 Image(systemName: "sparkles.rectangle.stack")
                     .font(.system(size: 18, weight: .semibold))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(gameModel.hasCompletedTutorial ? "Replay Tutorial" : "Play Tutorial")
+                    Text("Play Tutorial")
                         .font(.system(size: 17, weight: .bold, design: .rounded))
                     Text("Guided calibration with coaching overlays.")
                         .font(.system(size: 13, weight: .regular, design: .rounded))
@@ -71,6 +91,22 @@ struct LevelSelectView: View {
         }
         .buttonStyle(.plain)
         .disabled(gameModel.isPlaying)
+    }
+
+    /// Quiet footer action — easy to miss on purpose after the first completion.
+    private var replayTutorialLink: some View {
+        Button {
+            showReplayConfirm = true
+        } label: {
+            Text("Replay tutorial…")
+                .font(.system(size: 12, weight: .medium, design: .rounded))
+                .foregroundStyle(.tertiary)
+        }
+        .buttonStyle(.plain)
+        .disabled(gameModel.isPlaying)
+        .padding(.top, 4)
+        .frame(maxWidth: .infinity, alignment: .trailing)
+        .accessibilityLabel("Replay tutorial")
     }
 
     private var modePicker: some View {
