@@ -146,7 +146,7 @@ The six biomes in the random pool:
 
 - **Look / feel:** Sunlit alpine stone — warm golds and ochres, open vertical space, contrast to Low Crawl’s cool blues.
 - **Music mood:** Bright, climbing pulse — upward energy, short bursts of lift.
-- **Special twist — jump hurdles:** Low ground barriers require a **small physical hop** (raising the headset ~8 cm above standing eye height) to clear, in addition to normal left/right lane dodges. Standing height is the **median** of headset-Y samples taken every few seconds while idle (menu / between runs), frozen during play. Rise is measured along **universal/world up** from the headset, not headset-local up.
+- **Special twist — jump hurdles:** Low ground barriers require a **small physical hop** (raising the headset ~8 cm above standing eye height) to clear, in addition to normal left/right lane dodges. Standing height is the **median** of headset-Y samples taken every few seconds while idle (menu / between runs; up to 100 samples), frozen during play. Rise is measured along **universal/world up** from the headset, not headset-local up.
 - **Gameplay notes:** Jump obstacles should be clearly silhouetted on the floor. Don’t stack jump-hazards with unfair side-walls in the same beat during early Summit Step visits; mix in simple jump-only gates so the verb teaches cleanly. Flow mirrors Low Crawl (teach gates, wider spawn gaps, optional single side wall). Coins stay at normal height.
 
 ##### Low Crawl

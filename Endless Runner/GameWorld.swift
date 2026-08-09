@@ -291,8 +291,8 @@ final class GameWorld {
     private var timeUntilStandingSample: Float = 0
     /// Sample standing height every few seconds while not in a run.
     private static let standingSampleInterval: Float = 2.5
-    /// Keep an odd count so the median is a real sample.
-    private static let standingSampleCapacity: Int = 7
+    /// Cap the rolling buffer so calibration stays bounded in memory.
+    private static let standingSampleCapacity: Int = 100
     /// Seconds since attach — drives portal pulse / ambient motion.
     private var elapsedTime: Float = 0
     /// Elapsed time while game-over clear is armed; nil when inactive.

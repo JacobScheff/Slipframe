@@ -395,6 +395,12 @@ final class Endless_RunnerTests: XCTestCase {
         XCTAssertFalse(JumpHeightDetection.isPlausibleStandingHeight(0.4))
     }
 
+    func testStandingHeightMedianHandlesLargeSampleBuffer() {
+        var samples = Array(repeating: Float(1.55), count: 99)
+        samples.append(1.90) // one jump outlier in a full 100-sample buffer
+        XCTAssertEqual(JumpHeightDetection.medianHeight(of: samples), 1.55, accuracy: 0.0001)
+    }
+
     func testSweptZCatchesTunnelingWall() {
         // Wall jumped from z=-0.4 to z=0.4 in one frame past a head at z=0.
         XCTAssertTrue(
