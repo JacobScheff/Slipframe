@@ -8,6 +8,7 @@
 import XCTest
 @testable import Endless_Runner
 import Combine
+import GameKit
 import simd
 
 @MainActor
