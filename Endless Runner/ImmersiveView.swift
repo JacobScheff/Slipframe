@@ -84,7 +84,7 @@ struct ImmersiveView: View {
             gameModel.isPlaying = false
             gameModel.prefersRoomDimming = false
             if gameModel.isTutorialRun {
-                gameModel.finishTutorial(markCompleted: false)
+                gameModel.finishTutorial(markCompleted: false, revealMenu: false)
             }
             isGameCenterAuthWindowOpen = false
             dismissWindow(id: GameCenterAuthScene.id)

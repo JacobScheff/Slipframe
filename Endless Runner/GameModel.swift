@@ -238,6 +238,7 @@ final class GameModel: ObservableObject {
         isTutorialRun = tutorial
         prefersRoomDimming = false
         lastPersonalBestUpdate = nil
+        pendingMenuReveal = false
         clearTutorialOverlay()
         runID += 1
     }

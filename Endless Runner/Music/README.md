@@ -28,7 +28,7 @@ Section timestamps (hard-coded in `TutorialScript.swift`):
 | 1:33–2:00   | Crystal Cave       |
 | 2:00–2:24   | Jumping Mechanic   |
 | 2:24–2:51   | System Overdrive   |
-| 2:51        | Dead silence / hand-off |
+| 2:51        | Dead silence baked into the file (app does not cut playback) |
 
 Supported extensions (first match wins): `.m4a`, `.mp3`, `.wav`, `.caf`, `.aiff`.
 
