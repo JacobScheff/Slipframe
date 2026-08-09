@@ -174,15 +174,12 @@ final class GameWorld {
     private static let lowCrawlCoinHeight: Float = duckClearanceY * 0.65
 
     // Jump hazard geometry (Summit Step) — Low Crawl's vertical twin.
-    /// Top of the ground hurdle — stand through it = hit; jump so the body probe clears.
-    private static let jumpClearanceY: Float = 0.25
-    private static let jumpSlabHeight: Float = 0.25
+    /// Small headset rise above standing eye height that clears a hurdle.
+    private static let jumpMinRise: Float = 0.08
+    /// Visual hurdle height (short — reads as a step, not a wall).
+    private static let jumpSlabHeight: Float = 0.14
     private static let jumpSlabWidth: Float = 2.5
     private static let jumpHitHalfDepth: Float = 0.4
-    /// Floor band for jump-body probes (allows a slightly negative estimated feet Y).
-    private static let jumpHitMinY: Float = -0.5
-    /// Coins paired with a jump hurdle sit above it.
-    private static let summitStepCoinHeight: Float = jumpClearanceY + 0.35
 
     // Synth Riders-style portal aperture (always visible at the track end).
     private static let portalWidth: Float = 3.6
@@ -1569,9 +1566,8 @@ final class GameWorld {
         if environmentDirector.isTeachingSummitStep {
             spawnJumpWall()
             environmentDirector.noteJumpGateSpawned()
-            // Coin above the hurdle — jumping still rewards grabs.
             if nextUnitFloat() < 0.7, let lane = nextElement(Lane.allCases) {
-                spawnCoin(in: lane, overHurdle: true)
+                spawnCoin(in: lane)
             }
             return
         }
@@ -1587,10 +1583,9 @@ final class GameWorld {
             spawnJumpWall()
             let coinLanes = Lane.allCases.filter { !blocked.contains($0) }
             if nextUnitFloat() < 0.7, let lane = nextElement(coinLanes) {
-                spawnCoin(in: lane, overHurdle: true)
+                spawnCoin(in: lane)
             }
         } else {
-            // No hurdle on this beat — normal standing coin height.
             spawnStandardPattern()
         }
     }
@@ -1775,7 +1770,7 @@ final class GameWorld {
         return body
     }
 
-    private func spawnCoin(in lane: Lane, underCeiling: Bool = false, overHurdle: Bool = false) {
+    private func spawnCoin(in lane: Lane, underCeiling: Bool = false) {
         // Spawn-time biome tint only (no live retint on switch) — Ember keeps polished gold.
         let coinColors = GameCoinTint.colors(for: activeSpawnProfile)
         let coin = GameVisualBuilders.makeCoin(
@@ -1786,14 +1781,7 @@ final class GameWorld {
         )
         // Mild outward offset — still a reach, but easier to snag mid-dodge.
         let outward: Float = lane == .center ? 0 : (lane.x > 0 ? GameWorld.coinOutwardOffset : -GameWorld.coinOutwardOffset)
-        let baseY: Float
-        if underCeiling {
-            baseY = GameWorld.lowCrawlCoinHeight
-        } else if overHurdle {
-            baseY = GameWorld.summitStepCoinHeight
-        } else {
-            baseY = GameWorld.coinHeight
-        }
+        let baseY = underCeiling ? GameWorld.lowCrawlCoinHeight : GameWorld.coinHeight
         coin.position = SIMD3(lane.x + outward + windCurrentX, baseY, patternSpawnZ)
         root.addChild(coin)
         coins.append(
@@ -2026,11 +2014,15 @@ final class GameWorld {
         let handHalfWidth = halfWidth + GameWorld.handHitRadius
         let duckHalfWidth = GameWorld.duckSlabWidth * 0.5 - 0.05
         let jumpHalfWidth = GameWorld.jumpSlabWidth * 0.5 - 0.05
-        // Feet + shin probes from headset along universal (playfield) down.
-        let jumpBodySamples = [
-            JumpHeightDetection.bodyProbe(fromHead: head, eyeHeight: standingEyeHeight),
-            JumpHeightDetection.bodyProbe(fromHead: head, eyeHeight: standingEyeHeight * 0.75)
-        ]
+        // If the player stands shorter than the captured baseline, ease the
+        // baseline down so a small hop still clears (avoids permanent hits).
+        if head.y + 0.02 < standingEyeHeight {
+            standingEyeHeight = max(1.2, head.y)
+        }
+        let jumpHeadRise = JumpHeightDetection.headRise(
+            headY: head.y,
+            standingEyeHeight: standingEyeHeight
+        )
 
         for wall in walls {
             guard !wall.hasResolvedHit else { continue }
@@ -2067,32 +2059,18 @@ final class GameWorld {
                 }
                 hit = headHit || handHit
             case .jump:
+                // Headset-only: a small rise along universal up clears. Hands ignored.
                 let centerX = wall.entity.position.x
-                let bodyHit = jumpBodySamples.contains { sample in
-                    WallCollision.pointHitsJumpBarrier(
-                        point: sample,
-                        wallZ: wallZ,
-                        previousWallZ: previousZ,
-                        centerX: centerX,
-                        halfWidth: jumpHalfWidth,
-                        halfDepth: GameWorld.jumpHitHalfDepth,
-                        clearanceY: GameWorld.jumpClearanceY,
-                        minY: GameWorld.jumpHitMinY
-                    )
-                }
-                let handHit = hands.contains { hand in
-                    WallCollision.pointHitsJumpBarrier(
-                        point: hand,
-                        wallZ: wallZ,
-                        previousWallZ: previousZ,
-                        centerX: centerX,
-                        halfWidth: jumpHalfWidth + GameWorld.handHitRadius,
-                        halfDepth: GameWorld.jumpHitHalfDepth + GameWorld.handHitRadius,
-                        clearanceY: GameWorld.jumpClearanceY,
-                        minY: GameWorld.jumpHitMinY
-                    )
-                }
-                hit = bodyHit || handHit
+                hit = WallCollision.pointHitsJumpBarrier(
+                    point: head,
+                    wallZ: wallZ,
+                    previousWallZ: previousZ,
+                    centerX: centerX,
+                    halfWidth: jumpHalfWidth,
+                    halfDepth: GameWorld.jumpHitHalfDepth,
+                    headRise: jumpHeadRise,
+                    minRise: GameWorld.jumpMinRise
+                )
             case .standard, .ghost:
                 let slabXs = wall.worldSlabXs()
                 let seal = wall.sealsBetweenSlabs

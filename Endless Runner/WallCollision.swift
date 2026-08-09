@@ -18,10 +18,17 @@ enum WallKind: Equatable {
 
 enum JumpHeightDetection {
     /// Playfield / world down. Never use headset-local down — tilting the
-    /// device must not walk the body probe sideways.
+    /// device must not walk a height sample sideways.
     static let universalDown = SIMD3<Float>(0, -1, 0)
 
-    /// Body/feet probe from headset translation along universal down.
+    /// How far the headset has risen above the standing eye height, measured
+    /// along universal up (playfield Y). Ignores headset pitch/roll.
+    static func headRise(headY: Float, standingEyeHeight: Float) -> Float {
+        headY - standingEyeHeight
+    }
+
+    /// Body/feet probe from headset translation along universal down (XZ stays
+    /// under the headset even if the display is tilted).
     static func bodyProbe(fromHead head: SIMD3<Float>, eyeHeight: Float) -> SIMD3<Float> {
         head + universalDown * eyeHeight
     }
@@ -152,9 +159,9 @@ enum WallCollision {
         return abs(point.x - centerX) <= halfWidth
     }
 
-    /// Low ground hurdle: hit if the contact (usually a feet/body probe cast
-    /// straight down from the headset) is inside the XZ box and still at or
-    /// below `clearanceY` (player must jump over).
+    /// Low ground hurdle: hit if the headset XZ is inside the kill box and the
+    /// headset has not risen at least `minRise` above standing eye height
+    /// (small physical hop clears). Height uses universal up, not headset-local up.
     static func pointHitsJumpBarrier(
         point: SIMD3<Float>,
         wallZ: Float,
@@ -162,10 +169,10 @@ enum WallCollision {
         centerX: Float,
         halfWidth: Float,
         halfDepth: Float,
-        clearanceY: Float,
-        minY: Float
+        headRise: Float,
+        minRise: Float
     ) -> Bool {
-        guard point.y <= clearanceY, point.y >= minY else { return false }
+        guard headRise < minRise else { return false }
         let prior = previousWallZ ?? wallZ
         guard overlapsSweptZ(
             pointZ: point.z,

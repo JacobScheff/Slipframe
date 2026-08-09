@@ -355,37 +355,33 @@ final class Endless_RunnerTests: XCTestCase {
         XCTAssertEqual(JumpHeightDetection.universalDown, SIMD3<Float>(0, -1, 0))
     }
 
-    func testJumpBarrierHitsStandingBodyProbe() {
-        let feet = JumpHeightDetection.bodyProbe(
-            fromHead: SIMD3(0, 1.55, 0),
-            eyeHeight: 1.55
-        )
+    func testJumpBarrierHitsWhenHeadsetHasNotRisen() {
+        let head = SIMD3<Float>(0, 1.55, 0)
+        let rise = JumpHeightDetection.headRise(headY: head.y, standingEyeHeight: 1.55)
         let hit = WallCollision.pointHitsJumpBarrier(
-            point: feet,
+            point: head,
             wallZ: 0,
             centerX: 0,
             halfWidth: 1.1,
             halfDepth: 0.2,
-            clearanceY: 0.25,
-            minY: -0.5
+            headRise: rise,
+            minRise: 0.08
         )
         XCTAssertTrue(hit)
     }
 
-    func testJumpBarrierClearedWhenBodyProbeIsHigh() {
-        // ~0.3 m jump raises the universal-down feet probe above the hurdle.
-        let feet = JumpHeightDetection.bodyProbe(
-            fromHead: SIMD3(0, 1.85, 0),
-            eyeHeight: 1.55
-        )
+    func testJumpBarrierClearedWithSmallHeadsetRise() {
+        let head = SIMD3<Float>(0, 1.64, 0)
+        let rise = JumpHeightDetection.headRise(headY: head.y, standingEyeHeight: 1.55)
+        XCTAssertGreaterThanOrEqual(rise, 0.08)
         let hit = WallCollision.pointHitsJumpBarrier(
-            point: feet,
+            point: head,
             wallZ: 0,
             centerX: 0,
             halfWidth: 1.1,
             halfDepth: 0.2,
-            clearanceY: 0.25,
-            minY: -0.5
+            headRise: rise,
+            minRise: 0.08
         )
         XCTAssertFalse(hit)
     }
