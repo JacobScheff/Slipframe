@@ -47,8 +47,6 @@ struct LeaderboardPanelView: View {
             localBestRow
 
             remoteBlock
-
-            footerNote
         }
         .padding(.horizontal, 28)
         .padding(.vertical, 22)
