@@ -32,6 +32,18 @@ enum JumpHeightDetection {
     static func bodyProbe(fromHead head: SIMD3<Float>, eyeHeight: Float) -> SIMD3<Float> {
         head + universalDown * eyeHeight
     }
+
+    /// Median of standing-height samples (middle value after sort).
+    static func medianHeight(of samples: [Float]) -> Float? {
+        guard !samples.isEmpty else { return nil }
+        let sorted = samples.sorted()
+        return sorted[sorted.count / 2]
+    }
+
+    /// True when a headset Y reading is plausible for standing calibration.
+    static func isPlausibleStandingHeight(_ height: Float) -> Bool {
+        height >= 1.1 && height <= 2.1
+    }
 }
 
 enum ObstacleLayout {

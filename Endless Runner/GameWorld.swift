@@ -284,9 +284,15 @@ final class GameWorld {
     private var isPlayfieldLocked = false
     /// True once we've placed using a tracked WorldTracking device anchor.
     private var didSnapWithWorldTracking = false
-    /// Standing eye height in playfield space, captured when the playfield is placed.
-    /// Used as the universal-down offset for Summit Step jump probes.
+    /// Standing eye height in playfield space — median of idle headset samples.
     private var standingEyeHeight: Float = GameWorld.fallbackEyeHeight
+    /// Rolling headset-Y samples gathered while idle (menu / game over).
+    private var standingHeightSamples: [Float] = []
+    private var timeUntilStandingSample: Float = 0
+    /// Sample standing height every few seconds while not in a run.
+    private static let standingSampleInterval: Float = 2.5
+    /// Keep an odd count so the median is a real sample.
+    private static let standingSampleCapacity: Int = 7
     /// Seconds since attach — drives portal pulse / ambient motion.
     private var elapsedTime: Float = 0
     /// Elapsed time while game-over clear is armed; nil when inactive.
@@ -711,14 +717,35 @@ final class GameWorld {
     private func placePlayfield() {
         let usedWorldTracking = hasTrackedDeviceAnchor
         snapPlayfieldToPlayer()
-        // Capture standing eye height in playfield Y (root sits on the floor).
-        // Jump probes drop this offset along universal down — not headset-local down.
-        let headY = playfieldHeadPosition().y
-        standingEyeHeight = max(1.2, min(1.9, headY > 0.5 ? headY : GameWorld.fallbackEyeHeight))
+        // Seed standing-height calibration from the placement pose.
+        recordStandingHeightSample(playfieldHeadPosition().y)
+        timeUntilStandingSample = GameWorld.standingSampleInterval
         updatePortalAndTrack()
         rebuildFixedTrack(force: true)
         isPlayfieldLocked = true
         didSnapWithWorldTracking = usedWorldTracking
+    }
+
+    /// While idle, sample headset height every few seconds and use the median
+    /// as standing eye height so Summit Step jumps aren't calibrated off a bob.
+    private func updateStandingHeightCalibration(deltaTime: Float) {
+        timeUntilStandingSample -= deltaTime
+        guard timeUntilStandingSample <= 0 else { return }
+        timeUntilStandingSample = GameWorld.standingSampleInterval
+        recordStandingHeightSample(playfieldHeadPosition().y)
+    }
+
+    private func recordStandingHeightSample(_ headY: Float) {
+        guard JumpHeightDetection.isPlausibleStandingHeight(headY) else { return }
+        standingHeightSamples.append(headY)
+        if standingHeightSamples.count > GameWorld.standingSampleCapacity {
+            standingHeightSamples.removeFirst(
+                standingHeightSamples.count - GameWorld.standingSampleCapacity
+            )
+        }
+        if let median = JumpHeightDetection.medianHeight(of: standingHeightSamples) {
+            standingEyeHeight = median
+        }
     }
 
     /// One-time upgrade from head-anchor fallback → WorldTracking once the device is tracked.
@@ -1105,6 +1132,12 @@ final class GameWorld {
         upgradePlayfieldWithWorldTrackingIfNeeded()
 
         guard let gameModel else { return }
+
+        // Calibrate standing height on the menu / after a run — freeze during play
+        // so a jump cannot raise the baseline mid-hurdle.
+        if !gameModel.isPlaying {
+            updateStandingHeightCalibration(deltaTime: deltaTime)
+        }
 
         guard gameModel.isPlaying, !gameModel.isGameOver else {
             if gameModel.prefersRoomDimming {
@@ -2014,11 +2047,6 @@ final class GameWorld {
         let handHalfWidth = halfWidth + GameWorld.handHitRadius
         let duckHalfWidth = GameWorld.duckSlabWidth * 0.5 - 0.05
         let jumpHalfWidth = GameWorld.jumpSlabWidth * 0.5 - 0.05
-        // If the player stands shorter than the captured baseline, ease the
-        // baseline down so a small hop still clears (avoids permanent hits).
-        if head.y + 0.02 < standingEyeHeight {
-            standingEyeHeight = max(1.2, head.y)
-        }
         let jumpHeadRise = JumpHeightDetection.headRise(
             headY: head.y,
             standingEyeHeight: standingEyeHeight
