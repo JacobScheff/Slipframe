@@ -27,10 +27,28 @@ final class GameModel: ObservableObject {
     /// Game Center submit/load. Tests may override submission via `scoreSubmitter`.
     let gameCenter: GameCenterService
     private let scoreSubmitterOverride: (any GameCenterSubmitting)?
+    private let defaults: UserDefaults
+    private let tutorialCompletedKey: String
 
     @Published var isPlaying: Bool = false
     @Published var isGameOver: Bool = false
     @Published var immersiveSpaceOpen: Bool = false
+
+    /// True while a guided tutorial run is active (soft hits, no score).
+    @Published private(set) var isTutorialRun: Bool = false
+
+    // MARK: - Tutorial overlay (lazy-locked attachment)
+
+    @Published var tutorialOverlayTitle: String = ""
+    @Published var tutorialOverlayBody: String = ""
+    @Published var tutorialOverlayOpacity: Float = 0
+    @Published var tutorialBannerText: String? = nil
+    @Published var tutorialBannerScale: Float = 1
+    @Published var tutorialBannerOpacity: Float = 0
+    @Published var tutorialBannerGlow: Float = 0
+    @Published var tutorialBannerExit: Float = 0
+    /// After tutorial outro, menu chrome rises into place once.
+    @Published var pendingMenuReveal: Bool = false
 
     // MARK: - Level select draft (committed via resolvedPlayMode on Start)
 
@@ -40,7 +58,7 @@ final class GameModel: ObservableObject {
     /// Nil = random start from the selected playlist set.
     @Published var playlistStart: EnvironmentID? = nil
 
-    /// Optional passthrough room dimming (currently unused by the biome roster).
+    /// Fog / Summit Step asks ImmersiveView to dim passthrough when density > 0.
     @Published var prefersRoomDimming: Bool = false
 
     /// Bumped on each restart so the immersive session can reset run content (not pose).
@@ -54,13 +72,17 @@ final class GameModel: ObservableObject {
     init(
         personalBests: PersonalBestStore? = nil,
         gameCenter: GameCenterService? = nil,
-        scoreSubmitter: (any GameCenterSubmitting)? = nil
+        scoreSubmitter: (any GameCenterSubmitting)? = nil,
+        defaults: UserDefaults? = nil,
+        tutorialCompletedKey: String = "tutorial.completed.v1"
     ) {
         let bests = personalBests ?? PersonalBestStore()
         let center = gameCenter ?? GameCenterService()
         self.personalBests = bests
         self.gameCenter = center
         self.scoreSubmitterOverride = scoreSubmitter
+        self.defaults = defaults ?? .standard
+        self.tutorialCompletedKey = tutorialCompletedKey
         center.attachPersonalBests(bests)
     }
 
@@ -79,8 +101,14 @@ final class GameModel: ObservableObject {
         set { stats.coinsCollected = newValue }
     }
 
+    var hasCompletedTutorial: Bool {
+        get { defaults.bool(forKey: tutorialCompletedKey) }
+        set { defaults.set(newValue, forKey: tutorialCompletedKey) }
+    }
+
     /// Mode used for the active / next run.
     var resolvedPlayMode: PlayMode {
+        if isTutorialRun { return .tutorial }
         switch playKind {
         case .normal:
             return .normal
@@ -96,6 +124,7 @@ final class GameModel: ObservableObject {
     }
 
     var canStartRun: Bool {
+        if isTutorialRun { return true }
         switch playKind {
         case .playlist:
             return !playlistEnvironments.isEmpty
@@ -106,32 +135,135 @@ final class GameModel: ObservableObject {
 
     func startRun() {
         guard canStartRun else { return }
-        stats.score = 0
-        stats.coinsCollected = 0
+        beginPlayback(tutorial: false)
+    }
+
+    func startTutorial() {
+        beginPlayback(tutorial: true)
+    }
+
+    /// Soft exit from tutorial — returns to Ready (not game-over).
+    func finishTutorial(markCompleted: Bool = true, revealMenu: Bool = true) {
+        guard isTutorialRun else { return }
+        isPlaying = false
         isGameOver = false
-        isPlaying = true
+        isTutorialRun = false
         prefersRoomDimming = false
-        lastPersonalBestUpdate = nil
-        runID += 1
+        clearTutorialOverlay()
+        pendingMenuReveal = revealMenu
+        if markCompleted {
+            hasCompletedTutorial = true
+        }
+    }
+
+    /// Stop playback and arm the normal game-over field clear; menu returns after dissolve.
+    func skipTutorial() {
+        guard isTutorialRun, isPlaying else { return }
+        // Leaving mid-track — stop the master cue so the menu isn't under a half-song.
+        if GameMusic.shared.currentCue == TutorialMusic.cue {
+            GameMusic.shared.stop()
+        }
+        clearTutorialOverlay()
+        isPlaying = false
+        isGameOver = true
+        prefersRoomDimming = false
+        // Keep `isTutorialRun` true so HUD/panels stay in tutorial-skip mode until
+        // `finalizeTutorialSkip()` runs after walls/coins dissolve.
+    }
+
+    /// Called by GameWorld once the post-skip dissolve finishes.
+    func finalizeTutorialSkip() {
+        guard isTutorialRun else { return }
+        isTutorialRun = false
+        isGameOver = false
+        isPlaying = false
+        prefersRoomDimming = false
+        hasCompletedTutorial = true
+        pendingMenuReveal = true
+        clearTutorialOverlay()
+    }
+
+    func consumeMenuReveal() {
+        pendingMenuReveal = false
     }
 
     func addScore(_ points: Int) {
-        guard isPlaying else { return }
+        guard isPlaying, !isTutorialRun else { return }
         stats.score += points
     }
 
     /// Coins are a separate counter — score is distance-only.
     func collectCoin(count: Int = 1) {
-        guard isPlaying else { return }
+        guard isPlaying, !isTutorialRun else { return }
         stats.coinsCollected += count
     }
 
     func endRun() {
         guard isPlaying else { return }
+        // Tutorial never hard-fails into game-over.
+        if isTutorialRun {
+            finishTutorial(markCompleted: false)
+            return
+        }
         isPlaying = false
         isGameOver = true
         prefersRoomDimming = false
         recordPersonalBestsIfNeeded()
+    }
+
+    func applyTutorialOverlay(
+        title: String,
+        body: String,
+        opacity: Float,
+        banner: TutorialSuccessBanner?
+    ) {
+        if tutorialOverlayTitle != title { tutorialOverlayTitle = title }
+        if tutorialOverlayBody != body { tutorialOverlayBody = body }
+        if tutorialOverlayOpacity != opacity { tutorialOverlayOpacity = opacity }
+        if let banner {
+            if tutorialBannerText != banner.text { tutorialBannerText = banner.text }
+            if tutorialBannerScale != banner.scale { tutorialBannerScale = banner.scale }
+            if tutorialBannerOpacity != banner.opacity { tutorialBannerOpacity = banner.opacity }
+            if tutorialBannerGlow != banner.pulse { tutorialBannerGlow = banner.pulse }
+            if tutorialBannerExit != banner.exit { tutorialBannerExit = banner.exit }
+        } else {
+            if tutorialBannerText != nil { tutorialBannerText = nil }
+            if tutorialBannerOpacity != 0 { tutorialBannerOpacity = 0 }
+            if tutorialBannerGlow != 0 { tutorialBannerGlow = 0 }
+            if tutorialBannerExit != 0 { tutorialBannerExit = 0 }
+            if tutorialBannerScale != 1 { tutorialBannerScale = 1 }
+        }
+    }
+
+    func clearTutorialOverlay() {
+        tutorialOverlayTitle = ""
+        tutorialOverlayBody = ""
+        tutorialOverlayOpacity = 0
+        tutorialBannerText = nil
+        tutorialBannerScale = 1
+        tutorialBannerOpacity = 0
+        tutorialBannerGlow = 0
+        tutorialBannerExit = 0
+    }
+
+    private func beginPlayback(tutorial: Bool) {
+        if !tutorial {
+            guard canStartRun else { return }
+        }
+        stats.score = 0
+        stats.coinsCollected = 0
+        isGameOver = false
+        isPlaying = true
+        isTutorialRun = tutorial
+        prefersRoomDimming = false
+        lastPersonalBestUpdate = nil
+        pendingMenuReveal = false
+        clearTutorialOverlay()
+        // Seed coaching opacity immediately so Skip isn't hidden for a frame on auto-start.
+        if tutorial {
+            tutorialOverlayOpacity = 1
+        }
+        runID += 1
     }
 
     /// Persists local bests and submits to Game Center for Normal, Loop, and Daily.

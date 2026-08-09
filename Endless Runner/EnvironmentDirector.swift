@@ -70,7 +70,7 @@ final class EnvironmentDirector {
 
         let start: EnvironmentID
         switch mode {
-        case .normal:
+        case .normal, .tutorial:
             start = .emberRun
         case .solo(let id):
             start = id
@@ -88,7 +88,13 @@ final class EnvironmentDirector {
             dailyRNG = rng
         }
 
-        enter(start, telegraph: false, announceMusic: true)
+        // Tutorial owns the master track — biomes switch silently.
+        let announceMusic = mode != .tutorial
+        enter(start, telegraph: false, announceMusic: announceMusic)
+        if mode == .tutorial {
+            // TutorialDirector advances sections; never auto-rotate biomes.
+            currentSwitchInterval = .greatestFiniteMagnitude
+        }
     }
 
     /// Idle preview when the player changes mode selection (no music hitch).
@@ -96,7 +102,7 @@ final class EnvironmentDirector {
         playMode = mode
         let start: EnvironmentID
         switch mode {
-        case .normal:
+        case .normal, .tutorial:
             start = .emberRun
         case .solo(let id):
             start = id
@@ -115,6 +121,23 @@ final class EnvironmentDirector {
         }
     }
 
+    /// Tutorial section change — palette / twist only (music stays on the master track).
+    func forceEnvironment(_ id: EnvironmentID, telegraph: Bool = true) {
+        guard id != currentID else {
+            // Re-enter teaching counters when the finale revisits Ember.
+            duckGatesSpawnedThisVisit = 0
+            jumpGatesSpawnedThisVisit = 0
+            if telegraph {
+                telegraphRemaining = EnvironmentCatalog.telegraphSeconds
+            }
+            return
+        }
+        enter(id, telegraph: telegraph, announceMusic: false)
+        if playMode == .tutorial {
+            currentSwitchInterval = .greatestFiniteMagnitude
+        }
+    }
+
     func update(deltaTime: Float) -> EnvironmentFrame {
         var didEnter = false
         var previous: EnvironmentID?
@@ -124,7 +147,9 @@ final class EnvironmentDirector {
             telegraphRemaining = max(0, telegraphRemaining - deltaTime)
         }
 
-        if case .solo(let forced) = playMode {
+        if case .tutorial = playMode {
+            // Section advances are driven by TutorialDirector via `forceEnvironment`.
+        } else if case .solo(let forced) = playMode {
             if forced != currentID {
                 previous = currentID
                 enter(forced, telegraph: true, announceMusic: true)
@@ -196,7 +221,7 @@ final class EnvironmentDirector {
 
     private func pickNextEnvironment() -> EnvironmentID? {
         switch playMode {
-        case .solo:
+        case .solo, .tutorial:
             return nil
         case .normal:
             return Self.randomNext(excluding: currentID)

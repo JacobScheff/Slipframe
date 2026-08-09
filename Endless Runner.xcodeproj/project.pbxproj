@@ -37,6 +37,10 @@
 		B01A102F2C72000100A0002F /* GameCenterService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A102E2C72000100A0002E /* GameCenterService.swift */; };
 		B01A10312C72000100A00031 /* GameKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B01A10302C72000100A00030 /* GameKit.framework */; };
 		B01A10342C72000100A00034 /* GameCenterAuthWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A10332C72000100A00033 /* GameCenterAuthWindow.swift */; };
+		B01A10412C72000100A00041 /* TutorialScript.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A10402C72000100A00040 /* TutorialScript.swift */; };
+		B01A10432C72000100A00043 /* TutorialDirector.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A10422C72000100A00042 /* TutorialDirector.swift */; };
+		B01A10452C72000100A00045 /* LazyLock.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A10442C72000100A00044 /* LazyLock.swift */; };
+		B01A10472C72000100A00047 /* TutorialOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A10462C72000100A00046 /* TutorialOverlayView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -84,6 +88,10 @@
 		B01A10302C72000100A00030 /* GameKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = GameKit.framework; path = System/Library/Frameworks/GameKit.framework; sourceTree = SDKROOT; };
 		B01A10322C72000100A00032 /* Endless_Runner.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Endless_Runner.entitlements; sourceTree = "<group>"; };
 		B01A10332C72000100A00033 /* GameCenterAuthWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameCenterAuthWindow.swift; sourceTree = "<group>"; };
+		B01A10402C72000100A00040 /* TutorialScript.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TutorialScript.swift; sourceTree = "<group>"; };
+		B01A10422C72000100A00042 /* TutorialDirector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TutorialDirector.swift; sourceTree = "<group>"; };
+		B01A10442C72000100A00044 /* LazyLock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LazyLock.swift; sourceTree = "<group>"; };
+		B01A10462C72000100A00046 /* TutorialOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TutorialOverlayView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -145,6 +153,10 @@
 				B01A101A2C72000100A0001A /* EnvironmentMaterials.swift */,
 				B01A10222C72000100A00022 /* StormWind.swift */,
 				B01A10242C72000100A00024 /* PlayMode.swift */,
+				B01A10402C72000100A00040 /* TutorialScript.swift */,
+				B01A10422C72000100A00042 /* TutorialDirector.swift */,
+				B01A10442C72000100A00044 /* LazyLock.swift */,
+				B01A10462C72000100A00046 /* TutorialOverlayView.swift */,
 				B01A10262C72000100A00026 /* DailyChallenge.swift */,
 				B01A10282C72000100A00028 /* LevelSelectView.swift */,
 				B01A102A2C72000100A0002A /* LeaderboardPanelView.swift */,
@@ -313,6 +325,10 @@
 				B01A101B2C72000100A0001B /* EnvironmentMaterials.swift in Sources */,
 				B01A10232C72000100A00023 /* StormWind.swift in Sources */,
 				B01A10252C72000100A00025 /* PlayMode.swift in Sources */,
+				B01A10412C72000100A00041 /* TutorialScript.swift in Sources */,
+				B01A10432C72000100A00043 /* TutorialDirector.swift in Sources */,
+				B01A10452C72000100A00045 /* LazyLock.swift in Sources */,
+				B01A10472C72000100A00047 /* TutorialOverlayView.swift in Sources */,
 				B01A10272C72000100A00027 /* DailyChallenge.swift in Sources */,
 				B01A10292C72000100A00029 /* LevelSelectView.swift in Sources */,
 				B01A102B2C72000100A0002B /* LeaderboardPanelView.swift in Sources */,

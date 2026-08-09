@@ -9,6 +9,7 @@ import SwiftUI
 
 struct LevelSelectView: View {
     @EnvironmentObject private var gameModel: GameModel
+    @State private var showReplayConfirm = false
 
     private let neon = Color(red: 0.35, green: 0.92, blue: 1.0)
     private let gold = Color(red: 1.0, green: 0.82, blue: 0.32)
@@ -18,11 +19,20 @@ struct LevelSelectView: View {
         VStack(alignment: .leading, spacing: 18) {
             header
 
+            // First-time only — once completed, tutorial moves to a quiet footer control.
+            if !gameModel.hasCompletedTutorial {
+                playTutorialButton
+            }
+
             modePicker
 
             Divider().opacity(0.35)
 
             modeBody
+
+            if gameModel.hasCompletedTutorial {
+                replayTutorialFooter
+            }
         }
         .padding(.horizontal, 28)
         .padding(.vertical, 24)
@@ -32,12 +42,95 @@ struct LevelSelectView: View {
                 .strokeBorder(neon.opacity(0.45), lineWidth: 1.2)
         }
         .glassBackgroundEffect()
+        // System confirmationDialog does not present from RealityKit attachments.
+        .onChange(of: gameModel.isPlaying) { _, playing in
+            if playing { showReplayConfirm = false }
+        }
     }
 
     private var header: some View {
         Text("Mode Selection")
             .font(.system(size: 28, weight: .semibold, design: .rounded))
             .foregroundStyle(.primary)
+    }
+
+    private var playTutorialButton: some View {
+        Button {
+            gameModel.startTutorial()
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "sparkles.rectangle.stack")
+                    .font(.system(size: 18, weight: .semibold))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Play Tutorial")
+                        .font(.system(size: 17, weight: .bold, design: .rounded))
+                    Text("Guided calibration with coaching overlays.")
+                        .font(.system(size: 13, weight: .regular, design: .rounded))
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 4)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(gold.opacity(0.14))
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(gold.opacity(0.55), lineWidth: 1)
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(gameModel.isPlaying)
+    }
+
+    /// Quiet footer — confirmation is inline because attachment views can't present dialogs.
+    @ViewBuilder
+    private var replayTutorialFooter: some View {
+        if showReplayConfirm {
+            VStack(alignment: .trailing, spacing: 8) {
+                Text("Replay the full tutorial?")
+                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.trailing)
+
+                HStack(spacing: 10) {
+                    Button("Cancel") {
+                        showReplayConfirm = false
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
+
+                    Button("Replay") {
+                        showReplayConfirm = false
+                        gameModel.startTutorial()
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundStyle(gold.opacity(0.9))
+                }
+            }
+            .padding(.top, 6)
+            .frame(maxWidth: .infinity, alignment: .trailing)
+            .transition(.opacity.combined(with: .move(edge: .bottom)))
+        } else {
+            Button {
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    showReplayConfirm = true
+                }
+            } label: {
+                Text("Replay tutorial…")
+                    .font(.system(size: 15, weight: .medium, design: .rounded))
+                    .foregroundStyle(.tertiary)
+            }
+            .buttonStyle(.plain)
+            .disabled(gameModel.isPlaying)
+            .padding(.top, 4)
+            .frame(maxWidth: .infinity, alignment: .trailing)
+            .accessibilityLabel("Replay tutorial")
+        }
     }
 
     private var modePicker: some View {

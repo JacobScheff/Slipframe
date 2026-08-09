@@ -18,9 +18,16 @@ struct PlayHUDView: View {
 
     var body: some View {
         VStack(spacing: 18) {
-            HStack(spacing: 28) {
-                metricChip(title: "Score", value: "\(stats.score)", accent: neon)
-                metricChip(title: "Coins", value: "\(stats.coinsCollected)", accent: gold)
+            if gameModel.isTutorialRun {
+                Text("TUTORIAL")
+                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .tracking(3)
+                    .foregroundStyle(neon.opacity(0.85))
+            } else {
+                HStack(spacing: 28) {
+                    metricChip(title: "Score", value: "\(stats.score)", accent: neon)
+                    metricChip(title: "Coins", value: "\(stats.coinsCollected)", accent: gold)
+                }
             }
 
             controls
@@ -48,11 +55,40 @@ struct PlayHUDView: View {
                 }
         }
         .glassBackgroundEffect()
+        // Dissolve center HUD during overdrive / outro — coaching overlay owns the moment.
+        .opacity(centerHUDOpacity)
+        .animation(.easeInOut(duration: 0.45), value: gameModel.tutorialOverlayOpacity)
+        .animation(.easeInOut(duration: 0.3), value: gameModel.tutorialBannerText)
+    }
+
+    private var centerHUDOpacity: Double {
+        // Keep Skip reachable for the whole tutorial (including auto-start / overdrive).
+        // Only yield the center stage during the success banner.
+        if gameModel.isTutorialRun {
+            return gameModel.tutorialBannerOpacity > 0.05 ? 0 : 1
+        }
+        return 1
     }
 
     @ViewBuilder
     private var controls: some View {
-        if gameModel.isGameOver {
+        if gameModel.isTutorialRun {
+            if gameModel.isPlaying {
+                Button {
+                    gameModel.skipTutorial()
+                } label: {
+                    Label("Skip Tutorial", systemImage: "forward.end.fill")
+                        .font(.system(size: 20, weight: .semibold, design: .rounded))
+                        .frame(minWidth: 200)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.large)
+            } else {
+                Text("Clearing the track…")
+                    .font(.system(size: 17, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
+            }
+        } else if gameModel.isGameOver {
             Button {
                 gameModel.startRun()
             } label: {
