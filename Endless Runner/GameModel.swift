@@ -156,12 +156,31 @@ final class GameModel: ObservableObject {
         }
     }
 
+    /// Stop playback and arm the normal game-over field clear; menu returns after dissolve.
     func skipTutorial() {
-        // Leaving mid-track — fade the master cue so the menu isn't under a half-song.
+        guard isTutorialRun, isPlaying else { return }
+        // Leaving mid-track — stop the master cue so the menu isn't under a half-song.
         if GameMusic.shared.currentCue == TutorialMusic.cue {
             GameMusic.shared.stop()
         }
-        finishTutorial(markCompleted: true, revealMenu: true)
+        clearTutorialOverlay()
+        isPlaying = false
+        isGameOver = true
+        prefersRoomDimming = false
+        // Keep `isTutorialRun` true so HUD/panels stay in tutorial-skip mode until
+        // `finalizeTutorialSkip()` runs after walls/coins dissolve.
+    }
+
+    /// Called by GameWorld once the post-skip dissolve finishes.
+    func finalizeTutorialSkip() {
+        guard isTutorialRun else { return }
+        isTutorialRun = false
+        isGameOver = false
+        isPlaying = false
+        prefersRoomDimming = false
+        hasCompletedTutorial = true
+        pendingMenuReveal = true
+        clearTutorialOverlay()
     }
 
     func consumeMenuReveal() {
@@ -240,6 +259,10 @@ final class GameModel: ObservableObject {
         lastPersonalBestUpdate = nil
         pendingMenuReveal = false
         clearTutorialOverlay()
+        // Seed coaching opacity immediately so Skip isn't hidden for a frame on auto-start.
+        if tutorial {
+            tutorialOverlayOpacity = 1
+        }
         runID += 1
     }
 

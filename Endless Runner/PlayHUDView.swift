@@ -62,23 +62,32 @@ struct PlayHUDView: View {
     }
 
     private var centerHUDOpacity: Double {
-        if gameModel.tutorialBannerOpacity > 0.05 { return 0 }
-        if gameModel.isTutorialRun, gameModel.tutorialOverlayOpacity < 0.15 { return 0 }
+        // Keep Skip reachable for the whole tutorial (including auto-start / overdrive).
+        // Only yield the center stage during the success banner.
+        if gameModel.isTutorialRun {
+            return gameModel.tutorialBannerOpacity > 0.05 ? 0 : 1
+        }
         return 1
     }
 
     @ViewBuilder
     private var controls: some View {
         if gameModel.isTutorialRun {
-            Button {
-                gameModel.skipTutorial()
-            } label: {
-                Label("Skip Tutorial", systemImage: "forward.end.fill")
-                    .font(.system(size: 20, weight: .semibold, design: .rounded))
-                    .frame(minWidth: 200)
+            if gameModel.isPlaying {
+                Button {
+                    gameModel.skipTutorial()
+                } label: {
+                    Label("Skip Tutorial", systemImage: "forward.end.fill")
+                        .font(.system(size: 20, weight: .semibold, design: .rounded))
+                        .frame(minWidth: 200)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.large)
+            } else {
+                Text("Clearing the track…")
+                    .font(.system(size: 17, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
             }
-            .buttonStyle(.bordered)
-            .controlSize(.large)
         } else if gameModel.isGameOver {
             Button {
                 gameModel.startRun()

@@ -282,6 +282,33 @@ final class Endless_RunnerTests: XCTestCase {
         XCTAssertTrue(model.hasCompletedTutorial)
     }
 
+    func testSkipTutorialArmsGameOverClearThenFinalizes() {
+        let suite = "test.tutorial.skip.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let model = GameModel(
+            personalBests: makeIsolatedBestStore(),
+            scoreSubmitter: MockGameCenterSubmitter(),
+            defaults: defaults,
+            tutorialCompletedKey: suite
+        )
+        model.startTutorial()
+        XCTAssertEqual(model.tutorialOverlayOpacity, 1, accuracy: 0.001)
+
+        model.skipTutorial()
+        XCTAssertFalse(model.isPlaying)
+        XCTAssertTrue(model.isGameOver)
+        XCTAssertTrue(model.isTutorialRun)
+        XCTAssertFalse(model.pendingMenuReveal)
+
+        model.finalizeTutorialSkip()
+        XCTAssertFalse(model.isTutorialRun)
+        XCTAssertFalse(model.isGameOver)
+        XCTAssertTrue(model.hasCompletedTutorial)
+        XCTAssertTrue(model.pendingMenuReveal)
+    }
+
     func testEnvironmentDirectorTutorialForcesSilentBiomeSwitches() {
         let director = EnvironmentDirector()
         director.beginRun(mode: .tutorial)

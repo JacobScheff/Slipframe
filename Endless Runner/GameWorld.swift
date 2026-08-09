@@ -983,6 +983,10 @@ final class GameWorld {
         if animT >= GameWorld.gameOverClearDuration || walls.isEmpty {
             clearDynamicContent()
             gameOverClearFinished = true
+            // Tutorial skip reuses this dissolve, then hands back to the ready menu.
+            if gameModel?.isTutorialRun == true {
+                gameModel?.finalizeTutorialSkip()
+            }
             return
         }
 

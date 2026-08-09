@@ -26,8 +26,11 @@ struct ImmersiveView: View {
     @State private var didOfferAutoTutorial = false
 
     /// Side panels show between runs; hide while a run is active.
+    /// Also stay hidden while a skipped tutorial dissolves the field.
     private var showSidePanels: Bool {
-        !gameModel.isPlaying
+        guard !gameModel.isPlaying else { return false }
+        if gameModel.isTutorialRun, gameModel.isGameOver { return false }
+        return true
     }
 
     private var showTutorialOverlay: Bool {
