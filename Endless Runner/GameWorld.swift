@@ -127,9 +127,9 @@ final class GameWorld {
     private static let headHitMinY: Float = 0.4
     private static let headHitMaxY: Float = wallHeight + 0.35
     private static let collectDistance: Float = 0.24
-    /// Crystal halves use a generous grab radius so fist + reach stays fair.
-    /// Radius is measured from hand samples only (fingertips + grip), never the wrist/arm.
-    private static let crystalCollectDistance: Float = 0.45
+    /// Crystal halves require a close hand touch (fingertips + grip only; never wrist/arm).
+    /// Kept tight so distant hands do not grab or trigger the open-hand drop window.
+    private static let crystalCollectDistance: Float = 0.16
     private static let baseSpeed: Float = 3.0
     private static let maxSpeed: Float = 7.0
     private static let speedRampPerSecond: Float = 0.055
