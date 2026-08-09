@@ -2,7 +2,7 @@
 //  EnvironmentDirector.swift
 //  Endless Runner
 //
-//  Owns biome timing, random/forced selection, and palette blending.
+//  Owns biome timing, mode-based selection, and palette blending.
 //  Biome dwell time follows each track's length via GameMusic.
 //
 
@@ -31,7 +31,8 @@ final class EnvironmentDirector {
     private var blendFrom: EnvironmentPalette
     private var telegraphRemaining: Float = 0
     private var duckGatesSpawnedThisVisit = 0
-    private var debugMode: EnvironmentDebugMode = .normal
+    private var playMode: PlayMode = .normal
+    private var dailyRNG: SeededGenerator?
 
     init() {
         let starter = EnvironmentCatalog.profile(for: .emberRun)
@@ -53,31 +54,54 @@ final class EnvironmentDirector {
         duckGatesSpawnedThisVisit += 1
     }
 
-    func beginRun(debugMode: EnvironmentDebugMode) {
-        self.debugMode = debugMode
+    func beginRun(mode: PlayMode) {
+        playMode = mode
+        dailyRNG = nil
+
         let start: EnvironmentID
-        switch debugMode {
+        switch mode {
         case .normal:
             start = .emberRun
-        case .force(let id):
+        case .solo(let id):
             start = id
+        case .playlist(let environments, let preferredStart):
+            let pool = Array(environments)
+            if let preferredStart, environments.contains(preferredStart) {
+                start = preferredStart
+            } else {
+                start = pool.randomElement() ?? .emberRun
+            }
+        case .daily:
+            let key = DailyChallenge.dayKey()
+            var rng = DailyChallenge.makeGenerator(dayKey: key)
+            start = EnvironmentID.allCases.randomElement(using: &rng) ?? .emberRun
+            dailyRNG = rng
         }
+
         enter(start, telegraph: false, announceMusic: true)
     }
 
-    /// Call when the HUD debug mode changes mid-session.
-    func applyDebugMode(_ mode: EnvironmentDebugMode) {
-        debugMode = mode
+    /// Idle preview when the player changes mode selection (no music hitch).
+    func previewMode(_ mode: PlayMode) {
+        playMode = mode
+        let start: EnvironmentID
         switch mode {
         case .normal:
-            break
-        case .force(let id):
-            if id != currentID {
-                enter(id, telegraph: true, announceMusic: true)
+            start = .emberRun
+        case .solo(let id):
+            start = id
+        case .playlist(let environments, let preferredStart):
+            if let preferredStart, environments.contains(preferredStart) {
+                start = preferredStart
             } else {
-                // Same biome — restart/loop music for the forced lock.
-                _ = playMusic(for: id)
+                start = environments.first ?? .emberRun
             }
+        case .daily:
+            let preview = DailyChallenge.previewSequence(dayKey: DailyChallenge.dayKey(), count: 1)
+            start = preview.first ?? .emberRun
+        }
+        if start != currentID {
+            enter(start, telegraph: false, announceMusic: false)
         }
     }
 
@@ -90,17 +114,21 @@ final class EnvironmentDirector {
             telegraphRemaining = max(0, telegraphRemaining - deltaTime)
         }
 
-        if case .force(let forced) = debugMode {
+        if case .solo(let forced) = playMode {
             if forced != currentID {
                 previous = currentID
                 enter(forced, telegraph: true, announceMusic: true)
                 didEnter = true
             }
         } else if elapsedInEnvironment >= currentSwitchInterval {
-            let next = Self.randomNext(excluding: currentID)
-            previous = currentID
-            enter(next, telegraph: true, announceMusic: true)
-            didEnter = true
+            if let next = pickNextEnvironment(), next != currentID {
+                previous = currentID
+                enter(next, telegraph: true, announceMusic: true)
+                didEnter = true
+            } else {
+                // Singleton playlist (or empty pool): hold the current biome another interval.
+                elapsedInEnvironment = 0
+            }
         }
 
         blendElapsed += deltaTime
@@ -125,24 +153,55 @@ final class EnvironmentDirector {
         )
     }
 
-    static func randomNext(excluding current: EnvironmentID, rng: inout some RandomNumberGenerator) -> EnvironmentID {
-        let options = EnvironmentID.allCases.filter { $0 != current }
-        return options.randomElement(using: &rng) ?? .emberRun
+    /// Pure helper — `nonisolated` so daily preview / tests can call it off the main actor.
+    nonisolated static func randomNext<RNG: RandomNumberGenerator>(
+        excluding current: EnvironmentID,
+        from pool: [EnvironmentID] = Array(EnvironmentID.allCases),
+        rng: inout RNG
+    ) -> EnvironmentID {
+        let options = pool.filter { $0 != current }
+        if options.isEmpty {
+            return current
+        }
+        return options.randomElement(using: &rng) ?? current
     }
 
-    static func randomNext(excluding current: EnvironmentID) -> EnvironmentID {
+    nonisolated static func randomNext(
+        excluding current: EnvironmentID,
+        from pool: [EnvironmentID] = Array(EnvironmentID.allCases)
+    ) -> EnvironmentID {
         var rng = SystemRandomNumberGenerator()
-        return randomNext(excluding: current, rng: &rng)
+        return randomNext(excluding: current, from: pool, rng: &rng)
     }
 
     /// Biome dwell time for a cue: full track length, minus the crossfade so the
     /// next biome starts as the current song is fading out.
-    static func switchInterval(forTrackDuration trackDuration: Float, crossfade: Float) -> Float {
+    nonisolated static func switchInterval(forTrackDuration trackDuration: Float, crossfade: Float) -> Float {
         let usable = trackDuration - crossfade
         return min(
             EnvironmentCatalog.maxSwitchInterval,
             max(EnvironmentCatalog.minSwitchInterval, usable)
         )
+    }
+
+    private func pickNextEnvironment() -> EnvironmentID? {
+        switch playMode {
+        case .solo:
+            return nil
+        case .normal:
+            return Self.randomNext(excluding: currentID)
+        case .playlist(let environments, _):
+            let pool = Array(environments)
+            guard !pool.isEmpty else { return nil }
+            return Self.randomNext(excluding: currentID, from: pool)
+        case .daily:
+            guard var rng = dailyRNG else {
+                return Self.randomNext(excluding: currentID)
+            }
+            let next = Self.randomNext(excluding: currentID, rng: &rng)
+            dailyRNG = rng
+            return next
+        }
     }
 
     private func enter(_ id: EnvironmentID, telegraph: Bool, announceMusic: Bool) {
@@ -167,7 +226,7 @@ final class EnvironmentDirector {
     @discardableResult
     private func playMusic(for id: EnvironmentID) -> Float {
         let loop: Bool
-        if case .force = debugMode {
+        if case .solo = playMode {
             loop = true
         } else {
             loop = false

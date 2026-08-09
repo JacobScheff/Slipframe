@@ -43,7 +43,9 @@ enum CrystalCombine {
         }
     }
 
-    static func makeHalf(rng: inout some RandomNumberGenerator) -> (type: CrystalHalfType, charged: Bool) {
+    static func makeHalf<RNG: RandomNumberGenerator>(
+        rng: inout RNG
+    ) -> (type: CrystalHalfType, charged: Bool) {
         let type = CrystalHalfType.allCases.randomElement(using: &rng) ?? .red
         let charged = Float.random(in: 0...1, using: &rng) < chargedSpawnChance
         return (type, charged)

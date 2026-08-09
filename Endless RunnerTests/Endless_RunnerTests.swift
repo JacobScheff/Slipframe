@@ -53,7 +53,7 @@ final class Endless_RunnerTests: XCTestCase {
     }
 
     func testEndRunStopsPlayback() {
-        let model = GameModel()
+        let model = makeIsolatedGameModel()
         model.startRun()
         model.addScore(5)
         model.collectCoin()
@@ -64,6 +64,156 @@ final class Endless_RunnerTests: XCTestCase {
         XCTAssertTrue(model.isGameOver)
         XCTAssertEqual(model.score, 5)
         XCTAssertEqual(model.coinsCollected, 1)
+    }
+
+    func testPersonalBestStoreRecordsIndependentScoreAndCoinBests() {
+        let store = makeIsolatedBestStore()
+        let first = store.record(category: "normal", score: 100, coins: 3)
+        XCTAssertTrue(first.scoreImproved)
+        XCTAssertTrue(first.coinsImproved)
+        XCTAssertEqual(store.best(for: "normal"), PersonalBest(bestScore: 100, bestCoins: 3))
+
+        let scoreOnly = store.record(category: "normal", score: 150, coins: 1)
+        XCTAssertTrue(scoreOnly.scoreImproved)
+        XCTAssertFalse(scoreOnly.coinsImproved)
+        XCTAssertEqual(store.best(for: "normal"), PersonalBest(bestScore: 150, bestCoins: 3))
+
+        let coinsOnly = store.record(category: "normal", score: 120, coins: 8)
+        XCTAssertFalse(coinsOnly.scoreImproved)
+        XCTAssertTrue(coinsOnly.coinsImproved)
+        XCTAssertEqual(store.best(for: "normal"), PersonalBest(bestScore: 150, bestCoins: 8))
+
+        let noChange = store.record(category: "normal", score: 150, coins: 8)
+        XCTAssertFalse(noChange.anyImproved)
+    }
+
+    func testPersonalBestStorePersistsAcrossInstances() {
+        let suite = "test.personalBests.persist.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let writer = PersonalBestStore(defaults: defaults, storageKey: suite)
+        writer.record(category: "emberRun", score: 88, coins: 4)
+
+        let reader = PersonalBestStore(defaults: defaults, storageKey: suite)
+        XCTAssertEqual(reader.best(for: "emberRun"), PersonalBest(bestScore: 88, bestCoins: 4))
+    }
+
+    func testEndRunRecordsBestsForNormalLoopAndDailyButNotPlaylist() {
+        let store = makeIsolatedBestStore()
+        let model = GameModel(personalBests: store)
+
+        model.playKind = .normal
+        model.startRun()
+        model.addScore(40)
+        model.collectCoin(count: 2)
+        model.endRun()
+        XCTAssertEqual(store.best(for: "normal"), PersonalBest(bestScore: 40, bestCoins: 2))
+        XCTAssertEqual(model.lastPersonalBestUpdate, PersonalBestUpdate(scoreImproved: true, coinsImproved: true))
+
+        model.playKind = .solo
+        model.soloEnvironment = .crystalCave
+        model.startRun()
+        XCTAssertNil(model.lastPersonalBestUpdate)
+        model.addScore(12)
+        model.collectCoin(count: 5)
+        model.endRun()
+        XCTAssertEqual(store.best(for: "crystalCave"), PersonalBest(bestScore: 12, bestCoins: 5))
+        XCTAssertEqual(store.best(for: "normal").bestScore, 40)
+        XCTAssertEqual(store.best(for: "fogHollow").bestScore, 0)
+
+        model.playKind = .daily
+        model.startRun()
+        model.addScore(7)
+        model.collectCoin()
+        model.endRun()
+        let dailyKey = "daily.\(DailyChallenge.dayKey())"
+        XCTAssertEqual(store.best(for: dailyKey), PersonalBest(bestScore: 7, bestCoins: 1))
+
+        model.playKind = .playlist
+        model.playlistEnvironments = [.emberRun]
+        model.startRun()
+        model.addScore(999)
+        model.collectCoin(count: 99)
+        model.endRun()
+        XCTAssertNil(model.lastPersonalBestUpdate)
+        XCTAssertNil(PlayMode.playlist(environments: [.emberRun], start: nil).leaderboardCategory)
+        XCTAssertEqual(store.best(for: "normal").bestScore, 40)
+        XCTAssertEqual(store.best(for: dailyKey).bestScore, 7)
+    }
+
+    func testLeaderboardBoardBrowseableAndMatching() {
+        let boards = LeaderboardBoard.browseable()
+        let dayKey = DailyChallenge.dayKey()
+        XCTAssertEqual(boards.first, .normal)
+        XCTAssertEqual(boards.dropFirst().first, .daily(dayKey: dayKey))
+        XCTAssertEqual(
+            Array(boards.dropFirst(2)),
+            EnvironmentID.allCases.map { LeaderboardBoard.loop($0) }
+        )
+        XCTAssertEqual(boards.count, 1 + 1 + EnvironmentID.allCases.count)
+
+        XCTAssertEqual(LeaderboardBoard.matching(.normal)?.categoryKey, "normal")
+        XCTAssertEqual(LeaderboardBoard.matching(.solo(.stormPass))?.categoryKey, "stormPass")
+        XCTAssertNil(LeaderboardBoard.matching(.playlist(environments: [.emberRun], start: nil)))
+        XCTAssertEqual(
+            LeaderboardBoard.matching(.daily)?.categoryKey,
+            "daily.\(dayKey)"
+        )
+    }
+
+    func testGameCenterLeaderboardIDsAreStable() {
+        XCTAssertEqual(
+            GameCenterLeaderboardID.identifier(metric: .score, board: .normal),
+            "score.normal"
+        )
+        XCTAssertEqual(
+            GameCenterLeaderboardID.identifier(metric: .coins, board: .loop(.crystalCave)),
+            "coins.crystalCave"
+        )
+        // Daily ASC boards are recurring — day key is not part of the ID.
+        XCTAssertEqual(
+            GameCenterLeaderboardID.identifier(metric: .score, board: .daily(dayKey: "2026-08-05")),
+            "score.daily"
+        )
+        XCTAssertEqual(
+            GameCenterLeaderboardID.identifier(metric: .coins, board: .daily(dayKey: "2099-01-01")),
+            "coins.daily"
+        )
+        XCTAssertEqual(GameCenterLeaderboardID.allConfiguredIDs.count, 16)
+        XCTAssertTrue(Set(GameCenterLeaderboardID.allConfiguredIDs).count == 16)
+    }
+
+    func testEndRunSubmitsScoreAndCoinsToGameCenterExceptPlaylist() {
+        let store = makeIsolatedBestStore()
+        let submitter = MockGameCenterSubmitter()
+        let model = GameModel(personalBests: store, scoreSubmitter: submitter)
+
+        model.playKind = .normal
+        model.startRun()
+        model.addScore(33)
+        model.collectCoin(count: 4)
+        model.endRun()
+        XCTAssertEqual(submitter.submissions.count, 1)
+        XCTAssertEqual(submitter.submissions[0].board, .normal)
+        XCTAssertEqual(submitter.submissions[0].score, 33)
+        XCTAssertEqual(submitter.submissions[0].coins, 4)
+
+        model.playKind = .solo
+        model.soloEnvironment = .emberRun
+        model.startRun()
+        model.addScore(10)
+        model.endRun()
+        XCTAssertEqual(submitter.submissions.count, 2)
+        XCTAssertEqual(submitter.submissions[1].board, .loop(.emberRun))
+
+        model.playKind = .playlist
+        model.playlistEnvironments = [.fogHollow]
+        model.startRun()
+        model.addScore(500)
+        model.collectCoin(count: 50)
+        model.endRun()
+        XCTAssertEqual(submitter.submissions.count, 2, "Playlist runs must not submit")
     }
 
     func testCenterSlabDoesNotHitDodgedHead() {
@@ -260,22 +410,178 @@ final class Endless_RunnerTests: XCTestCase {
 
     func testEnvironmentDirectorStartsOnEmberRun() {
         let director = EnvironmentDirector()
-        director.beginRun(debugMode: .normal)
+        director.beginRun(mode: .normal)
         XCTAssertEqual(director.currentID, .emberRun)
         XCTAssertEqual(director.currentProfile.twist, .baseline)
     }
 
-    func testEnvironmentDirectorForceModeLocksBiome() {
+    func testEnvironmentDirectorSoloModeLocksBiome() {
         let director = EnvironmentDirector()
-        director.beginRun(debugMode: .force(.fogHollow))
+        director.beginRun(mode: .solo(.fogHollow))
         XCTAssertEqual(director.currentID, .fogHollow)
 
-        // Even after many switch intervals, forced biome should stick.
+        // Even after many switch intervals, solo biome should stick.
         for _ in 0..<5 {
             let frame = director.update(deltaTime: director.currentSwitchInterval + 1)
             XCTAssertEqual(frame.currentID, .fogHollow)
             XCTAssertFalse(frame.didEnterEnvironment)
         }
+    }
+
+    func testEnvironmentDirectorPlaylistStaysInPoolAndAvoidsCurrent() {
+        let pool: Set<EnvironmentID> = [.emberRun, .lowCrawl, .stormPass]
+        let director = EnvironmentDirector()
+        director.beginRun(mode: .playlist(environments: pool, start: .lowCrawl))
+        XCTAssertEqual(director.currentID, .lowCrawl)
+
+        for _ in 0..<12 {
+            let previous = director.currentID
+            let frame = director.update(deltaTime: director.currentSwitchInterval + 1)
+            XCTAssertTrue(frame.didEnterEnvironment)
+            XCTAssertTrue(pool.contains(frame.currentID))
+            XCTAssertNotEqual(frame.currentID, previous)
+        }
+    }
+
+    func testEnvironmentDirectorPlaylistSingleBiomeLoops() {
+        let director = EnvironmentDirector()
+        director.beginRun(mode: .playlist(environments: [.ghostGlass], start: nil))
+        XCTAssertEqual(director.currentID, .ghostGlass)
+        let frame = director.update(deltaTime: director.currentSwitchInterval + 1)
+        // Only one option — stay put (no churn).
+        XCTAssertEqual(frame.currentID, .ghostGlass)
+        XCTAssertFalse(frame.didEnterEnvironment)
+    }
+
+    func testDailyChallengeDayKeyUsesEasternTime() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        // 2026-07-31 03:30 UTC == 2026-07-30 23:30 EDT — still previous Eastern day.
+        let components = DateComponents(year: 2026, month: 7, day: 31, hour: 3, minute: 30)
+        let date = calendar.date(from: components)!
+        XCTAssertEqual(DailyChallenge.dayKey(for: date), "2026-07-30")
+
+        // 2026-07-31 04:30 UTC == 2026-07-31 00:30 EDT — new Eastern day.
+        let after = calendar.date(from: DateComponents(year: 2026, month: 7, day: 31, hour: 4, minute: 30))!
+        XCTAssertEqual(DailyChallenge.dayKey(for: after), "2026-07-31")
+    }
+
+    func testDailyChallengeSeedIsStableAndPreviewMatchesDirector() {
+        let key = "2026-07-31"
+        XCTAssertEqual(DailyChallenge.seed(for: key), DailyChallenge.seed(for: key))
+        XCTAssertNotEqual(DailyChallenge.seed(for: key), DailyChallenge.seed(for: "2026-08-01"))
+
+        let preview = DailyChallenge.previewSequence(dayKey: key, count: 5)
+        XCTAssertEqual(preview.count, 5)
+        for index in 1..<preview.count {
+            XCTAssertNotEqual(preview[index], preview[index - 1])
+        }
+
+        // Same day key → same sequence on a second call (shared worldwide).
+        XCTAssertEqual(preview, DailyChallenge.previewSequence(dayKey: key, count: 5))
+    }
+
+    func testDailyChallengeCountdownFormatsAndRolloverPositive() {
+        XCTAssertEqual(DailyChallenge.formatCountdown(3661), "01:01:01")
+        XCTAssertGreaterThan(DailyChallenge.secondsUntilRollover(), 0)
+    }
+
+    func testDailyGameplaySeedIsStableAndDistinctFromBiomeSeed() {
+        let key = "2026-07-31"
+        XCTAssertEqual(DailyChallenge.gameplaySeed(for: key), DailyChallenge.gameplaySeed(for: key))
+        XCTAssertNotEqual(DailyChallenge.gameplaySeed(for: key), DailyChallenge.seed(for: key))
+        XCTAssertNotEqual(
+            DailyChallenge.gameplaySeed(for: key),
+            DailyChallenge.gameplaySeed(for: "2026-08-01")
+        )
+    }
+
+    func testDailyGameplayGeneratorProducesIdenticalWallPatternStream() {
+        // Same weighted table shape as GameWorld.randomWallLanes (lane raw values).
+        let patterns: [[Int]] = [
+            [-1], [0], [1],
+            [-1], [0], [1],
+            [-1], [1],
+            [-1, 0], [0, 1], [-1, 1],
+            [-1, 1], [-1, 0], [0, 1]
+        ]
+        let key = "2026-07-31"
+        var a = DailyChallenge.makeGameplayGenerator(dayKey: key)
+        var b = DailyChallenge.makeGameplayGenerator(dayKey: key)
+        for _ in 0..<48 {
+            XCTAssertEqual(
+                patterns.randomElement(using: &a),
+                patterns.randomElement(using: &b)
+            )
+        }
+    }
+
+    func testSeededStormWallPicksAreDeterministic() {
+        let patterns: [[Int]] = [
+            [-1], [0], [1],
+            [-1, 0], [0, 1], [-1, 1]
+        ]
+        var a = SeededGenerator(seed: 0xC0FFEE)
+        var b = SeededGenerator(seed: 0xC0FFEE)
+        for _ in 0..<30 {
+            let leftA = StormWind.chooseWallLanes(
+                from: patterns,
+                offsetStep: 0,
+                pendingDirection: -1,
+                rng: &a
+            )
+            let leftB = StormWind.chooseWallLanes(
+                from: patterns,
+                offsetStep: 0,
+                pendingDirection: -1,
+                rng: &b
+            )
+            XCTAssertEqual(leftA, leftB)
+            XCTAssertFalse(leftA.contains(-1))
+        }
+    }
+
+    func testPlaylistCannotStartWhenEmpty() {
+        let model = GameModel()
+        model.playKind = .playlist
+        model.playlistEnvironments = []
+        XCTAssertFalse(model.canStartRun)
+        model.startRun()
+        XCTAssertFalse(model.isPlaying)
+        XCTAssertEqual(model.runID, 0)
+
+        model.playlistEnvironments = [.emberRun]
+        XCTAssertTrue(model.canStartRun)
+        model.startRun()
+        XCTAssertTrue(model.isPlaying)
+    }
+
+    func testResolvedPlayModeMappings() {
+        let model = GameModel()
+        model.playKind = .normal
+        XCTAssertEqual(model.resolvedPlayMode, .normal)
+
+        model.playKind = .solo
+        model.soloEnvironment = .crystalCave
+        XCTAssertEqual(model.resolvedPlayMode, .solo(.crystalCave))
+
+        model.playKind = .playlist
+        model.playlistEnvironments = [.fogHollow, .stormPass]
+        model.playlistStart = .stormPass
+        XCTAssertEqual(
+            model.resolvedPlayMode,
+            .playlist(environments: [.fogHollow, .stormPass], start: .stormPass)
+        )
+
+        model.playlistStart = .emberRun // not in set → treated as random
+        if case .playlist(_, let start) = model.resolvedPlayMode {
+            XCTAssertNil(start)
+        } else {
+            XCTFail("Expected playlist mode")
+        }
+
+        model.playKind = .daily
+        XCTAssertEqual(model.resolvedPlayMode, .daily)
     }
 
     func testSwitchIntervalFollowsTrackDurationMinusCrossfade() {
@@ -564,7 +870,7 @@ final class Endless_RunnerTests: XCTestCase {
         XCTAssertEqual(crawl.twist, .lowCrawl)
         XCTAssertGreaterThan(crawl.lowCrawlTeachCount, 0)
         let director = EnvironmentDirector()
-        director.beginRun(debugMode: .force(.lowCrawl))
+        director.beginRun(mode: .solo(.lowCrawl))
         XCTAssertTrue(director.isTeachingLowCrawl)
         for _ in 0..<crawl.lowCrawlTeachCount {
             director.noteDuckGateSpawned()
@@ -590,7 +896,7 @@ final class Endless_RunnerTests: XCTestCase {
 
     func testEnvironmentDirectorUsesMusicDurationForSwitchInterval() {
         let director = EnvironmentDirector()
-        director.beginRun(debugMode: .normal)
+        director.beginRun(mode: .normal)
         let expected = EnvironmentDirector.switchInterval(
             forTrackDuration: GameMusic.fallbackTrackDuration,
             crossfade: EnvironmentCatalog.ambienceLerpSeconds
@@ -762,21 +1068,36 @@ final class Endless_RunnerTests: XCTestCase {
         _ = gameModelWatch
         _ = statsWatch
     }
-}
 
-/// Deterministic RNG for spawn-rate tests.
-private struct SeededGenerator: RandomNumberGenerator {
-    private var state: UInt64
+    // MARK: - Helpers
 
-    init(seed: UInt64) {
-        state = seed == 0 ? 0x4d595df4d0f33173 : seed
+    private func makeIsolatedBestStore() -> PersonalBestStore {
+        let suite = "test.personalBests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        return PersonalBestStore(defaults: defaults, storageKey: suite)
     }
 
-    mutating func next() -> UInt64 {
-        state &+= 0x9e3779b97f4a7c15
-        var z = state
-        z = (z ^ (z >> 30)) &* 0xbf58476d1ce4e5b9
-        z = (z ^ (z >> 27)) &* 0x94d049bb133111eb
-        return z ^ (z >> 31)
+    private func makeIsolatedGameModel() -> GameModel {
+        GameModel(
+            personalBests: makeIsolatedBestStore(),
+            scoreSubmitter: MockGameCenterSubmitter()
+        )
     }
 }
+
+@MainActor
+private final class MockGameCenterSubmitter: GameCenterSubmitting {
+    struct Submission: Equatable {
+        let board: LeaderboardBoard
+        let score: Int
+        let coins: Int
+    }
+
+    private(set) var submissions: [Submission] = []
+
+    func submitRun(board: LeaderboardBoard, score: Int, coins: Int) {
+        submissions.append(Submission(board: board, score: score, coins: coins))
+    }
+}
+

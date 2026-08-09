@@ -1,0 +1,282 @@
+//
+//  LevelSelectView.swift
+//  Endless Runner
+//
+//  World-anchored mode / level picker at the left track edge.
+//
+
+import SwiftUI
+
+struct LevelSelectView: View {
+    @EnvironmentObject private var gameModel: GameModel
+
+    private let neon = Color(red: 0.35, green: 0.92, blue: 1.0)
+    private let gold = Color(red: 1.0, green: 0.82, blue: 0.32)
+    private let dailyAccent = Color(red: 0.45, green: 0.88, blue: 0.78)
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            header
+
+            modePicker
+
+            Divider().opacity(0.35)
+
+            modeBody
+        }
+        .padding(.horizontal, 28)
+        .padding(.vertical, 24)
+        .frame(width: 420, alignment: .leading)
+        .background {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .strokeBorder(neon.opacity(0.45), lineWidth: 1.2)
+        }
+        .glassBackgroundEffect()
+    }
+
+    private var header: some View {
+        Text("Mode Selection")
+            .font(.system(size: 28, weight: .semibold, design: .rounded))
+            .foregroundStyle(.primary)
+    }
+
+    private var modePicker: some View {
+        HStack(spacing: 8) {
+            ForEach(PlayModeKind.allCases) { kind in
+                let selected = gameModel.playKind == kind
+                Button {
+                    gameModel.playKind = kind
+                } label: {
+                    Text(kind.title)
+                        .font(.system(size: 15, weight: selected ? .bold : .medium, design: .rounded))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .frame(maxWidth: .infinity)
+                        .background {
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(selected ? neon.opacity(0.22) : Color.white.opacity(0.06))
+                        }
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .strokeBorder(selected ? neon.opacity(0.7) : Color.white.opacity(0.12), lineWidth: 1)
+                        }
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var modeBody: some View {
+        switch gameModel.playKind {
+        case .normal:
+            normalBody
+        case .playlist:
+            playlistBody
+        case .solo:
+            soloBody
+        case .daily:
+            dailyBody
+        }
+    }
+
+    private var normalBody: some View {
+        Text(PlayModeKind.normal.subtitle)
+            .font(.system(size: 16, weight: .regular, design: .rounded))
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var soloBody: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(PlayModeKind.solo.subtitle)
+                .font(.system(size: 15, weight: .regular, design: .rounded))
+                .foregroundStyle(.secondary)
+
+            biomeGrid(selection: .solo)
+        }
+    }
+
+    private var playlistBody: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(PlayModeKind.playlist.subtitle)
+                .font(.system(size: 15, weight: .regular, design: .rounded))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text("BIOMES")
+                .font(.system(size: 12, weight: .bold, design: .rounded))
+                .tracking(1.2)
+                .foregroundStyle(.secondary)
+
+            biomeGrid(selection: .playlist)
+
+            if gameModel.playlistEnvironments.isEmpty {
+                Text("Select at least one biome.")
+                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                    .foregroundStyle(.orange)
+            }
+
+            Text("STARTING BIOME")
+                .font(.system(size: 12, weight: .bold, design: .rounded))
+                .tracking(1.2)
+                .foregroundStyle(.secondary)
+                .padding(.top, 4)
+
+            playlistStartPicker
+        }
+    }
+
+    private var playlistStartPicker: some View {
+        let selected = gameModel.playlistEnvironments
+        return FlowChips {
+            startChip(title: "Random", isOn: gameModel.playlistStart == nil) {
+                gameModel.playlistStart = nil
+            }
+            ForEach(EnvironmentID.allCases) { id in
+                if selected.contains(id) {
+                    startChip(title: id.displayName, isOn: gameModel.playlistStart == id) {
+                        gameModel.playlistStart = id
+                    }
+                }
+            }
+        }
+    }
+
+    private func startChip(title: String, isOn: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 14, weight: isOn ? .bold : .medium, design: .rounded))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .background {
+                    Capsule(style: .continuous)
+                        .fill(isOn ? gold.opacity(0.22) : Color.white.opacity(0.06))
+                }
+                .overlay {
+                    Capsule(style: .continuous)
+                        .strokeBorder(isOn ? gold.opacity(0.75) : Color.white.opacity(0.14), lineWidth: 1)
+                }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var dailyBody: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            let remaining = DailyChallenge.secondsUntilRollover(from: context.date)
+
+            VStack(alignment: .leading, spacing: 12) {
+                Text(DailyChallenge.displayDate(for: context.date))
+                    .font(.system(size: 22, weight: .semibold, design: .rounded))
+                    .foregroundStyle(dailyAccent)
+
+                Text(PlayModeKind.daily.subtitle)
+                    .font(.system(size: 14, weight: .regular, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                HStack(spacing: 8) {
+                    Image(systemName: "timer")
+                        .foregroundStyle(dailyAccent)
+                    Text(DailyChallenge.formatCountdown(remaining))
+                        .font(.system(size: 28, weight: .bold, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(dailyAccent)
+                    Text("left today")
+                        .font(.system(size: 14, weight: .medium, design: .rounded))
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.top, 4)
+            }
+        }
+    }
+
+    private enum BiomeSelection {
+        case solo
+        case playlist
+    }
+
+    private func biomeGrid(selection: BiomeSelection) -> some View {
+        VStack(spacing: 8) {
+            ForEach(EnvironmentID.allCases) { id in
+                biomeRow(id: id, selection: selection)
+            }
+        }
+    }
+
+    private func biomeRow(id: EnvironmentID, selection: BiomeSelection) -> some View {
+        let isOn: Bool = {
+            switch selection {
+            case .solo: return gameModel.soloEnvironment == id
+            case .playlist: return gameModel.playlistEnvironments.contains(id)
+            }
+        }()
+
+        return Button {
+            switch selection {
+            case .solo:
+                gameModel.soloEnvironment = id
+            case .playlist:
+                if gameModel.playlistEnvironments.contains(id) {
+                    gameModel.playlistEnvironments.remove(id)
+                    if gameModel.playlistStart == id {
+                        gameModel.playlistStart = nil
+                    }
+                } else {
+                    gameModel.playlistEnvironments.insert(id)
+                }
+            }
+        } label: {
+            HStack(spacing: 12) {
+                Circle()
+                    .fill(biomeColor(id))
+                    .frame(width: 12, height: 12)
+                Text(id.displayName)
+                    .font(.system(size: 17, weight: isOn ? .bold : .medium, design: .rounded))
+                Spacer(minLength: 4)
+                if isOn {
+                    Image(systemName: selection == .solo ? "checkmark.circle.fill" : "checkmark")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(neon)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(isOn ? neon.opacity(0.14) : Color.white.opacity(0.04))
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(isOn ? neon.opacity(0.55) : Color.white.opacity(0.1), lineWidth: 1)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func biomeColor(_ id: EnvironmentID) -> Color {
+        let tint = EnvironmentCatalog.profile(for: id).palette.portalRim
+        return Color(red: Double(tint.r), green: Double(tint.g), blue: Double(tint.b))
+    }
+}
+
+/// Simple wrapping chip row without pulling in a layout dependency.
+private struct FlowChips<Content: View>: View {
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        // VisionOS panels are narrow — a wrapping LazyVGrid keeps chips tidy.
+        LazyVGrid(
+            columns: [GridItem(.adaptive(minimum: 96), spacing: 8)],
+            alignment: .leading,
+            spacing: 8
+        ) {
+            content()
+        }
+    }
+}
+
+#Preview {
+    LevelSelectView()
+        .environmentObject(GameModel())
+}

@@ -8,16 +8,34 @@
 import SwiftUI
 
 @main
+@MainActor
 struct Endless_RunnerApp: App {
-    @StateObject private var gameModel = GameModel()
+    @StateObject private var gameModel: GameModel
     @State private var immersionState: ImmersionStyle = .mixed
+
+    init() {
+        _gameModel = StateObject(wrappedValue: GameModel())
+    }
 
     var body: some SwiftUI.Scene {
         // Immersive-first: Info.plist preferred scene role launches this space.
         ImmersiveSpace(id: "RunnerSpace") {
             ImmersiveView()
                 .environmentObject(gameModel)
+                .environmentObject(gameModel.personalBests)
+                .environmentObject(gameModel.gameCenter)
+                .onAppear {
+                    gameModel.gameCenter.start()
+                }
         }
         .immersionStyle(selection: $immersionState, in: .mixed)
+
+        // Presentation anchor for GameKit sign-in (UIKit modal). Opened on demand.
+        WindowGroup(id: GameCenterAuthScene.id) {
+            GameCenterAuthWindow()
+                .environmentObject(gameModel.gameCenter)
+        }
+        .windowStyle(.plain)
+        .windowResizability(.contentSize)
     }
 }

@@ -149,6 +149,16 @@ final class GameWorld {
     private static let hudPosition = SIMD3<Float>(0, 2.45, -3.2)
     /// World scale for the SwiftUI attachment (attachments are small by default).
     private static let hudScale: Float = 3.0
+    /// Side panels sit on the track edges, slightly forward of the stand line, facing the player.
+    private static let sidePanelY: Float = 1.55
+    private static let sidePanelZ: Float = -1.15
+    private static let sidePanelScale: Float = 2.15
+    /// Yaw so each panel faces inward across the track (±90° from the forward-facing HUD).
+    private static let sidePanelYawDegrees: Float = 90
+    /// Pause after a crash before walls start dissolving.
+    private static let gameOverClearDelay: Float = 2.2
+    /// Duration of the post-game wall sink / squash animation.
+    private static let gameOverClearDuration: Float = 0.9
 
     // Duck hazard geometry (Low Crawl).
     /// Bottom of the hanging slab — stand through it = hit; duck under to clear.
@@ -224,6 +234,8 @@ final class GameWorld {
         )
     )
     private let hudAnchor = Entity()
+    private let levelSelectAnchor = Entity()
+    private let leaderboardAnchor = Entity()
     private let trackRoot = Entity()
     /// Holds the portal plane + neon rim in playfield space (always visible).
     private let portalRoot = Entity()
@@ -233,7 +245,7 @@ final class GameWorld {
 
     private weak var gameModel: GameModel?
     private let environmentDirector = EnvironmentDirector()
-    private var lastDebugMode: EnvironmentDebugMode = .normal
+    private var lastPreviewMode: PlayMode?
     private var activeSpawnProfile: EnvironmentProfile = EnvironmentCatalog.profile(for: .emberRun)
 
     private var walls: [WallItem] = []
@@ -257,10 +269,19 @@ final class GameWorld {
     private var lastBuiltPortalZ: Float = .greatestFiniteMagnitude
     private var updateSubscription: EventSubscription?
     private var activeRunID: Int = -1
-    /// After Start, playfield pose no longer follows the player.
+    /// After the initial placement (or an explicit recenter), pose stays fixed.
     private var isPlayfieldLocked = false
+    /// True once we've placed using a tracked WorldTracking device anchor.
+    private var didSnapWithWorldTracking = false
     /// Seconds since attach — drives portal pulse / ambient motion.
     private var elapsedTime: Float = 0
+    /// Elapsed time while game-over clear is armed; nil when inactive.
+    private var gameOverClearElapsed: Float?
+    private var gameOverClearFinished = false
+    /// Snapshotted wall poses at the start of the dissolve animation.
+    private var gameOverWallBases: [(entity: Entity, position: SIMD3<Float>, scale: SIMD3<Float>)] = []
+    /// Daily-only spawn/wind stream (nil → unseeded SystemRandom for other modes).
+    private var gameplayRNG: SeededGenerator?
 
     // Wind shove state (offsets obstacle boxes only).
     private var windCurrentX: Float = 0
@@ -306,7 +327,8 @@ final class GameWorld {
         content.add(floorAnchor)
         content.add(wallAnchor)
         isPlayfieldLocked = false
-        lastDebugMode = gameModel.environmentDebugMode
+        didSnapWithWorldTracking = false
+        lastPreviewMode = gameModel.resolvedPlayMode
         elapsedTime = 0
         GameMaterials.warmTextures()
         visualFX.attach(to: root)
@@ -322,13 +344,14 @@ final class GameWorld {
         buildPortal()
         buildStaticEnvironment()
         ensureHUDAnchor()
+        ensureSidePanelAnchors()
         startARSession()
         // Warm audio before the first coin so setActive does not hitch mid-run.
         GameSFX.shared.prepare()
         GameMusic.shared.prepare()
         applyPalette(environmentDirector.displayedPalette, telegraph: 0)
-        snapPlayfieldToPlayer()
-        updatePortalAndTrack()
+        // Place once from the current headset pose; do not follow afterward.
+        placePlayfield()
     }
 
     /// Parents the SwiftUI play/score attachment so it stays fixed with the track.
@@ -343,16 +366,44 @@ final class GameWorld {
         hudAnchor.addChild(hudEntity)
     }
 
+    func attachLevelSelect(_ entity: Entity) {
+        ensureSidePanelAnchors()
+        let yaw = GameWorld.sidePanelYawDegrees * .pi / 180
+        entity.orientation = simd_quatf(angle: yaw, axis: SIMD3(0, 1, 0))
+        entity.scale = SIMD3(repeating: GameWorld.sidePanelScale)
+        guard entity.parent !== levelSelectAnchor else { return }
+        entity.removeFromParent()
+        levelSelectAnchor.addChild(entity)
+    }
+
+    func attachLeaderboard(_ entity: Entity) {
+        ensureSidePanelAnchors()
+        let yaw = -GameWorld.sidePanelYawDegrees * .pi / 180
+        entity.orientation = simd_quatf(angle: yaw, axis: SIMD3(0, 1, 0))
+        entity.scale = SIMD3(repeating: GameWorld.sidePanelScale)
+        guard entity.parent !== leaderboardAnchor else { return }
+        entity.removeFromParent()
+        leaderboardAnchor.addChild(entity)
+    }
+
+    func setSidePanelsVisible(_ visible: Bool) {
+        levelSelectAnchor.isEnabled = visible
+        leaderboardAnchor.isEnabled = visible
+    }
+
+    /// Idle palette preview when the level-select draft changes.
+    func previewPlayMode(_ mode: PlayMode) {
+        guard gameModel?.isPlaying != true else { return }
+        guard mode != lastPreviewMode else { return }
+        lastPreviewMode = mode
+        environmentDirector.previewMode(mode)
+        activeSpawnProfile = environmentDirector.currentProfile
+        applyPalette(environmentDirector.displayedPalette, telegraph: 0)
+        syncRoomDimming()
+    }
+
     func syncRun(with gameModel: GameModel) {
         self.gameModel = gameModel
-        if gameModel.environmentDebugMode != lastDebugMode {
-            lastDebugMode = gameModel.environmentDebugMode
-            environmentDirector.applyDebugMode(gameModel.environmentDebugMode)
-            activeSpawnProfile = environmentDirector.currentProfile
-            if gameModel.environmentDebugMode != .normal || gameModel.isPlaying {
-                dropHeldHalves()
-            }
-        }
         guard gameModel.isPlaying, gameModel.runID != activeRunID else { return }
         beginRun(runID: gameModel.runID)
     }
@@ -368,16 +419,25 @@ final class GameWorld {
         rightIsOpen = false
         updateSubscription = nil
         isPlayfieldLocked = false
+        didSnapWithWorldTracking = false
         elapsedTime = 0
         portalZ = GameWorld.defaultPortalZ
         activeSpawnZ = GameWorld.defaultPortalZ + GameWorld.spawnInFrontOfPortal
         lastBuiltPortalZ = .greatestFiniteMagnitude
         visualFX.clear()
+        resetGameOverClear()
         clearDynamicContent()
         dropHeldHalves()
+        gameplayRNG = nil
         gameModel?.prefersRoomDimming = false
         GameMusic.shared.stop()
         for child in hudAnchor.children {
+            child.removeFromParent()
+        }
+        for child in levelSelectAnchor.children {
+            child.removeFromParent()
+        }
+        for child in leaderboardAnchor.children {
             child.removeFromParent()
         }
         for child in trackRoot.children {
@@ -401,6 +461,22 @@ final class GameWorld {
         hudAnchor.position = GameWorld.hudPosition
         if hudAnchor.parent !== root {
             root.addChild(hudAnchor)
+        }
+    }
+
+    private func ensureSidePanelAnchors() {
+        // Center just outside the floor slab so the panel body sits on the track edge.
+        let edgeX = GameWorld.trackWidth * 0.5 + 0.3
+        levelSelectAnchor.name = "levelSelect"
+        levelSelectAnchor.position = SIMD3(-edgeX, GameWorld.sidePanelY, GameWorld.sidePanelZ)
+        if levelSelectAnchor.parent !== root {
+            root.addChild(levelSelectAnchor)
+        }
+
+        leaderboardAnchor.name = "leaderboard"
+        leaderboardAnchor.position = SIMD3(edgeX, GameWorld.sidePanelY, GameWorld.sidePanelZ)
+        if leaderboardAnchor.parent !== root {
+            root.addChild(leaderboardAnchor)
         }
     }
 
@@ -510,17 +586,22 @@ final class GameWorld {
 
     private func beginRun(runID: Int) {
         activeRunID = runID
-        snapPlayfieldToPlayer()
-        updatePortalAndTrack()
-        isPlayfieldLocked = true
+        // Restart must not move the track — pose stays from session start / last recenter.
+        if !isPlayfieldLocked {
+            placePlayfield()
+        }
         visualFX.clear()
+        resetGameOverClear()
         clearDynamicContent()
         dropHeldHalves()
+        let mode = gameModel?.resolvedPlayMode ?? .normal
+        configureGameplayRNG(for: mode)
         resetWind()
-        environmentDirector.beginRun(debugMode: gameModel?.environmentDebugMode ?? .normal)
+        lastPreviewMode = mode
+        environmentDirector.beginRun(mode: mode)
         activeSpawnProfile = environmentDirector.currentProfile
         if activeSpawnProfile.twist == .windShove {
-            timeUntilWind = Float.random(in: 1.0...2.0)
+            timeUntilWind = nextFloat(in: 1.0...2.0)
         }
         rebuildFixedTrack(force: true)
         buildPortalRim()
@@ -535,6 +616,11 @@ final class GameWorld {
         visualFX.prepare()
         GameSFX.shared.prepare()
         GameMusic.shared.prepare()
+    }
+
+    /// Re-snap the track to the current headset pose (use after the user recenters their origin).
+    func recalibratePlayfield() {
+        placePlayfield()
     }
 
     // MARK: - Palette / room dimming
@@ -604,6 +690,32 @@ final class GameWorld {
     }
 
     // MARK: - Playfield pose
+
+    private var hasTrackedDeviceAnchor: Bool {
+        worldTracking.state == .running
+            && worldTracking.queryDeviceAnchor(atTimestamp: CACurrentMediaTime())?.isTracked == true
+    }
+
+    /// Places the playfield from the current headset pose and locks it in place.
+    private func placePlayfield() {
+        let usedWorldTracking = hasTrackedDeviceAnchor
+        snapPlayfieldToPlayer()
+        updatePortalAndTrack()
+        rebuildFixedTrack(force: true)
+        isPlayfieldLocked = true
+        didSnapWithWorldTracking = usedWorldTracking
+    }
+
+    /// One-time upgrade from head-anchor fallback → WorldTracking once the device is tracked.
+    /// Only before a run starts — never mid-run or after the player has already begun.
+    private func upgradePlayfieldWithWorldTrackingIfNeeded() {
+        guard isPlayfieldLocked,
+              !didSnapWithWorldTracking,
+              gameModel?.isPlaying != true,
+              hasTrackedDeviceAnchor
+        else { return }
+        placePlayfield()
+    }
 
     private func snapPlayfieldToPlayer() {
         let headWorld: SIMD3<Float>
@@ -698,10 +810,66 @@ final class GameWorld {
         walls.removeAll()
         coins.removeAll()
         halves.removeAll()
+        gameOverWallBases = []
         lastAdjacentDoubleOpenLaneRaw = nil
         patternSpawnZOffset = 0
         gustEntity?.removeFromParent()
         gustEntity = nil
+    }
+
+    private func resetGameOverClear() {
+        gameOverClearElapsed = nil
+        gameOverClearFinished = false
+        gameOverWallBases = []
+    }
+
+    /// After a crash, hold for a beat, then squash/sink walls away and clear the field.
+    private func tickGameOverClear(deltaTime: Float) {
+        guard !gameOverClearFinished else { return }
+        if gameOverClearElapsed == nil {
+            gameOverClearElapsed = 0
+        }
+        gameOverClearElapsed! += max(0, deltaTime)
+        let elapsed = gameOverClearElapsed!
+
+        guard elapsed >= GameWorld.gameOverClearDelay else { return }
+
+        let animT = elapsed - GameWorld.gameOverClearDelay
+        if gameOverWallBases.isEmpty, !walls.isEmpty {
+            gameOverWallBases = walls.map { wall in
+                (wall.entity, wall.entity.position, wall.entity.scale)
+            }
+        }
+
+        if animT >= GameWorld.gameOverClearDuration || walls.isEmpty {
+            clearDynamicContent()
+            gameOverClearFinished = true
+            return
+        }
+
+        let u = min(1, animT / GameWorld.gameOverClearDuration)
+        // Smoothstep ease-in-out.
+        let ease = u * u * (3 - 2 * u)
+        for base in gameOverWallBases {
+            let scaleY = max(0.02, 1 - ease)
+            base.entity.scale = SIMD3(
+                base.scale.x * (1 + ease * 0.2),
+                base.scale.y * scaleY,
+                base.scale.z * (1 + ease * 0.12)
+            )
+            var position = base.position
+            position.y -= ease * 1.5
+            base.entity.position = position
+        }
+
+        // Soften leftover pickups in the same window.
+        let pickupScale = max(0.02, 1 - ease)
+        for coin in coins {
+            coin.entity.scale = SIMD3(repeating: pickupScale)
+        }
+        for half in halves where !half.collected {
+            half.entity.scale = SIMD3(repeating: pickupScale)
+        }
     }
 
     // MARK: - ARKit tracking
@@ -917,26 +1085,20 @@ final class GameWorld {
         animateCoins(deltaTime: deltaTime)
         visualFX.tick(deltaTime: deltaTime)
 
-        // Before Start, keep the stand line under the player and refresh portal depth.
-        // After Start, pose / portal / track are frozen — only obstacles move.
-        if !isPlayfieldLocked {
-            snapPlayfieldToPlayer()
-            updatePortalAndTrack()
-        }
+        // Pose is fixed after the initial placement. Allow a single upgrade from
+        // head-anchor fallback to WorldTracking before the first run starts.
+        upgradePlayfieldWithWorldTrackingIfNeeded()
 
         guard let gameModel else { return }
-
-        if gameModel.environmentDebugMode != lastDebugMode {
-            lastDebugMode = gameModel.environmentDebugMode
-            environmentDirector.applyDebugMode(gameModel.environmentDebugMode)
-            activeSpawnProfile = environmentDirector.currentProfile
-            dropHeldHalves()
-            syncRoomDimming()
-        }
 
         guard gameModel.isPlaying, !gameModel.isGameOver else {
             if gameModel.prefersRoomDimming {
                 gameModel.prefersRoomDimming = false
+            }
+            if gameModel.isGameOver {
+                tickGameOverClear(deltaTime: deltaTime)
+            } else {
+                resetGameOverClear()
             }
             return
         }
@@ -950,7 +1112,7 @@ final class GameWorld {
             if frame.profile.twist != .windShove {
                 resetWind()
             } else {
-                timeUntilWind = Float.random(in: 1.2...2.5)
+                timeUntilWind = nextFloat(in: 1.2...2.5)
             }
         }
         applyPalette(frame.displayedPalette, telegraph: frame.telegraphStrength)
@@ -978,21 +1140,64 @@ final class GameWorld {
             patternSpawnZOffset = 0
             spawnNextPattern()
             // Preserve spacing to the following beat when this one was pushed deeper.
-            distanceUntilSpawn = Self.spawnGap(for: activeSpawnProfile) + patternSpawnZOffset
+            distanceUntilSpawn = spawnGap(for: activeSpawnProfile) + patternSpawnZOffset
         }
 
         resolveCollisions(gameModel: gameModel)
         pruneEntities()
     }
 
-    private static func spawnGap(for profile: EnvironmentProfile) -> Float {
+    // MARK: - Gameplay RNG (Daily seed)
+
+    private func configureGameplayRNG(for mode: PlayMode) {
+        switch mode {
+        case .daily:
+            gameplayRNG = DailyChallenge.makeGameplayGenerator(dayKey: DailyChallenge.dayKey())
+        case .normal, .solo, .playlist:
+            gameplayRNG = nil
+        }
+    }
+
+    private func nextFloat(in range: ClosedRange<Float>) -> Float {
+        guard var rng = gameplayRNG else {
+            return Float.random(in: range)
+        }
+        let value = Float.random(in: range, using: &rng)
+        gameplayRNG = rng
+        return value
+    }
+
+    private func nextUnitFloat() -> Float {
+        nextFloat(in: 0...1)
+    }
+
+    private func nextBool() -> Bool {
+        guard var rng = gameplayRNG else {
+            return Bool.random()
+        }
+        let value = Bool.random(using: &rng)
+        gameplayRNG = rng
+        return value
+    }
+
+    private func nextElement<T>(_ items: [T]) -> T? {
+        guard !items.isEmpty else { return nil }
+        guard var rng = gameplayRNG else {
+            return items.randomElement()
+        }
+        let value = items.randomElement(using: &rng)
+        gameplayRNG = rng
+        return value
+    }
+
+    private func spawnGap(for profile: EnvironmentProfile) -> Float {
         switch profile.twist {
         case .lowCrawl:
-            return Float.random(in: lowCrawlSpawnGapMin...lowCrawlSpawnGapMax)
+            return nextFloat(in: GameWorld.lowCrawlSpawnGapMin...GameWorld.lowCrawlSpawnGapMax)
         case .baseline:
-            return Float.random(in: emberSpawnGapMin...emberSpawnGapMax)
+            return nextFloat(in: GameWorld.emberSpawnGapMin...GameWorld.emberSpawnGapMax)
         default:
-            return Float.random(in: spawnGapMin...spawnGapMax)
+            return nextFloat(in: GameWorld.spawnGapMin...GameWorld.spawnGapMax)
         }
     }
 
@@ -1063,7 +1268,7 @@ final class GameWorld {
         windTelegraphRemaining = 0
         pendingWindDirection = 0
         windOffsetStep = 0
-        timeUntilWind = Float.random(in: GameWorld.windMinInterval...GameWorld.windMaxInterval)
+        timeUntilWind = nextFloat(in: GameWorld.windMinInterval...GameWorld.windMaxInterval)
         gustEntity?.removeFromParent()
         gustEntity = nil
     }
@@ -1102,7 +1307,7 @@ final class GameWorld {
                     direction: pendingWindDirection
                 )
                 pendingWindDirection = 0
-                timeUntilWind = Float.random(in: GameWorld.windMinInterval...GameWorld.windMaxInterval)
+                timeUntilWind = nextFloat(in: GameWorld.windMinInterval...GameWorld.windMaxInterval)
             }
             return
         }
@@ -1148,6 +1353,15 @@ final class GameWorld {
         } else {
             preferred = nil
         }
+        if var rng = gameplayRNG {
+            let value = StormWind.nextDirection(
+                offsetStep: windOffsetStep,
+                preferredFromGap: preferred,
+                rng: &rng
+            )
+            gameplayRNG = rng
+            return value
+        }
         return StormWind.nextDirection(offsetStep: windOffsetStep, preferredFromGap: preferred)
     }
 
@@ -1163,7 +1377,7 @@ final class GameWorld {
                 return blockedCenter > 0 ? -1 : 1
             }
         }
-        return Bool.random() ? 1 : -1
+        return nextBool() ? 1 : -1
     }
 
     private func shiftDynamicBoxes(by deltaX: Float) {
@@ -1251,11 +1465,11 @@ final class GameWorld {
     }
 
     private func spawnStandardPattern(preferFairFog: Bool) {
-        let blocking = preferFairFog ? Self.fairFogWallLanes() : Self.randomWallLanes()
+        let blocking = preferFairFog ? fairFogWallLanes() : randomWallLanes()
         spawnWall(blocking: blocking, kind: .standard, profile: activeSpawnProfile)
 
         let safeLanes = Lane.allCases.filter { !blocking.contains($0) }
-        if let coinLane = safeLanes.randomElement(), Float.random(in: 0...1) < 0.7 {
+        if let coinLane = nextElement(safeLanes), nextUnitFloat() < 0.7 {
             spawnCoin(in: coinLane)
         }
     }
@@ -1263,27 +1477,38 @@ final class GameWorld {
     /// Storm Pass: never spawn a wall in the lane the wind is shoving toward.
     private func spawnStormPattern(profile: EnvironmentProfile) {
         let rawPatterns = Self.stormWallLaneRawPatterns()
-        let chosen = StormWind.chooseWallLanes(
-            from: rawPatterns,
-            offsetStep: windOffsetStep,
-            pendingDirection: pendingWindDirection
-        )
+        let chosen: [Int]
+        if var rng = gameplayRNG {
+            chosen = StormWind.chooseWallLanes(
+                from: rawPatterns,
+                offsetStep: windOffsetStep,
+                pendingDirection: pendingWindDirection,
+                rng: &rng
+            )
+            gameplayRNG = rng
+        } else {
+            chosen = StormWind.chooseWallLanes(
+                from: rawPatterns,
+                offsetStep: windOffsetStep,
+                pendingDirection: pendingWindDirection
+            )
+        }
         let blocking = Set(chosen.compactMap { Lane(rawValue: $0) })
         spawnWall(blocking: blocking, kind: .standard, profile: profile)
 
         let safeLanes = Lane.allCases.filter { !blocking.contains($0) }
-        if let coinLane = safeLanes.randomElement(), Float.random(in: 0...1) < 0.7 {
+        if let coinLane = nextElement(safeLanes), nextUnitFloat() < 0.7 {
             spawnCoin(in: coinLane)
         }
     }
 
     private func spawnGhostGlassPattern(profile: EnvironmentProfile) {
-        let blocking = Self.randomWallLanes()
+        let blocking = randomWallLanes()
         // Every Ghost Glass wall is the white transparent ghost variant.
         spawnWall(blocking: blocking, kind: .ghost, profile: profile)
 
         let safeLanes = Lane.allCases.filter { !blocking.contains($0) }
-        if let coinLane = safeLanes.randomElement(), Float.random(in: 0...1) < 0.7 {
+        if let coinLane = nextElement(safeLanes), nextUnitFloat() < 0.7 {
             spawnCoin(in: coinLane)
         }
     }
@@ -1293,23 +1518,23 @@ final class GameWorld {
             spawnDuckWall()
             environmentDirector.noteDuckGateSpawned()
             // Coin under the hanging ceiling — lowered so ducking still rewards grabs.
-            if Float.random(in: 0...1) < 0.7, let lane = Lane.allCases.randomElement() {
+            if nextUnitFloat() < 0.7, let lane = nextElement(Lane.allCases) {
                 spawnCoin(in: lane, underCeiling: true)
             }
             return
         }
 
-        if Float.random(in: 0...1) < profile.duckHazardChance {
+        if nextUnitFloat() < profile.duckHazardChance {
             // Occasional duck + simple single side wall, otherwise duck alone.
             var blocked: Set<Lane> = []
-            if Float.random(in: 0...1) < 0.35 {
-                let side: Set<Lane> = Bool.random() ? [.left] : [.right]
+            if nextUnitFloat() < 0.35 {
+                let side: Set<Lane> = nextBool() ? [.left] : [.right]
                 blocked = side
                 spawnWall(blocking: side, kind: .standard, profile: profile)
             }
             spawnDuckWall()
             let coinLanes = Lane.allCases.filter { !blocked.contains($0) }
-            if Float.random(in: 0...1) < 0.7, let lane = coinLanes.randomElement() {
+            if nextUnitFloat() < 0.7, let lane = nextElement(coinLanes) {
                 spawnCoin(in: lane, underCeiling: true)
             }
         } else {
@@ -1325,27 +1550,27 @@ final class GameWorld {
             [.left], [.right],
             [.left, .right]
         ]
-        let blocking = patterns.randomElement() ?? [.center]
+        let blocking = nextElement(patterns) ?? [.center]
         spawnWall(blocking: blocking, kind: .standard, profile: activeSpawnProfile)
 
         let safeLanes = Lane.allCases.filter { !blocking.contains($0) }
-        if let lane = safeLanes.randomElement(),
-           Float.random(in: 0...1) < GameWorld.crystalHalfSpawnChance {
+        if let lane = nextElement(safeLanes),
+           nextUnitFloat() < GameWorld.crystalHalfSpawnChance {
             spawnHalfCrystal(in: lane)
         }
     }
 
     /// Avoid surprise double-blocks while Fog Hollow walls are harder to read.
-    private static func fairFogWallLanes() -> Set<Lane> {
+    private func fairFogWallLanes() -> Set<Lane> {
         let patterns: [Set<Lane>] = [
             [.left], [.center], [.right],
             [.left], [.center], [.right],
             [.left, .right]
         ]
-        return patterns.randomElement() ?? [.center]
+        return nextElement(patterns) ?? [.center]
     }
 
-    private static func randomWallLanes() -> Set<Lane> {
+    private func randomWallLanes() -> Set<Lane> {
         let patterns: [Set<Lane>] = [
             [.left], [.center], [.right],
             [.left], [.center], [.right],
@@ -1353,7 +1578,7 @@ final class GameWorld {
             [.left, .center], [.center, .right], [.left, .right],
             [.left, .right], [.left, .center], [.center, .right]
         ]
-        return patterns.randomElement() ?? [.center]
+        return nextElement(patterns) ?? [.center]
     }
 
     /// Lane raw patterns for Storm (-1 left, 0 center, +1 right).
@@ -1497,14 +1722,20 @@ final class GameWorld {
             CoinItem(
                 entity: coin,
                 baseY: baseY,
-                phase: Float.random(in: 0...(Float.pi * 2))
+                phase: nextFloat(in: 0...(Float.pi * 2))
             )
         )
     }
 
     private func spawnHalfCrystal(in lane: Lane) {
-        var rng = SystemRandomNumberGenerator()
-        let roll = CrystalCombine.makeHalf(rng: &rng)
+        let roll: (type: CrystalHalfType, charged: Bool)
+        if var rng = gameplayRNG {
+            roll = CrystalCombine.makeHalf(rng: &rng)
+            gameplayRNG = rng
+        } else {
+            var rng = SystemRandomNumberGenerator()
+            roll = CrystalCombine.makeHalf(rng: &rng)
+        }
         let radius: Float = roll.charged ? 0.09 : 0.075
         let mesh = MeshResource.generateSphere(radius: radius)
         let material = EnvironmentMaterials.crystalHalf(type: roll.type, charged: roll.charged)
