@@ -420,7 +420,7 @@ final class GameWorld {
     func attachTutorialOverlay(_ entity: Entity) {
         ensureTutorialOverlayAnchor()
         entity.orientation = simd_quatf(ix: 0, iy: 0, iz: 0, r: 1)
-        entity.scale = SIMD3(repeating: 1.15)
+        entity.scale = SIMD3(repeating: 1.35)
         guard entity.parent !== tutorialOverlayAnchor else { return }
         entity.removeFromParent()
         tutorialOverlayAnchor.addChild(entity)
