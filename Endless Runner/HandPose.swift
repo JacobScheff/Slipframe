@@ -20,7 +20,7 @@ enum HandPose {
     static let fistMaxTipToWrist: Float = 0.13
     /// Tip→wrist average above this supports an open hand.
     /// Kept low so partial / facing-away opens still release a held half.
-    static let openMinTipToWrist: Float = 0.12
+    static let openMinTipToWrist: Float = 0.115
 
     /// Strict tip curl — tips parked near knuckles (partial close, palm toward camera).
     static let fistTipPastKnuckle: Float = 0.02
@@ -28,8 +28,8 @@ enum HandPose {
     /// Tip folded past the knuckle toward the palm (full fist; tip→wrist ≤ knuckle→wrist).
     static let fistTipTuckedPastKnuckle: Float = 0.0
     /// Tip extension past the knuckle ⇒ open finger (low bar so releases fire).
-    static let openTipPastKnuckle: Float = 0.02
-    static let openTipToKnuckle: Float = 0.05
+    static let openTipPastKnuckle: Float = 0.015
+    static let openTipToKnuckle: Float = 0.045
 
     /// Occlusion-resistant curl: intermediate tip folded toward knuckle / palm.
     static let fistIntermediateToKnuckle: Float = 0.07
@@ -39,12 +39,12 @@ enum HandPose {
 
     /// Intermediate tip stretched away from wrist / knuckle ⇒ open finger.
     /// Works when the hand faces away and tip estimates are noisy.
-    static let openIntermediateToWrist: Float = 0.09
-    static let openIntermediatePastKnuckle: Float = 0.01
-    static let openMinIntermediateToWrist: Float = 0.105
+    static let openIntermediateToWrist: Float = 0.085
+    static let openIntermediatePastKnuckle: Float = 0.008
+    static let openMinIntermediateToWrist: Float = 0.10
 
     /// Index↔little tip span — open hands are wide even when facing away.
-    static let openFingerSpan: Float = 0.07
+    static let openFingerSpan: Float = 0.065
 
     static let fistMinCurledFingers = 3
     static let fistMinOccludedCurledFingers = 2
