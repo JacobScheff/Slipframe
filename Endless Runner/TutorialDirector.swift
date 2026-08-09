@@ -112,7 +112,7 @@ final class TutorialDirector {
             if !didEnter {
                 outroElapsed += deltaTime
             }
-            banner = makeSuccessBanner(text: section.title, time: outroElapsed)
+            banner = Self.makeSuccessBanner(text: section.title, time: outroElapsed)
             if outroElapsed >= Self.outroTotal, !didRequestFinish {
                 didRequestFinish = true
                 shouldFinish = true
