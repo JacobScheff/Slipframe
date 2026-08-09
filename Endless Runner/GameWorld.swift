@@ -128,6 +128,7 @@ final class GameWorld {
     private static let headHitMaxY: Float = wallHeight + 0.35
     private static let collectDistance: Float = 0.24
     /// Crystal halves use a generous grab radius so fist + reach stays fair.
+    /// Radius is measured from hand samples only (fingertips + grip), never the wrist/arm.
     private static let crystalCollectDistance: Float = 0.45
     private static let baseSpeed: Float = 3.0
     private static let maxSpeed: Float = 7.0
@@ -1842,32 +1843,34 @@ final class GameWorld {
         guard activeSpawnProfile.twist == .crystalHalves else { return }
 
         // Proximity pickup. Already-closed hands keep it; still-open hands drop after the window.
+        // Crystal only: wrist/arm contact must not grab — fingertips + grip (the hand) only.
         if heldLeft == nil {
-            let points = handPointsInRoot(leftHandContactsWorld, gripWorld: leftHandGripWorld)
+            let points = handPointsInRoot(
+                CrystalCombine.handOnlyContacts(
+                    from: leftHandContactsWorld,
+                    grip: leftHandGripWorld
+                )
+            )
             if let index = nearestHalfIndex(toAnyOf: points) {
                 grabHalf(at: index, left: true)
             }
         }
         if heldRight == nil {
-            let points = handPointsInRoot(rightHandContactsWorld, gripWorld: rightHandGripWorld)
+            let points = handPointsInRoot(
+                CrystalCombine.handOnlyContacts(
+                    from: rightHandContactsWorld,
+                    grip: rightHandGripWorld
+                )
+            )
             if let index = nearestHalfIndex(toAnyOf: points) {
                 grabHalf(at: index, left: false)
             }
         }
     }
 
-    private func handPointsInRoot(
-        _ contactsWorld: [SIMD3<Float>],
-        gripWorld: SIMD3<Float>?
-    ) -> [SIMD3<Float>] {
-        var points = contactsWorld.map { root.convert(position: $0, from: nil) }
-        if let gripWorld {
-            let grip = root.convert(position: gripWorld, from: nil)
-            if !points.contains(where: { distance($0, grip) < 0.01 }) {
-                points.append(grip)
-            }
-        }
-        return points
+    /// Convert already-filtered world-space hand samples into root space.
+    private func handPointsInRoot(_ contactsWorld: [SIMD3<Float>]) -> [SIMD3<Float>] {
+        contactsWorld.map { root.convert(position: $0, from: nil) }
     }
 
     private func nearestHalfIndex(toAnyOf points: [SIMD3<Float>]) -> Int? {

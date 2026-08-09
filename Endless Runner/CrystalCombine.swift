@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import simd
 
 enum CrystalHalfType: String, CaseIterable, Equatable {
     case red
@@ -23,6 +24,19 @@ enum CrystalCombine {
     static let chargedSpawnChance: Float = 0.01
     /// Hands must be within this distance to merge (meters).
     static let combineDistance: Float = 0.22
+
+    /// Half-crystal grab samples. `contactPoints` stores wrist/arm first, then fingertips.
+    /// Crystal Cave ignores the wrist so only the hand (tips + optional grip) can pick up a half.
+    static func handOnlyContacts(
+        from contacts: [SIMD3<Float>],
+        grip: SIMD3<Float>? = nil
+    ) -> [SIMD3<Float>] {
+        var points = Array(contacts.dropFirst())
+        if let grip, !points.contains(where: { distance($0, grip) < 0.01 }) {
+            points.append(grip)
+        }
+        return points
+    }
 
     static func canMerge(left: CrystalHalfType, right: CrystalHalfType) -> Bool {
         left != right
