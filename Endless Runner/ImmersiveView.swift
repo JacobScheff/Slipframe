@@ -16,7 +16,12 @@ private enum ImmersiveAttachmentID: String {
 
 struct ImmersiveView: View {
     @EnvironmentObject private var gameModel: GameModel
+    @EnvironmentObject private var gameCenter: GameCenterService
+    @Environment(\.openWindow) private var openWindow
+    @Environment(\.dismissWindow) private var dismissWindow
     @State private var gameWorld = GameWorld()
+    /// Prevents `openWindow` from spawning duplicate Game Center host windows.
+    @State private var isGameCenterAuthWindowOpen = false
 
     /// Side panels show between runs; hide while a run is active.
     private var showSidePanels: Bool {
@@ -55,13 +60,19 @@ struct ImmersiveView: View {
         .preferredSurroundingsEffect(gameModel.prefersRoomDimming ? .dark : nil)
         .onAppear {
             gameModel.immersiveSpaceOpen = true
-            gameModel.gameCenter.start()
+            gameCenter.start()
+            syncGameCenterAuthWindow()
         }
         .onDisappear {
             gameModel.immersiveSpaceOpen = false
             gameModel.isPlaying = false
             gameModel.prefersRoomDimming = false
+            isGameCenterAuthWindowOpen = false
+            dismissWindow(id: GameCenterAuthScene.id)
             gameWorld.teardown()
+        }
+        .onChange(of: gameCenter.needsSignInPresentation) { _, _ in
+            syncGameCenterAuthWindow()
         }
         .onChange(of: gameModel.playKind) { _, _ in
             gameWorld.previewPlayMode(gameModel.resolvedPlayMode)
@@ -74,6 +85,17 @@ struct ImmersiveView: View {
         }
         .onChange(of: gameModel.playlistStart) { _, _ in
             gameWorld.previewPlayMode(gameModel.resolvedPlayMode)
+        }
+    }
+
+    private func syncGameCenterAuthWindow() {
+        if gameCenter.needsSignInPresentation {
+            guard !isGameCenterAuthWindowOpen else { return }
+            isGameCenterAuthWindowOpen = true
+            openWindow(id: GameCenterAuthScene.id)
+        } else if isGameCenterAuthWindowOpen {
+            isGameCenterAuthWindowOpen = false
+            dismissWindow(id: GameCenterAuthScene.id)
         }
     }
 
@@ -94,4 +116,5 @@ struct ImmersiveView: View {
     let model = GameModel()
     return ImmersiveView()
         .environmentObject(model)
+        .environmentObject(model.gameCenter)
 }

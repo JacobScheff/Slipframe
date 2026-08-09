@@ -29,5 +29,13 @@ struct Endless_RunnerApp: App {
                 }
         }
         .immersionStyle(selection: $immersionState, in: .mixed)
+
+        // Presentation anchor for GameKit sign-in (UIKit modal). Opened on demand.
+        WindowGroup(id: GameCenterAuthScene.id) {
+            GameCenterAuthWindow()
+                .environmentObject(gameModel.gameCenter)
+        }
+        .windowStyle(.plain)
+        .windowResizability(.contentSize)
     }
 }

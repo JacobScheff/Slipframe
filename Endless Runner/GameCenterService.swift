@@ -92,7 +92,10 @@ final class GameCenterService: NSObject, ObservableObject, GameCenterSubmitting 
     @Published private(set) var isAuthenticated = false
     @Published private(set) var localPlayerDisplayName: String?
     @Published private(set) var statusMessage: String = "Checking Game Center…"
-    @Published var authenticationViewController: UIViewController?
+    /// GameKit sign-in UI to present from `GameCenterAuthWindow` (not immersive sheets).
+    @Published private(set) var authenticationViewController: UIViewController?
+    /// True while GameKit has handed us a sign-in controller that still needs presentation.
+    @Published private(set) var needsSignInPresentation = false
 
     @Published private(set) var remoteSnapshot: RemoteLeaderboardSnapshot?
     @Published private(set) var isLoadingRemote = false
@@ -117,14 +120,23 @@ final class GameCenterService: NSObject, ObservableObject, GameCenterSubmitting 
         GKLocalPlayer.local.authenticateHandler = { [weak self] viewController, error in
             Task { @MainActor in
                 guard let self else { return }
-                self.authenticationViewController = viewController
-                self.refreshAuthState(error: error)
-                if self.isAuthenticated {
-                    self.authenticationViewController = nil
+                if GKLocalPlayer.local.isAuthenticated {
+                    self.clearAuthenticationPresentation()
+                    self.refreshAuthState(error: error)
                     await self.publishAllLocalBests()
+                } else {
+                    self.authenticationViewController = viewController
+                    self.needsSignInPresentation = viewController != nil
+                    self.refreshAuthState(error: error)
                 }
             }
         }
+    }
+
+    /// Clears a dismissed / completed sign-in presentation without disturbing auth state.
+    func clearAuthenticationPresentation() {
+        authenticationViewController = nil
+        needsSignInPresentation = false
     }
 
     func refreshAuthState(error: Error? = nil) {
@@ -138,7 +150,7 @@ final class GameCenterService: NSObject, ObservableObject, GameCenterSubmitting 
             localPlayerDisplayName = nil
             statusMessage = "Game Center unavailable — local bests only."
             remoteErrorMessage = error.localizedDescription
-        } else if authenticationViewController != nil {
+        } else if needsSignInPresentation {
             localPlayerDisplayName = nil
             statusMessage = "Sign in to Game Center to compete."
         } else {
