@@ -139,9 +139,11 @@ final class GameWorld {
     /// Ember Run gets a touch more room than the denser biomes.
     private static let emberSpawnGapMin: Float = 2.55
     private static let emberSpawnGapMax: Float = 3.25
-    /// Low Crawl needs extra reaction time for duck gates.
+    /// Low Crawl / Summit Step need extra reaction time for vertical gates.
     private static let lowCrawlSpawnGapMin: Float = 3.3
     private static let lowCrawlSpawnGapMax: Float = 4.2
+    private static let summitStepSpawnGapMin: Float = 3.3
+    private static let summitStepSpawnGapMax: Float = 4.2
     /// Nudge adjacent double-lane slabs slightly farther apart (meters each side).
     private static let adjacentPairSpread: Float = 0.09
     /// Extra Z gap when consecutive adjacent doubles open on opposite outer lanes (left↔right).
@@ -170,6 +172,16 @@ final class GameWorld {
     private static let duckHitHalfDepth: Float = 0.4
     /// Coins paired with a duck ceiling sit under it; other Low Crawl coins stay normal height.
     private static let lowCrawlCoinHeight: Float = duckClearanceY * 0.65
+
+    // Jump hazard geometry (Summit Step) — Low Crawl's vertical twin.
+    /// Very small headset rise above standing eye height that clears a hurdle.
+    private static let jumpMinRise: Float = 0.04
+    /// Visual hurdle height (short — reads as a step, not a wall).
+    private static let jumpSlabHeight: Float = 0.14
+    private static let jumpSlabWidth: Float = 2.5
+    /// Thin along the track (toward the portal) so the step is a narrow strip.
+    private static let jumpSlabDepth: Float = 0.22
+    private static let jumpHitHalfDepth: Float = 0.16
 
     // Synth Riders-style portal aperture (always visible at the track end).
     private static let portalWidth: Float = 3.6
@@ -274,6 +286,15 @@ final class GameWorld {
     private var isPlayfieldLocked = false
     /// True once we've placed using a tracked WorldTracking device anchor.
     private var didSnapWithWorldTracking = false
+    /// Standing eye height in playfield space — median of idle headset samples.
+    private var standingEyeHeight: Float = GameWorld.fallbackEyeHeight
+    /// Rolling headset-Y samples gathered while idle (menu / game over).
+    private var standingHeightSamples: [Float] = []
+    private var timeUntilStandingSample: Float = 0
+    /// Sample standing height every few seconds while not in a run.
+    private static let standingSampleInterval: Float = 2.5
+    /// Cap the rolling buffer so calibration stays bounded in memory.
+    private static let standingSampleCapacity: Int = 100
     /// Seconds since attach — drives portal pulse / ambient motion.
     private var elapsedTime: Float = 0
     /// Elapsed time while game-over clear is armed; nil when inactive.
@@ -679,14 +700,11 @@ final class GameWorld {
         syncRoomDimming()
     }
 
-    /// Fog Hollow dims the real room via preferredSurroundingsEffect (no fog geometry).
+    /// Room dimming is unused by the current biome roster; keep passthrough clear.
     private func syncRoomDimming() {
         guard let gameModel else { return }
-        let wants = gameModel.isPlaying
-            && !gameModel.isGameOver
-            && activeSpawnProfile.twist == .fogVisibility
-        if gameModel.prefersRoomDimming != wants {
-            gameModel.prefersRoomDimming = wants
+        if gameModel.prefersRoomDimming {
+            gameModel.prefersRoomDimming = false
         }
     }
 
@@ -701,10 +719,35 @@ final class GameWorld {
     private func placePlayfield() {
         let usedWorldTracking = hasTrackedDeviceAnchor
         snapPlayfieldToPlayer()
+        // Seed standing-height calibration from the placement pose.
+        recordStandingHeightSample(playfieldHeadPosition().y)
+        timeUntilStandingSample = GameWorld.standingSampleInterval
         updatePortalAndTrack()
         rebuildFixedTrack(force: true)
         isPlayfieldLocked = true
         didSnapWithWorldTracking = usedWorldTracking
+    }
+
+    /// While idle, sample headset height every few seconds and use the median
+    /// as standing eye height so Summit Step jumps aren't calibrated off a bob.
+    private func updateStandingHeightCalibration(deltaTime: Float) {
+        timeUntilStandingSample -= deltaTime
+        guard timeUntilStandingSample <= 0 else { return }
+        timeUntilStandingSample = GameWorld.standingSampleInterval
+        recordStandingHeightSample(playfieldHeadPosition().y)
+    }
+
+    private func recordStandingHeightSample(_ headY: Float) {
+        guard JumpHeightDetection.isPlausibleStandingHeight(headY) else { return }
+        standingHeightSamples.append(headY)
+        if standingHeightSamples.count > GameWorld.standingSampleCapacity {
+            standingHeightSamples.removeFirst(
+                standingHeightSamples.count - GameWorld.standingSampleCapacity
+            )
+        }
+        if let median = JumpHeightDetection.medianHeight(of: standingHeightSamples) {
+            standingEyeHeight = median
+        }
     }
 
     /// One-time upgrade from head-anchor fallback → WorldTracking once the device is tracked.
@@ -1092,6 +1135,12 @@ final class GameWorld {
 
         guard let gameModel else { return }
 
+        // Calibrate standing height on the menu / after a run — freeze during play
+        // so a jump cannot raise the baseline mid-hurdle.
+        if !gameModel.isPlaying {
+            updateStandingHeightCalibration(deltaTime: deltaTime)
+        }
+
         guard gameModel.isPlaying, !gameModel.isGameOver else {
             if gameModel.prefersRoomDimming {
                 gameModel.prefersRoomDimming = false
@@ -1195,6 +1244,8 @@ final class GameWorld {
         switch profile.twist {
         case .lowCrawl:
             return nextFloat(in: GameWorld.lowCrawlSpawnGapMin...GameWorld.lowCrawlSpawnGapMax)
+        case .summitStep:
+            return nextFloat(in: GameWorld.summitStepSpawnGapMin...GameWorld.summitStepSpawnGapMax)
         case .baseline:
             return nextFloat(in: GameWorld.emberSpawnGapMin...GameWorld.emberSpawnGapMax)
         default:
@@ -1454,19 +1505,21 @@ final class GameWorld {
         switch profile.twist {
         case .lowCrawl:
             spawnLowCrawlPattern(profile: profile)
+        case .summitStep:
+            spawnSummitStepPattern(profile: profile)
         case .crystalHalves:
             spawnCrystalCavePattern()
         case .ghostWalls:
             spawnGhostGlassPattern(profile: profile)
         case .windShove:
             spawnStormPattern(profile: profile)
-        case .fogVisibility, .baseline:
-            spawnStandardPattern(preferFairFog: profile.twist == .fogVisibility)
+        case .baseline:
+            spawnStandardPattern()
         }
     }
 
-    private func spawnStandardPattern(preferFairFog: Bool) {
-        let blocking = preferFairFog ? fairFogWallLanes() : randomWallLanes()
+    private func spawnStandardPattern() {
+        let blocking = randomWallLanes()
         spawnWall(blocking: blocking, kind: .standard, profile: activeSpawnProfile)
 
         let safeLanes = Lane.allCases.filter { !blocking.contains($0) }
@@ -1540,7 +1593,35 @@ final class GameWorld {
             }
         } else {
             // No ceiling on this beat — normal standing coin height.
-            spawnStandardPattern(preferFairFog: false)
+            spawnStandardPattern()
+        }
+    }
+
+    private func spawnSummitStepPattern(profile: EnvironmentProfile) {
+        if environmentDirector.isTeachingSummitStep {
+            spawnJumpWall()
+            environmentDirector.noteJumpGateSpawned()
+            if nextUnitFloat() < 0.7, let lane = nextElement(Lane.allCases) {
+                spawnCoin(in: lane)
+            }
+            return
+        }
+
+        if nextUnitFloat() < profile.jumpHazardChance {
+            // Occasional jump + simple single side wall, otherwise jump alone.
+            var blocked: Set<Lane> = []
+            if nextUnitFloat() < 0.35 {
+                let side: Set<Lane> = nextBool() ? [.left] : [.right]
+                blocked = side
+                spawnWall(blocking: side, kind: .standard, profile: profile)
+            }
+            spawnJumpWall()
+            let coinLanes = Lane.allCases.filter { !blocked.contains($0) }
+            if nextUnitFloat() < 0.7, let lane = nextElement(coinLanes) {
+                spawnCoin(in: lane)
+            }
+        } else {
+            spawnStandardPattern()
         }
     }
 
@@ -1559,16 +1640,6 @@ final class GameWorld {
            nextUnitFloat() < GameWorld.crystalHalfSpawnChance {
             spawnHalfCrystal(in: lane)
         }
-    }
-
-    /// Avoid surprise double-blocks while Fog Hollow walls are harder to read.
-    private func fairFogWallLanes() -> Set<Lane> {
-        let patterns: [Set<Lane>] = [
-            [.left], [.center], [.right],
-            [.left], [.center], [.right],
-            [.left, .right]
-        ]
-        return nextElement(patterns) ?? [.center]
     }
 
     private func randomWallLanes() -> Set<Lane> {
@@ -1679,6 +1750,35 @@ final class GameWorld {
         walls.append(WallItem(entity: parent, localSlabXs: [0], kind: .duck))
     }
 
+    private func spawnJumpWall() {
+        // Jump gates break adjacent-double open-lane chaining.
+        lastAdjacentDoubleOpenLaneRaw = nil
+        let parent = Entity()
+        // Sit the hurdle on the floor band (center at half slab height).
+        let centerY = GameWorld.jumpSlabHeight * 0.5
+        parent.position = SIMD3(windCurrentX, centerY, patternSpawnZ)
+        parent.name = "wallJump"
+
+        let mesh = MeshResource.generateBox(
+            width: GameWorld.jumpSlabWidth,
+            height: GameWorld.jumpSlabHeight,
+            depth: GameWorld.jumpSlabDepth
+        )
+        let profile = activeSpawnProfile
+        let material = EnvironmentMaterials.wallBody(
+            tint: TintColor(r: 0.95, g: 0.55, b: 0.18, a: profile.palette.wallOpacity),
+            emissive: TintColor(r: 1.0, g: 0.7, b: 0.25, a: 1),
+            opacity: max(0.35, profile.palette.wallOpacity),
+            emissiveIntensity: 0.7
+        )
+        let body = ModelEntity(mesh: mesh, materials: [material])
+        body.name = "jumpSlab"
+        parent.addChild(body)
+
+        root.addChild(parent)
+        walls.append(WallItem(entity: parent, localSlabXs: [0], kind: .jump))
+    }
+
     private func makeWallSlab(kind: WallKind, profile: EnvironmentProfile) -> Entity {
         let bodyMesh = MeshResource.generateBox(
             width: GameWorld.wallWidth,
@@ -1691,7 +1791,7 @@ final class GameWorld {
         case .ghost:
             // No Unlit rim — UnlitMaterial ignores alpha and was painting a solid white shell.
             material = EnvironmentMaterials.ghostWallBody(opacity: profile.ghostWallOpacity)
-        case .standard, .duck:
+        case .standard, .duck, .jump:
             material = EnvironmentMaterials.wallBody(
                 tint: profile.palette.wallTint,
                 emissive: profile.palette.wallEmissive,
@@ -1948,6 +2048,11 @@ final class GameWorld {
         let handHalfDepth = halfDepth + GameWorld.handHitRadius
         let handHalfWidth = halfWidth + GameWorld.handHitRadius
         let duckHalfWidth = GameWorld.duckSlabWidth * 0.5 - 0.05
+        let jumpHalfWidth = GameWorld.jumpSlabWidth * 0.5 - 0.05
+        let jumpHeadRise = JumpHeightDetection.headRise(
+            headY: head.y,
+            standingEyeHeight: standingEyeHeight
+        )
 
         for wall in walls {
             guard !wall.hasResolvedHit else { continue }
@@ -1955,7 +2060,8 @@ final class GameWorld {
             let previousZ = wall.previousZ
 
             let hit: Bool
-            if wall.kind == .duck {
+            switch wall.kind {
+            case .duck:
                 let centerX = wall.entity.position.x
                 let headHit = headSamples.contains { sample in
                     WallCollision.pointHitsDuckBarrier(
@@ -1982,7 +2088,20 @@ final class GameWorld {
                     )
                 }
                 hit = headHit || handHit
-            } else {
+            case .jump:
+                // Headset-only: a small rise along universal up clears. Hands ignored.
+                let centerX = wall.entity.position.x
+                hit = WallCollision.pointHitsJumpBarrier(
+                    point: head,
+                    wallZ: wallZ,
+                    previousWallZ: previousZ,
+                    centerX: centerX,
+                    halfWidth: jumpHalfWidth,
+                    halfDepth: GameWorld.jumpHitHalfDepth,
+                    headRise: jumpHeadRise,
+                    minRise: GameWorld.jumpMinRise
+                )
+            case .standard, .ghost:
                 let slabXs = wall.worldSlabXs()
                 let seal = wall.sealsBetweenSlabs
                 let headHit = headSamples.contains { sample in

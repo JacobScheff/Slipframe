@@ -7,7 +7,7 @@
 //  App Store Connect setup (manual):
 //  1. Enable Game Center on App ID `Jacob-Scheff.Slipframe`.
 //  2. In the app’s Game Center section, create leaderboards with these IDs:
-//     Classic (score + coins): normal, emberRun, fogHollow, ghostGlass,
+//     Classic (score + coins): normal, emberRun, summitStep, ghostGlass,
 //     lowCrawl, stormPass, crystalCave → e.g. `score.normal`, `coins.emberRun`.
 //     Recurring daily (1-day): `score.daily`, `coins.daily`.
 //  3. Sandbox-test with two+ Game Center sandbox accounts (Friends scope).

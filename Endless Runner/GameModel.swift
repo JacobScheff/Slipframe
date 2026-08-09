@@ -36,11 +36,11 @@ final class GameModel: ObservableObject {
 
     @Published var playKind: PlayModeKind = .normal
     @Published var soloEnvironment: EnvironmentID = .emberRun
-    @Published var playlistEnvironments: Set<EnvironmentID> = [.emberRun, .fogHollow, .lowCrawl]
+    @Published var playlistEnvironments: Set<EnvironmentID> = [.emberRun, .summitStep, .lowCrawl]
     /// Nil = random start from the selected playlist set.
     @Published var playlistStart: EnvironmentID? = nil
 
-    /// Fog Hollow asks ImmersiveView to dim passthrough (Vision Pro room dimming).
+    /// Optional passthrough room dimming (currently unused by the biome roster).
     @Published var prefersRoomDimming: Bool = false
 
     /// Bumped on each restart so the immersive session can reset run content (not pose).

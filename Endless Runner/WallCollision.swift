@@ -2,8 +2,9 @@
 //  WallCollision.swift
 //  Endless Runner
 //
-//  Pure AABB helpers for wall / duck-hazard hits. A contact (head or hand)
-//  only counts when it overlaps a slab's kill box — not merely the same lane.
+//  Pure AABB helpers for wall / duck / jump-hazard hits. A contact (head, hand,
+//  or body probe) only counts when it overlaps a slab's kill box — not merely
+//  the same lane.
 //
 
 import simd
@@ -12,6 +13,37 @@ enum WallKind: Equatable {
     case standard
     case ghost
     case duck
+    case jump
+}
+
+enum JumpHeightDetection {
+    /// Playfield / world down. Never use headset-local down — tilting the
+    /// device must not walk a height sample sideways.
+    static let universalDown = SIMD3<Float>(0, -1, 0)
+
+    /// How far the headset has risen above the standing eye height, measured
+    /// along universal up (playfield Y). Ignores headset pitch/roll.
+    static func headRise(headY: Float, standingEyeHeight: Float) -> Float {
+        headY - standingEyeHeight
+    }
+
+    /// Body/feet probe from headset translation along universal down (XZ stays
+    /// under the headset even if the display is tilted).
+    static func bodyProbe(fromHead head: SIMD3<Float>, eyeHeight: Float) -> SIMD3<Float> {
+        head + universalDown * eyeHeight
+    }
+
+    /// Median of standing-height samples (middle value after sort).
+    static func medianHeight(of samples: [Float]) -> Float? {
+        guard !samples.isEmpty else { return nil }
+        let sorted = samples.sorted()
+        return sorted[sorted.count / 2]
+    }
+
+    /// True when a headset Y reading is plausible for standing calibration.
+    static func isPlausibleStandingHeight(_ height: Float) -> Bool {
+        height >= 1.1 && height <= 2.1
+    }
 }
 
 enum ObstacleLayout {
@@ -129,6 +161,30 @@ enum WallCollision {
         maxY: Float
     ) -> Bool {
         guard point.y >= clearanceY, point.y <= maxY else { return false }
+        let prior = previousWallZ ?? wallZ
+        guard overlapsSweptZ(
+            pointZ: point.z,
+            wallZ: wallZ,
+            previousWallZ: prior,
+            halfDepth: halfDepth
+        ) else { return false }
+        return abs(point.x - centerX) <= halfWidth
+    }
+
+    /// Low ground hurdle: hit if the headset XZ is inside the kill box and the
+    /// headset has not risen at least `minRise` above standing eye height
+    /// (small physical hop clears). Height uses universal up, not headset-local up.
+    static func pointHitsJumpBarrier(
+        point: SIMD3<Float>,
+        wallZ: Float,
+        previousWallZ: Float? = nil,
+        centerX: Float,
+        halfWidth: Float,
+        halfDepth: Float,
+        headRise: Float,
+        minRise: Float
+    ) -> Bool {
+        guard headRise < minRise else { return false }
         let prior = previousWallZ ?? wallZ
         guard overlapsSweptZ(
             pointZ: point.z,

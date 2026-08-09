@@ -12,9 +12,9 @@ VisionOS / RealityKit immersive game using hand tracking and body position. Simp
 
 - **Dodge:** Your head/body position maps to left–right (and optionally slight up/down). Stand in place; lean or step side to side.
 - **Collect:** Hands are the collectors. Reach into a coin’s volume to pick it up (no buttons).
-- **No jump button** — keep it to 2 actions: move + reach.
+- **No jump button** — vertical verbs use body motion (duck / physical jump via headset height), not a button.
 
-**Why this works on Vision Pro:** Body dodge feels physical; hand grabs feel like magic. Two verbs, clear feedback.
+**Why this works on Vision Pro:** Body dodge feels physical; hand grabs feel like magic. Clear verbs, clear feedback.
 
 ---
 
@@ -100,7 +100,7 @@ Build this first:
 4. Hand joint collision with coins → score
 5. Score + restart button
 
-Skip for v1: jumps, enemies, power-ups, multiplayer, fancy menus.
+Skip for v1: enemies, power-ups, multiplayer, fancy menus.
 
 ---
 
@@ -135,19 +135,19 @@ Each environment has:
 
 The six biomes in the random pool:
 
-1. Fog Hollow
+1. Summit Step
 2. Low Crawl
 3. Ghost Glass
 4. Ember Run
 5. Storm Pass
 6. Crystal Cave
 
-##### Fog Hollow
+##### Summit Step
 
-- **Look / feel:** Darker corridor, muted greys and desaturated reds, with soft mist volumes mid-track toward the portal (stand line stays clear).
-- **Music mood:** Low, tense drone — almost motionless, anxious underground atmosphere.
-- **Special twist — worse visibility:** Spawn distance stays the same; walls are more transparent and Fog Hollow is the **only** biome with fog/mist.
-- **Gameplay notes:** Keep lane patterns fair (avoid surprise double-blocks while walls are hard to read). Coins stay at normal readability so rewards still pop through the fog.
+- **Look / feel:** Sunlit alpine stone — warm golds and ochres, open vertical space, contrast to Low Crawl’s cool blues.
+- **Music mood:** Bright, climbing pulse — upward energy, short bursts of lift.
+- **Special twist — jump hurdles:** Low ground barriers require a **very small hop** (raising the headset ~4 cm above standing eye height) to clear, in addition to normal left/right lane dodges. Hurdles are thin along the track. Standing height is the **median** of headset-Y samples taken every few seconds while idle (menu / between runs; up to 100 samples), frozen during play. Rise is measured along **universal/world up** from the headset, not headset-local up.
+- **Gameplay notes:** Jump obstacles should be clearly silhouetted on the floor. Don’t stack jump-hazards with unfair side-walls in the same beat during early Summit Step visits; mix in simple jump-only gates so the verb teaches cleanly. Flow mirrors Low Crawl (teach gates, wider spawn gaps, optional single side wall). Coins stay at normal height.
 
 ##### Low Crawl
 
@@ -207,4 +207,4 @@ The six biomes in the random pool:
 - Telegraph briefly (e.g. 1s color wash or audio sting) so the change doesn’t feel like a glitch.
 - Spawn rules for the new twist apply to newly spawned obstacles; don’t unfairly rewrite what’s already on top of the player.
 - Drop any held Crystal Cave halves on environment exit (they vanish; no carry into the next biome).
-- Audio files live in `Endless Runner/Music/` named by biome cue (`emberRun.m4a`, `fogHollow.m4a`, …).
+- Audio files live in `Endless Runner/Music/` named by biome cue (`emberRun.m4a`, `summitStep.m4a`, …).

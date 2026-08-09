@@ -11,7 +11,7 @@ import simd
 
 enum EnvironmentID: String, CaseIterable, Identifiable, Codable {
     case emberRun
-    case fogHollow
+    case summitStep
     case ghostGlass
     case lowCrawl
     case stormPass
@@ -22,7 +22,7 @@ enum EnvironmentID: String, CaseIterable, Identifiable, Codable {
     var displayName: String {
         switch self {
         case .emberRun: return "Ember Run"
-        case .fogHollow: return "Fog Hollow"
+        case .summitStep: return "Summit Step"
         case .ghostGlass: return "Ghost Glass"
         case .lowCrawl: return "Low Crawl"
         case .stormPass: return "Storm Pass"
@@ -37,7 +37,7 @@ enum EnvironmentID: String, CaseIterable, Identifiable, Codable {
 
 enum EnvironmentTwist: Equatable {
     case baseline
-    case fogVisibility
+    case summitStep
     case ghostWalls
     case lowCrawl
     case windShove
@@ -73,7 +73,7 @@ struct EnvironmentPalette: Equatable {
     var portalAccent: TintColor
     /// Multiplies overall ambience darkness (1 = normal, lower = darker).
     var ambienceBrightness: Float
-    /// >0 marks Fog Hollow — drives passthrough room dimming (not geometry fog cards).
+    /// Reserved palette channel (kept for blend continuity; unused as a gameplay flag).
     var fogDensity: Float
     var fogColor: TintColor
     var wallTint: TintColor
@@ -95,6 +95,10 @@ struct EnvironmentProfile: Equatable {
     var lowCrawlTeachCount: Int
     /// Chance to spawn a duck hazard after teaching gates (Low Crawl).
     var duckHazardChance: Float
+    /// How many jump-only teaching gates to spawn at the start of a Summit Step visit.
+    var summitStepTeachCount: Int
+    /// Chance to spawn a jump hazard after teaching gates (Summit Step).
+    var jumpHazardChance: Float
 }
 
 enum EnvironmentCatalog {
@@ -131,35 +135,38 @@ enum EnvironmentCatalog {
                 ghostWallChance: 0,
                 ghostWallOpacity: 0.45,
                 lowCrawlTeachCount: 0,
-                duckHazardChance: 0
+                duckHazardChance: 0,
+                summitStepTeachCount: 0,
+                jumpHazardChance: 0
             )
 
-        case .fogHollow:
+        case .summitStep:
             return EnvironmentProfile(
-                id: .fogHollow,
-                twist: .fogVisibility,
+                id: .summitStep,
+                twist: .summitStep,
                 palette: EnvironmentPalette(
-                    // Darker corridor so mist reads as gloom, not hard slabs.
-                    floor: TintColor(r: 0.02, g: 0.022, b: 0.03, a: 1),
-                    laneStripe: TintColor(r: 0.22, g: 0.26, b: 0.3, a: 0.35),
-                    portalRim: TintColor(r: 0.18, g: 0.22, b: 0.26, a: 1),
-                    portalVoid: TintColor(r: 0.008, g: 0.01, b: 0.014, a: 1),
-                    portalRail: TintColor(r: 0.16, g: 0.2, b: 0.24, a: 1),
-                    portalAccent: TintColor(r: 0.1, g: 0.12, b: 0.16, a: 1),
-                    ambienceBrightness: 0.28,
-                    // Room gloom comes from preferredSurroundingsEffect, not fog boxes.
-                    fogDensity: 1.0,
-                    fogColor: TintColor(r: 0.55, g: 0.6, b: 0.66, a: 0.0),
-                    wallTint: TintColor(r: 0.45, g: 0.14, b: 0.12, a: 0.32),
-                    wallEmissive: TintColor(r: 0.4, g: 0.12, b: 0.1, a: 1),
-                    wallOpacity: 0.32,
-                    wallEmissiveIntensity: 0.22,
-                    coinTint: TintColor(r: 1.0, g: 0.86, b: 0.35, a: 1)
+                    // Sunlit alpine stone — warm contrast to Low Crawl's cool blues.
+                    floor: TintColor(r: 0.1, g: 0.08, b: 0.05, a: 1),
+                    laneStripe: TintColor(r: 1.0, g: 0.78, b: 0.35, a: 0.85),
+                    portalRim: TintColor(r: 0.95, g: 0.68, b: 0.28, a: 1),
+                    portalVoid: TintColor(r: 0.04, g: 0.03, b: 0.02, a: 1),
+                    portalRail: TintColor(r: 0.9, g: 0.62, b: 0.25, a: 1),
+                    portalAccent: TintColor(r: 0.75, g: 0.45, b: 0.15, a: 1),
+                    ambienceBrightness: 0.95,
+                    fogDensity: 0.0,
+                    fogColor: TintColor(r: 0.55, g: 0.45, b: 0.3, a: 0.0),
+                    wallTint: TintColor(r: 0.85, g: 0.5, b: 0.18, a: 0.42),
+                    wallEmissive: TintColor(r: 1.0, g: 0.65, b: 0.22, a: 1),
+                    wallOpacity: 0.42,
+                    wallEmissiveIntensity: 0.55,
+                    coinTint: TintColor(r: 1.0, g: 0.62, b: 0.38, a: 1)
                 ),
                 ghostWallChance: 0,
-                ghostWallOpacity: 0.32,
+                ghostWallOpacity: 0.42,
                 lowCrawlTeachCount: 0,
-                duckHazardChance: 0
+                duckHazardChance: 0,
+                summitStepTeachCount: 3,
+                jumpHazardChance: 0.55
             )
 
         case .ghostGlass:
@@ -186,7 +193,9 @@ enum EnvironmentCatalog {
                 ghostWallChance: 1.0,
                 ghostWallOpacity: 0.002,
                 lowCrawlTeachCount: 0,
-                duckHazardChance: 0
+                duckHazardChance: 0,
+                summitStepTeachCount: 0,
+                jumpHazardChance: 0
             )
 
         case .lowCrawl:
@@ -212,7 +221,9 @@ enum EnvironmentCatalog {
                 ghostWallChance: 0,
                 ghostWallOpacity: 0.42,
                 lowCrawlTeachCount: 3,
-                duckHazardChance: 0.55
+                duckHazardChance: 0.55,
+                summitStepTeachCount: 0,
+                jumpHazardChance: 0
             )
 
         case .stormPass:
@@ -238,7 +249,9 @@ enum EnvironmentCatalog {
                 ghostWallChance: 0,
                 ghostWallOpacity: 0.42,
                 lowCrawlTeachCount: 0,
-                duckHazardChance: 0
+                duckHazardChance: 0,
+                summitStepTeachCount: 0,
+                jumpHazardChance: 0
             )
 
         case .crystalCave:
@@ -264,9 +277,10 @@ enum EnvironmentCatalog {
                 ghostWallChance: 0,
                 ghostWallOpacity: 0.38,
                 lowCrawlTeachCount: 0,
-                duckHazardChance: 0
+                duckHazardChance: 0,
+                summitStepTeachCount: 0,
+                jumpHazardChance: 0
             )
         }
     }
 }
-
