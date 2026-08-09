@@ -150,6 +150,8 @@ final class GameWorld {
     private static let oppositeOpenLaneSpacingBonus: Float = 0.35
     /// HUD sits above the corridor, further down the track, clear of the play volume.
     private static let hudPosition = SIMD3<Float>(0, 2.45, -3.2)
+    /// Coaching card sits just under the center HUD band.
+    private static let tutorialOverlayHUDDrop: Float = 0.28
     /// World scale for the SwiftUI attachment (attachments are small by default).
     private static let hudScale: Float = 3.0
     /// Side panels sit on the track edges, slightly forward of the stand line, facing the player.
@@ -529,9 +531,13 @@ final class GameWorld {
 
     private func ensureTutorialOverlayAnchor() {
         tutorialOverlayAnchor.name = "tutorialOverlay"
-        // Seed in front of the stand line; lazy-lock retargets every frame while active.
+        // Seed under the HUD; lazy-lock retargets XZ while active.
         if tutorialOverlayAnchor.parent !== root {
-            tutorialOverlayAnchor.position = SIMD3(0, 1.45, -1.6)
+            tutorialOverlayAnchor.position = SIMD3(
+                0,
+                GameWorld.hudPosition.y - GameWorld.tutorialOverlayHUDDrop,
+                -1.8
+            )
             root.addChild(tutorialOverlayAnchor)
         }
     }
@@ -1344,11 +1350,20 @@ final class GameWorld {
         ensureTutorialOverlayAnchor()
         let head = playfieldHeadPosition()
         let forward = playfieldFlatForward()
-        let desired = LazyLock.desiredPose(headPosition: head, flatForward: forward)
+        // Match HUD height (slightly below) so coaching copy sits under the score panel.
+        var desired = LazyLock.desiredPose(
+            headPosition: head,
+            flatForward: forward,
+            distance: 1.85,
+            drop: 0
+        )
+        desired.position.y = GameWorld.hudPosition.y - GameWorld.tutorialOverlayHUDDrop
         let next = LazyLock.step(current: lazyLockPose, desired: desired, deltaTime: deltaTime)
-        lazyLockPose = next
-        tutorialOverlayAnchor.position = next.position
-        tutorialOverlayAnchor.orientation = simd_quatf(angle: next.yaw, axis: SIMD3(0, 1, 0))
+        var seated = next
+        seated.position.y = desired.position.y
+        lazyLockPose = seated
+        tutorialOverlayAnchor.position = seated.position
+        tutorialOverlayAnchor.orientation = simd_quatf(angle: seated.yaw, axis: SIMD3(0, 1, 0))
     }
 
     /// Horizontal look direction in playfield space for lazy-lock seating.
