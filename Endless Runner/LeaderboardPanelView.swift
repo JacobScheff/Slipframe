@@ -291,13 +291,6 @@ struct LeaderboardPanelView: View {
         }
     }
 
-    private var footerNote: some View {
-        Text("Playlists stay off the board. Daily uses a recurring Game Center board.")
-            .font(.system(size: 12, weight: .regular, design: .rounded))
-            .foregroundStyle(.secondary.opacity(0.9))
-            .fixedSize(horizontal: false, vertical: true)
-    }
-
     private func pickerButton(
         title: String,
         selected: Bool,
