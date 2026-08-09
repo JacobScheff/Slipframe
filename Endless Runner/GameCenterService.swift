@@ -4,19 +4,45 @@
 //
 //  Game Center auth, score submission, and leaderboard loads.
 //
-//  App Store Connect setup (manual):
-//  1. Enable Game Center on App ID `Jacob-Scheff.Endless-Runner-1`.
-//  2. In the app’s Game Center section, create leaderboards with these IDs:
-//     Classic (score + coins): normal, emberRun, fogHollow, ghostGlass,
-//     lowCrawl, stormPass, crystalCave → e.g. `score.normal`, `coins.emberRun`.
+//  App Store Connect / Developer setup (manual) — required before remote
+//  boards work. GKError 15 (“not recognized by Game Center”) means this
+//  checklist is incomplete or Apple’s catalog hasn’t refreshed yet:
+//  1. Developer portal App ID `Jacob-Scheff.Endless-Runner-1` → enable Game Center.
+//  2. App Store Connect app with that exact bundle ID → Services → Game Center on.
+//  3. Create leaderboards with these IDs (classic unless noted):
+//     score/coins × normal, emberRun, fogHollow, ghostGlass, lowCrawl,
+//     stormPass, crystalCave → e.g. `score.normal`, `coins.emberRun`.
 //     Recurring daily (1-day): `score.daily`, `coins.daily`.
-//  3. Sandbox-test with two+ Game Center sandbox accounts (Friends scope).
+//  4. If still unrecognized: add/remove a dummy leaderboard to force a refresh,
+//     wait for propagation, delete the app from device, rebuild & relaunch.
+//  5. Sandbox-test with two+ Game Center accounts (Friends scope).
 //
 
 import Foundation
 import GameKit
 import SwiftUI
 import UIKit
+
+enum GameCenterErrorPresentation {
+    static let expectedBundleID = "Jacob-Scheff.Endless-Runner-1"
+
+    /// User-facing copy for GameKit failures (keeps local bests usable).
+    static func message(for error: Error) -> String {
+        let nsError = error as NSError
+        let description = nsError.localizedDescription
+        let isUnrecognized =
+            (nsError.domain == GKError.errorDomain
+                && nsError.code == GKError.Code.gameUnrecognized.rawValue)
+            || description.localizedCaseInsensitiveContains("not recognized by Game Center")
+
+        if isUnrecognized {
+            return """
+            Game Center doesn’t recognize this build yet. Enable Game Center for bundle ID \(expectedBundleID) in the Developer portal and App Store Connect, create the leaderboards listed in GameCenterService.swift, then delete the app and relaunch. Local bests still work.
+            """
+        }
+        return description
+    }
+}
 
 enum LeaderboardAudience: String, CaseIterable, Identifiable {
     case allPlayers
@@ -149,7 +175,7 @@ final class GameCenterService: NSObject, ObservableObject, GameCenterSubmitting 
         } else if let error {
             localPlayerDisplayName = nil
             statusMessage = "Game Center unavailable — local bests only."
-            remoteErrorMessage = error.localizedDescription
+            remoteErrorMessage = GameCenterErrorPresentation.message(for: error)
         } else if needsSignInPresentation {
             localPlayerDisplayName = nil
             statusMessage = "Sign in to Game Center to compete."
@@ -188,7 +214,7 @@ final class GameCenterService: NSObject, ObservableObject, GameCenterSubmitting 
                 )
             }
         } catch {
-            remoteErrorMessage = error.localizedDescription
+            remoteErrorMessage = GameCenterErrorPresentation.message(for: error)
         }
     }
 
@@ -265,7 +291,7 @@ final class GameCenterService: NSObject, ObservableObject, GameCenterSubmitting 
         } catch {
             if Task.isCancelled { return }
             remoteSnapshot = nil
-            remoteErrorMessage = error.localizedDescription
+            remoteErrorMessage = GameCenterErrorPresentation.message(for: error)
         }
     }
 

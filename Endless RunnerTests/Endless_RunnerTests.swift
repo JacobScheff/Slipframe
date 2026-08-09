@@ -184,6 +184,28 @@ final class Endless_RunnerTests: XCTestCase {
         XCTAssertTrue(Set(GameCenterLeaderboardID.allConfiguredIDs).count == 16)
     }
 
+    func testGameCenterUnrecognizedErrorMapsToSetupGuidance() {
+        let unrecognized = NSError(
+            domain: GKError.errorDomain,
+            code: GKError.Code.gameUnrecognized.rawValue,
+            userInfo: [
+                NSLocalizedDescriptionKey:
+                    "The requested operation could not be completed because this application is not recognized by Game Center."
+            ]
+        )
+        let message = GameCenterErrorPresentation.message(for: unrecognized)
+        XCTAssertTrue(message.contains(GameCenterErrorPresentation.expectedBundleID))
+        XCTAssertTrue(message.localizedCaseInsensitiveContains("App Store Connect"))
+        XCTAssertFalse(message.localizedCaseInsensitiveContains("operation could not be completed"))
+
+        let other = NSError(
+            domain: GKError.errorDomain,
+            code: GKError.Code.communicationsFailure.rawValue,
+            userInfo: [NSLocalizedDescriptionKey: "Network down"]
+        )
+        XCTAssertEqual(GameCenterErrorPresentation.message(for: other), "Network down")
+    }
+
     func testEndRunSubmitsScoreAndCoinsToGameCenterExceptPlaylist() {
         let store = makeIsolatedBestStore()
         let submitter = MockGameCenterSubmitter()
