@@ -99,7 +99,7 @@ struct LevelSelectView: View {
             showReplayConfirm = true
         } label: {
             Text("Replay tutorial…")
-                .font(.system(size: 12, weight: .medium, design: .rounded))
+                .font(.system(size: 15, weight: .medium, design: .rounded))
                 .foregroundStyle(.tertiary)
         }
         .buttonStyle(.plain)
