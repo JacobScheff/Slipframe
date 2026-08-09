@@ -91,7 +91,7 @@ enum LeaderboardBoard: Hashable, Identifiable {
             return .normal
         case .solo(let id):
             return .loop(id)
-        case .playlist:
+        case .playlist, .tutorial:
             return nil
         case .daily:
             return .daily(dayKey: DailyChallenge.dayKey(for: date))

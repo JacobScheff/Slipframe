@@ -18,6 +18,8 @@ struct LevelSelectView: View {
         VStack(alignment: .leading, spacing: 18) {
             header
 
+            tutorialButton
+
             modePicker
 
             Divider().opacity(0.35)
@@ -38,6 +40,37 @@ struct LevelSelectView: View {
         Text("Mode Selection")
             .font(.system(size: 28, weight: .semibold, design: .rounded))
             .foregroundStyle(.primary)
+    }
+
+    private var tutorialButton: some View {
+        Button {
+            gameModel.startTutorial()
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "sparkles.rectangle.stack")
+                    .font(.system(size: 18, weight: .semibold))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(gameModel.hasCompletedTutorial ? "Replay Tutorial" : "Play Tutorial")
+                        .font(.system(size: 17, weight: .bold, design: .rounded))
+                    Text("Guided calibration with coaching overlays.")
+                        .font(.system(size: 13, weight: .regular, design: .rounded))
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 4)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(gold.opacity(0.14))
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(gold.opacity(0.55), lineWidth: 1)
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(gameModel.isPlaying)
     }
 
     private var modePicker: some View {

@@ -38,7 +38,52 @@ final class GameMusic {
         for id in EnvironmentID.allCases {
             _ = loadPlayer(for: id.musicCue)
         }
+        _ = loadPlayer(for: TutorialMusic.cue)
         isPrepared = true
+    }
+
+    /// Current playback time of the active player, if any.
+    var playbackTime: Float {
+        Float(activePlayer?.currentTime ?? 0)
+    }
+
+    /// Start a cue from the beginning (no crossfade). Used by the tutorial master track.
+    @discardableResult
+    func playFromStart(_ cue: String, loop: Bool = false, volume: Float = 1) -> Float {
+        prepareSessionIfNeeded()
+        fadeTask?.cancel()
+        fadeTask = nil
+        outgoingPlayer?.stop()
+        outgoingPlayer = nil
+
+        currentCue = cue
+        let trackDuration = trackDuration(for: cue)
+        guard let next = loadPlayer(for: cue) else {
+            activePlayer?.stop()
+            activePlayer = nil
+            return trackDuration
+        }
+
+        activePlayer?.stop()
+        next.stop()
+        next.currentTime = 0
+        next.numberOfLoops = loop ? -1 : 0
+        next.volume = volume
+        next.prepareToPlay()
+        next.play()
+        activePlayer = next
+        return trackDuration
+    }
+
+    /// Immediate stop — used at the tutorial silence cut.
+    func stopAbruptly() {
+        fadeTask?.cancel()
+        fadeTask = nil
+        activePlayer?.stop()
+        outgoingPlayer?.stop()
+        activePlayer = nil
+        outgoingPlayer = nil
+        currentCue = nil
     }
 
     /// Duration of the biome track in seconds (fallback if the file is missing).

@@ -11,11 +11,30 @@ Put one audio file per environment in this folder. Filenames must match the biom
 | Storm Pass    | `stormPass`     | `stormPass.m4a`  |
 | Crystal Cave  | `crystalCave`   | `crystalCave.m4a`|
 
+## Tutorial master track
+
+| Cue        | Filename         | Notes                                      |
+|------------|------------------|--------------------------------------------|
+| Tutorial   | **`tutorial.m4a`** | Single continuous track (~2:51). Required. |
+
+Section timestamps (hard-coded in `TutorialScript.swift`):
+
+| Time        | Section            |
+|-------------|--------------------|
+| 0:00–0:26   | The Basics         |
+| 0:26–0:42   | Ducking Protocol   |
+| 0:42–1:11   | Moving Walls       |
+| 1:11–1:33   | Phantom Walls      |
+| 1:33–2:00   | Crystal Cave       |
+| 2:00–2:24   | Jumping Mechanic   |
+| 2:24–2:51   | System Overdrive   |
+| 2:51        | Dead silence / hand-off |
+
 Supported extensions (first match wins): `.m4a`, `.mp3`, `.wav`, `.caf`, `.aiff`.
 
 ## Notes
 
-- Aim for roughly **45 seconds** per track (a few seconds shorter/longer is fine). The run stays in that biome for the track length, then crossfades to the next.
+- Aim for roughly **45 seconds** per biome track (a few seconds shorter/longer is fine). The run stays in that biome for the track length, then crossfades to the next.
 - Prefer **AAC `.m4a`** for size/quality on Apple platforms.
 - Do not nest files in subfolders; keep them directly in `Music/`.
 - This `Music` folder is an Xcode **folder reference**, so new files here are copied into the app bundle on the next build without editing the project file.

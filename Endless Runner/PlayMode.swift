@@ -2,7 +2,7 @@
 //  PlayMode.swift
 //  Endless Runner
 //
-//  Player-facing run configuration: Normal, Playlist, Loop, Daily.
+//  Player-facing run configuration: Normal, Playlist, Loop, Daily, Tutorial.
 //
 
 import Foundation
@@ -45,10 +45,12 @@ enum PlayMode: Equatable {
     /// `environments` must be non-empty. `start` nil → random pick from the set.
     case playlist(environments: Set<EnvironmentID>, start: EnvironmentID?)
     case daily
+    /// Guided calibration run driven by `TutorialDirector` + `tutorial.m4a`.
+    case tutorial
 
     var kind: PlayModeKind {
         switch self {
-        case .normal: return .normal
+        case .normal, .tutorial: return .normal
         case .solo: return .solo
         case .playlist: return .playlist
         case .daily: return .daily
@@ -69,10 +71,12 @@ enum PlayMode: Equatable {
             return "Playlist · \(count) · random start"
         case .daily:
             return "Daily · \(DailyChallenge.displayDate())"
+        case .tutorial:
+            return "Tutorial"
         }
     }
 
-    /// Leaderboard category key. Playlists stay off the board.
+    /// Leaderboard category key. Playlists and tutorial stay off the board.
     var leaderboardCategory: String? {
         LeaderboardBoard.matching(self)?.categoryKey
     }

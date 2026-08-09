@@ -156,10 +156,125 @@ final class Endless_RunnerTests: XCTestCase {
         XCTAssertEqual(LeaderboardBoard.matching(.normal)?.categoryKey, "normal")
         XCTAssertEqual(LeaderboardBoard.matching(.solo(.stormPass))?.categoryKey, "stormPass")
         XCTAssertNil(LeaderboardBoard.matching(.playlist(environments: [.emberRun], start: nil)))
+        XCTAssertNil(LeaderboardBoard.matching(.tutorial))
         XCTAssertEqual(
             LeaderboardBoard.matching(.daily)?.categoryKey,
             "daily.\(dayKey)"
         )
+    }
+
+    func testTutorialScriptSectionOrderAndTimestamps() {
+        let sections = TutorialCatalog.sections
+        XCTAssertEqual(sections.map(\.id), [
+            .basics, .ducking, .movingWalls, .phantomWalls,
+            .crystalCave, .jumping, .overdrive, .outro
+        ])
+        XCTAssertEqual(sections[0].environment, .emberRun)
+        XCTAssertEqual(sections[1].environment, .lowCrawl)
+        XCTAssertEqual(sections[2].environment, .stormPass)
+        XCTAssertEqual(sections[3].environment, .ghostGlass)
+        XCTAssertEqual(sections[4].environment, .crystalCave)
+        XCTAssertEqual(sections[5].environment, .summitStep)
+        XCTAssertEqual(sections[6].environment, .emberRun)
+        XCTAssertGreaterThan(sections[6].speedMultiplier, 1.2)
+        XCTAssertTrue(sections[6].hidesOverlay)
+        XCTAssertTrue(sections[7].isOutro)
+
+        XCTAssertEqual(TutorialCatalog.section(at: 0).id, .basics)
+        XCTAssertEqual(TutorialCatalog.section(at: 26).id, .ducking)
+        XCTAssertEqual(TutorialCatalog.section(at: 42).id, .movingWalls)
+        XCTAssertEqual(TutorialCatalog.section(at: 71).id, .phantomWalls)
+        XCTAssertEqual(TutorialCatalog.section(at: 93).id, .crystalCave)
+        XCTAssertEqual(TutorialCatalog.section(at: 120).id, .jumping)
+        XCTAssertEqual(TutorialCatalog.section(at: 144).id, .overdrive)
+        XCTAssertEqual(TutorialCatalog.section(at: 171).id, .outro)
+        XCTAssertEqual(TutorialMusic.cue, "tutorial")
+    }
+
+    func testTutorialDirectorAdvancesAndFinishes() {
+        let director = TutorialDirector()
+        director.begin()
+        XCTAssertEqual(director.currentSection.id, .basics)
+
+        var frame = director.update(deltaTime: 26)
+        XCTAssertTrue(frame.didEnterSection)
+        XCTAssertEqual(frame.section.id, .ducking)
+
+        _ = director.update(deltaTime: 145) // past silence
+        frame = director.update(deltaTime: 0.05)
+        XCTAssertEqual(frame.section.id, .outro)
+        XCTAssertTrue(frame.shouldStopMusic || frame.showTestRunBanner)
+
+        // Hold through outro banner.
+        var finished = false
+        for _ in 0..<60 {
+            let step = director.update(deltaTime: 0.1)
+            if step.shouldFinish {
+                finished = true
+                break
+            }
+        }
+        XCTAssertTrue(finished)
+    }
+
+    func testLazyLockHoldsWithinThresholdThenFollows() {
+        let origin = LazyLockPose(position: SIMD3(0, 1.5, -1.6), yaw: 0)
+        let tiny = LazyLockPose(position: SIMD3(0.02, 1.5, -1.6), yaw: 0.02)
+        let held = LazyLock.step(current: origin, desired: tiny, deltaTime: 1 / 60)
+        XCTAssertEqual(held.position.x, origin.position.x, accuracy: 0.0001)
+
+        let far = LazyLockPose(position: SIMD3(0.5, 1.5, -1.6), yaw: 0.5)
+        let moved = LazyLock.step(current: origin, desired: far, deltaTime: 0.25)
+        XCTAssertGreaterThan(moved.position.x, origin.position.x)
+        XCTAssertLessThan(moved.position.x, far.position.x)
+    }
+
+    func testTutorialRunDisablesScoringAndFinishesCleanly() {
+        let suite = "test.tutorial.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let model = GameModel(
+            personalBests: makeIsolatedBestStore(),
+            scoreSubmitter: MockGameCenterSubmitter(),
+            defaults: defaults,
+            tutorialCompletedKey: suite
+        )
+        XCTAssertFalse(model.hasCompletedTutorial)
+
+        model.startTutorial()
+        XCTAssertTrue(model.isTutorialRun)
+        XCTAssertEqual(model.resolvedPlayMode, .tutorial)
+
+        model.addScore(50)
+        model.collectCoin(count: 3)
+        XCTAssertEqual(model.score, 0)
+        XCTAssertEqual(model.coinsCollected, 0)
+
+        model.finishTutorial(markCompleted: true)
+        XCTAssertFalse(model.isPlaying)
+        XCTAssertFalse(model.isGameOver)
+        XCTAssertFalse(model.isTutorialRun)
+        XCTAssertTrue(model.hasCompletedTutorial)
+    }
+
+    func testEnvironmentDirectorTutorialForcesSilentBiomeSwitches() {
+        let director = EnvironmentDirector()
+        director.beginRun(mode: .tutorial)
+        XCTAssertEqual(director.currentID, .emberRun)
+
+        director.forceEnvironment(.lowCrawl, telegraph: true)
+        XCTAssertEqual(director.currentID, .lowCrawl)
+
+        // Auto-rotate must not fire while in tutorial.
+        for _ in 0..<5 {
+            let frame = director.update(deltaTime: 30)
+            XCTAssertFalse(frame.didEnterEnvironment)
+            XCTAssertEqual(frame.currentID, .lowCrawl)
+        }
+
+        director.forceEnvironment(.summitStep, telegraph: true)
+        XCTAssertEqual(director.currentID, .summitStep)
     }
 
     func testGameCenterLeaderboardIDsAreStable() {
@@ -1170,9 +1285,13 @@ final class Endless_RunnerTests: XCTestCase {
     }
 
     private func makeIsolatedGameModel() -> GameModel {
-        GameModel(
+        let suite = "test.gameModel.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        return GameModel(
             personalBests: makeIsolatedBestStore(),
-            scoreSubmitter: MockGameCenterSubmitter()
+            scoreSubmitter: MockGameCenterSubmitter(),
+            defaults: defaults,
+            tutorialCompletedKey: suite
         )
     }
 }

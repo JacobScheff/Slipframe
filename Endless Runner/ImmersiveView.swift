@@ -12,6 +12,7 @@ private enum ImmersiveAttachmentID: String {
     case playHUD
     case levelSelect
     case leaderboard
+    case tutorialOverlay
 }
 
 struct ImmersiveView: View {
@@ -22,10 +23,17 @@ struct ImmersiveView: View {
     @State private var gameWorld = GameWorld()
     /// Prevents `openWindow` from spawning duplicate Game Center host windows.
     @State private var isGameCenterAuthWindowOpen = false
+    @State private var didOfferAutoTutorial = false
 
     /// Side panels show between runs; hide while a run is active.
     private var showSidePanels: Bool {
         !gameModel.isPlaying
+    }
+
+    private var showTutorialOverlay: Bool {
+        gameModel.isTutorialRun
+            || gameModel.tutorialOverlayOpacity > 0.02
+            || gameModel.tutorialBannerText != nil
     }
 
     var body: some View {
@@ -36,6 +44,7 @@ struct ImmersiveView: View {
             gameWorld.syncRun(with: gameModel)
             attachPanels(from: attachments)
             gameWorld.setSidePanelsVisible(showSidePanels)
+            gameWorld.setTutorialOverlayVisible(showTutorialOverlay)
         } attachments: {
             Attachment(id: ImmersiveAttachmentID.playHUD.rawValue) {
                 PlayHUDView()
@@ -56,17 +65,27 @@ struct ImmersiveView: View {
                     .opacity(showSidePanels ? 1 : 0)
                     .allowsHitTesting(showSidePanels)
             }
+            Attachment(id: ImmersiveAttachmentID.tutorialOverlay.rawValue) {
+                TutorialOverlayView()
+                    .environmentObject(gameModel)
+                    .opacity(showTutorialOverlay ? 1 : 0)
+                    .allowsHitTesting(false)
+            }
         }
         .preferredSurroundingsEffect(gameModel.prefersRoomDimming ? .dark : nil)
         .onAppear {
             gameModel.immersiveSpaceOpen = true
             gameCenter.start()
             syncGameCenterAuthWindow()
+            offerAutoTutorialIfNeeded()
         }
         .onDisappear {
             gameModel.immersiveSpaceOpen = false
             gameModel.isPlaying = false
             gameModel.prefersRoomDimming = false
+            if gameModel.isTutorialRun {
+                gameModel.finishTutorial(markCompleted: false)
+            }
             isGameCenterAuthWindowOpen = false
             dismissWindow(id: GameCenterAuthScene.id)
             gameWorld.teardown()
@@ -85,6 +104,21 @@ struct ImmersiveView: View {
         }
         .onChange(of: gameModel.playlistStart) { _, _ in
             gameWorld.previewPlayMode(gameModel.resolvedPlayMode)
+        }
+    }
+
+    private func offerAutoTutorialIfNeeded() {
+        guard !didOfferAutoTutorial else { return }
+        didOfferAutoTutorial = true
+        guard !gameModel.hasCompletedTutorial else { return }
+        Task { @MainActor in
+            // Let the playfield snap and side panels mount before diving in.
+            try? await Task.sleep(nanoseconds: 1_100_000_000)
+            guard gameModel.immersiveSpaceOpen,
+                  !gameModel.isPlaying,
+                  !gameModel.hasCompletedTutorial
+            else { return }
+            gameModel.startTutorial()
         }
     }
 
@@ -108,6 +142,9 @@ struct ImmersiveView: View {
         }
         if let board = attachments.entity(for: ImmersiveAttachmentID.leaderboard.rawValue) {
             gameWorld.attachLeaderboard(board)
+        }
+        if let overlay = attachments.entity(for: ImmersiveAttachmentID.tutorialOverlay.rawValue) {
+            gameWorld.attachTutorialOverlay(overlay)
         }
     }
 }
