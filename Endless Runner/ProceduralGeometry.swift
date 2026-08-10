@@ -20,15 +20,6 @@ enum ProceduralGeometryError: Error {
     case degenerate
 }
 
-/// Tags a small ambient "rift dust" mote so `GameWorld.animateRiftMotes` can
-/// drift it around a stable anchor without needing per-entity stored state
-/// outside the ECS component system.
-struct RiftMoteComponent: Component {
-    var basePosition: SIMD3<Float>
-    var phase: Float
-    var radius: Float
-}
-
 enum ProceduralGeometry {
 
     // MARK: - Deterministic "noise"
@@ -122,9 +113,9 @@ enum ProceduralGeometry {
         }
 
         var descriptor = MeshDescriptor(name: "riftFilledPolygon")
-        descriptor.positions = MeshBuffer(positions)
-        descriptor.normals = MeshBuffer(normals)
-        descriptor.textureCoordinates = MeshBuffer(uvs)
+        descriptor.positions = MeshBuffers.Positions(positions)
+        descriptor.normals = MeshBuffers.Normals(normals)
+        descriptor.textureCoordinates = MeshBuffers.TextureCoordinates(uvs)
         descriptor.primitives = .triangles(indices)
         return try MeshResource.generate(from: [descriptor])
     }
@@ -208,9 +199,9 @@ enum ProceduralGeometry {
         }
 
         var descriptor = MeshDescriptor(name: "riftExtrudedPolygon")
-        descriptor.positions = MeshBuffer(positions)
-        descriptor.normals = MeshBuffer(normals)
-        descriptor.textureCoordinates = MeshBuffer(uvs)
+        descriptor.positions = MeshBuffers.Positions(positions)
+        descriptor.normals = MeshBuffers.Normals(normals)
+        descriptor.textureCoordinates = MeshBuffers.TextureCoordinates(uvs)
         descriptor.primitives = .triangles(indices)
         return try MeshResource.generate(from: [descriptor])
     }
@@ -288,9 +279,9 @@ enum ProceduralGeometry {
         }
 
         var descriptor = MeshDescriptor(name: "riftGem")
-        descriptor.positions = MeshBuffer(positions)
-        descriptor.normals = MeshBuffer(normals)
-        descriptor.textureCoordinates = MeshBuffer(uvs)
+        descriptor.positions = MeshBuffers.Positions(positions)
+        descriptor.normals = MeshBuffers.Normals(normals)
+        descriptor.textureCoordinates = MeshBuffers.TextureCoordinates(uvs)
         descriptor.primitives = .triangles(indices)
         return try MeshResource.generate(from: [descriptor])
     }
@@ -355,9 +346,9 @@ enum ProceduralGeometry {
         }
 
         var descriptor = MeshDescriptor(name: "riftCrystalHalf")
-        descriptor.positions = MeshBuffer(positions)
-        descriptor.normals = MeshBuffer(normals)
-        descriptor.textureCoordinates = MeshBuffer(uvs)
+        descriptor.positions = MeshBuffers.Positions(positions)
+        descriptor.normals = MeshBuffers.Normals(normals)
+        descriptor.textureCoordinates = MeshBuffers.TextureCoordinates(uvs)
         descriptor.primitives = .triangles(indices)
         return try MeshResource.generate(from: [descriptor])
     }

@@ -8,6 +8,18 @@
 
 import RealityKit
 import UIKit
+import simd
+
+/// Tags a small ambient "rift dust" mote so `GameWorld.animateRiftMotes` can
+/// drift it around a stable anchor without needing per-entity stored state
+/// outside the ECS component system. Lives in this file (always compiled into
+/// the app target) rather than the geometry toolkit so registration and mote
+/// animation never lose the type to a missing source-file membership.
+struct RiftMoteComponent: Component, Codable {
+    var basePosition: SIMD3<Float>
+    var phase: Float
+    var radius: Float
+}
 
 // MARK: - Coin biome tint
 
