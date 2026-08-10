@@ -347,6 +347,15 @@ final class GameWorld {
     private var gameOverWallBases: [(entity: Entity, position: SIMD3<Float>, scale: SIMD3<Float>)] = []
     /// Daily-only spawn/wind stream (nil → unseeded SystemRandom for other modes).
     private var gameplayRNG: SeededGenerator?
+    /// Purely cosmetic per-instance seed for procedural obstacle geometry —
+    /// deliberately separate from `gameplayRNG` so shape variety never shifts
+    /// the deterministic daily-challenge spawn/wind sequence.
+    private var visualSeedCounter: UInt64 = 0
+
+    private func nextVisualSeed() -> UInt64 {
+        visualSeedCounter &+= 0x9E37_79B9_7F4A_7C15
+        return visualSeedCounter
+    }
 
     // Wind shove state (offsets obstacle boxes only).
     private var windCurrentX: Float = 0
@@ -642,7 +651,15 @@ final class GameWorld {
         portalWorld.name = "portalWorld"
         portalWorld.components.set(WorldComponent())
 
-        let portalMesh = MeshResource.generatePlane(
+        // Irregular "tear in reality" aperture instead of a rounded rectangle —
+        // same seed the rim's hot inner edge uses so the two stay concentric.
+        let apertureOutline = GameVisualBuilders.riftOutline(
+            width: GameWorld.portalWidth,
+            height: GameWorld.portalHeight,
+            jitter: 0.14,
+            seed: GameVisualBuilders.riftApertureSeed
+        )
+        let portalMesh = (try? ProceduralGeometry.filledPolygon(points: apertureOutline)) ?? MeshResource.generatePlane(
             width: GameWorld.portalWidth,
             height: GameWorld.portalHeight,
             cornerRadius: GameWorld.portalCornerRadius
@@ -791,27 +808,43 @@ final class GameWorld {
         for child in trackNodes {
             guard let model = child as? ModelEntity else { continue }
             if child.name == "floor" {
-                model.model?.materials = [EnvironmentMaterials.simple(palette.floor, roughness: 0.85)]
+                model.model?.materials = [GameMaterials.trackFloor(tint: EnvironmentMaterials.uiColor(palette.floor))]
             } else if child.name == "laneStripe" {
-                model.model?.materials = [EnvironmentMaterials.unlit(palette.laneStripe)]
+                model.model?.materials = [GameMaterials.laneCore(tint: EnvironmentMaterials.uiColor(palette.laneStripe))]
             }
         }
 
         if let rim = portalRoot.children.first(where: { $0.name == "portalRim" }) {
+            // Brief rim pulse on biome switch — no full-screen wash in front of the player.
+            var rimTint = palette.portalRim
+            if telegraph > 0.01 {
+                let boost = 0.35 * telegraph
+                rimTint = TintColor(
+                    r: min(1, rimTint.r + boost),
+                    g: min(1, rimTint.g + boost),
+                    b: min(1, rimTint.b + boost),
+                    a: rimTint.a
+                )
+            }
+            let rimColor = EnvironmentMaterials.uiColor(rimTint)
             for child in rim.children {
                 guard let model = child as? ModelEntity else { continue }
-                // Brief rim pulse on biome switch — no full-screen wash in front of the player.
-                var rimTint = palette.portalRim
-                if telegraph > 0.01 {
-                    let boost = 0.35 * telegraph
-                    rimTint = TintColor(
-                        r: min(1, rimTint.r + boost),
-                        g: min(1, rimTint.g + boost),
-                        b: min(1, rimTint.b + boost),
-                        a: rimTint.a
-                    )
+                switch child.name {
+                case "portalHot":
+                    // Hot inner edge skews toward white so it still reads as
+                    // the brightest layer against the mid/bloom bands.
+                    let hot = EnvironmentMaterials.lerpColor(rimColor, .white, 0.45)
+                    model.model?.materials = [UnlitMaterial(color: hot)]
+                case "portalMid":
+                    model.model?.materials = [UnlitMaterial(color: rimColor)]
+                case "portalBloom":
+                    // Keep the soft glow texture; only its tint shifts per biome.
+                    model.model?.materials = [GameMaterials.portalRimBloom(tint: rimColor)]
+                default:
+                    // Shard fringe / energy tendrils keep their own bespoke,
+                    // biome-independent alien-tech gradient materials.
+                    continue
                 }
-                model.model?.materials = [EnvironmentMaterials.unlit(rimTint)]
             }
         }
 
@@ -1586,10 +1619,28 @@ final class GameWorld {
         }
 
         // Subtle far-glow breathe inside the tunnel.
-        if let interior = portalWorld.children.first(where: { $0.name == "portalInterior" }),
-           let farCore = interior.children.first(where: { $0.name == "farCore" }) {
-            let glow = 1.0 + 0.12 * sin(elapsedTime * 1.8)
-            farCore.scale = SIMD3(repeating: glow)
+        if let interior = portalWorld.children.first(where: { $0.name == "portalInterior" }) {
+            if let farCore = interior.children.first(where: { $0.name == "farCore" }) {
+                let glow = 1.0 + 0.12 * sin(elapsedTime * 1.8)
+                farCore.scale = SIMD3(repeating: glow)
+            }
+            animateRiftMotes(in: interior)
+        }
+    }
+
+    /// Ambient dust motes drift in a small loop around their spawn anchor —
+    /// the tear keeps leaking energy even when nothing is spawning.
+    private func animateRiftMotes(in interior: Entity) {
+        for child in interior.children {
+            guard child.name == "riftMote",
+                  let mote = child.components[RiftMoteComponent.self] else { continue }
+            let t = elapsedTime * 0.5 + mote.phase
+            let drift = SIMD3<Float>(
+                sin(t) * mote.radius,
+                cos(t * 0.7) * mote.radius * 0.6,
+                sin(t * 0.5) * mote.radius * 0.4
+            )
+            child.position = mote.basePosition + drift
         }
     }
 
@@ -2228,20 +2279,12 @@ final class GameWorld {
         let centerY = GameWorld.duckClearanceY + GameWorld.duckSlabHeight * 0.5
         parent.name = "wallDuck"
 
-        let mesh = MeshResource.generateBox(
+        let body = GameVisualBuilders.makeDuckTendrilCurtain(
             width: GameWorld.duckSlabWidth,
             height: GameWorld.duckSlabHeight,
-            depth: GameWorld.wallThickness * 0.85
+            depth: GameWorld.wallThickness * 0.85,
+            seed: nextVisualSeed()
         )
-        let profile = activeSpawnProfile
-        let material = EnvironmentMaterials.wallBody(
-            tint: TintColor(r: 0.15, g: 0.55, b: 0.95, a: profile.palette.wallOpacity),
-            emissive: TintColor(r: 0.2, g: 0.7, b: 1.0, a: 1),
-            opacity: max(0.35, profile.palette.wallOpacity),
-            emissiveIntensity: 0.7
-        )
-        let body = ModelEntity(mesh: mesh, materials: [material])
-        body.name = "duckSlab"
         parent.addChild(body)
 
         beginWallEmerge(
@@ -2261,20 +2304,12 @@ final class GameWorld {
         let centerY = GameWorld.jumpSlabHeight * 0.5
         parent.name = "wallJump"
 
-        let mesh = MeshResource.generateBox(
+        let body = GameVisualBuilders.makeSummitSpikeRidge(
             width: GameWorld.jumpSlabWidth,
             height: GameWorld.jumpSlabHeight,
-            depth: GameWorld.jumpSlabDepth
+            depth: GameWorld.jumpSlabDepth,
+            seed: nextVisualSeed()
         )
-        let profile = activeSpawnProfile
-        let material = EnvironmentMaterials.wallBody(
-            tint: TintColor(r: 0.95, g: 0.55, b: 0.18, a: profile.palette.wallOpacity),
-            emissive: TintColor(r: 1.0, g: 0.7, b: 0.25, a: 1),
-            opacity: max(0.35, profile.palette.wallOpacity),
-            emissiveIntensity: 0.7
-        )
-        let body = ModelEntity(mesh: mesh, materials: [material])
-        body.name = "jumpSlab"
         parent.addChild(body)
 
         beginWallEmerge(
@@ -2286,30 +2321,29 @@ final class GameWorld {
         )
     }
 
+    /// Every biome gets its own alien obstacle "species" instead of a shared
+    /// rectangular slab — collision stays the plain AABB in `WallCollision`,
+    /// so these can be as irregular as they like without touching fairness.
     private func makeWallSlab(kind: WallKind, profile: EnvironmentProfile) -> Entity {
-        let bodyMesh = MeshResource.generateBox(
-            width: GameWorld.wallWidth,
-            height: GameWorld.wallHeight,
-            depth: GameWorld.wallThickness
-        )
-
-        let material: PhysicallyBasedMaterial
         switch kind {
         case .ghost:
-            // No Unlit rim — UnlitMaterial ignores alpha and was painting a solid white shell.
-            material = EnvironmentMaterials.ghostWallBody(opacity: profile.ghostWallOpacity)
+            return GameVisualBuilders.makeGhostShatterPane(
+                width: GameWorld.wallWidth,
+                height: GameWorld.wallHeight,
+                depth: GameWorld.wallThickness,
+                opacity: profile.ghostWallOpacity,
+                seed: nextVisualSeed()
+            )
         case .standard, .duck, .jump:
-            material = EnvironmentMaterials.wallBody(
-                tint: profile.palette.wallTint,
-                emissive: profile.palette.wallEmissive,
-                opacity: profile.palette.wallOpacity,
-                emissiveIntensity: profile.palette.wallEmissiveIntensity
+            return GameVisualBuilders.makeBiomeObstacle(
+                biome: profile.id,
+                width: GameWorld.wallWidth,
+                height: GameWorld.wallHeight,
+                depth: GameWorld.wallThickness,
+                profile: profile,
+                seed: nextVisualSeed()
             )
         }
-
-        let body = ModelEntity(mesh: bodyMesh, materials: [material])
-        body.name = "wallSlab"
-        return body
     }
 
     private func spawnCoin(in lane: Lane, underCeiling: Bool = false) {
@@ -2351,8 +2385,13 @@ final class GameWorld {
             var rng = SystemRandomNumberGenerator()
             roll = CrystalCombine.makeHalf(rng: &rng)
         }
-        let radius: Float = roll.charged ? 0.09 : 0.075
-        let mesh = MeshResource.generateSphere(radius: radius)
+        let radius: Float = roll.charged ? 0.085 : 0.07
+        let mesh = (try? ProceduralGeometry.crystalHalf(
+            sides: roll.charged ? 7 : 6,
+            radius: radius,
+            apexHeight: radius * 2.3,
+            seed: UInt64(bitPattern: Int64(halves.count)) &+ 0x4321
+        )) ?? MeshResource.generateSphere(radius: radius)
         let material = EnvironmentMaterials.crystalHalf(type: roll.type, charged: roll.charged)
         let entity = ModelEntity(mesh: mesh, materials: [material])
         let outward: Float = lane == .center ? 0 : (lane.x > 0 ? GameWorld.coinOutwardOffset : -GameWorld.coinOutwardOffset)
@@ -2457,6 +2496,7 @@ final class GameWorld {
             right.entity.removeFromParent()
             heldLeft = nil
             heldRight = nil
+            visualFX.spawnCoinBurst(at: (leftPos + rightPos) * 0.5)
             GameSFX.shared.playCoinCollect()
             let model = self.gameModel
             DispatchQueue.main.async {
@@ -2523,7 +2563,13 @@ final class GameWorld {
         let source = halves[index]
         source.entity.removeFromParent()
 
-        let mesh = MeshResource.generateSphere(radius: source.charged ? 0.08 : 0.065)
+        let radius: Float = source.charged ? 0.08 : 0.065
+        let mesh = (try? ProceduralGeometry.crystalHalf(
+            sides: source.charged ? 7 : 6,
+            radius: radius,
+            apexHeight: radius * 2.3,
+            seed: UInt64(bitPattern: Int64(index)) &+ 0x8765
+        )) ?? MeshResource.generateSphere(radius: radius)
         let heldEntity = ModelEntity(
             mesh: mesh,
             materials: [EnvironmentMaterials.crystalHalf(type: source.type, charged: source.charged)]
