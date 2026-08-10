@@ -23,8 +23,8 @@ struct RiftMoteComponent: Component, Codable {
 
 // MARK: - Coin biome tint
 
-/// Spawn-time coin colors per biome. Ember Run keeps the polished gold; other
-/// biomes shift the polished disc to `EnvironmentPalette.coinTint` (old behavior).
+/// Spawn-time Data Token colors per biome. Ember Run keeps the polished gold;
+/// other biomes shift to `EnvironmentPalette.coinTint`.
 enum GameCoinTint {
     struct Colors: Equatable {
         var base: TintColor
@@ -156,25 +156,24 @@ enum GameMaterials {
         )
     }
 
+    /// Glowing Data Token body — faceted gem, not a metallic coin disc.
     static func coinMetal(
         tint: UIColor = GamePalette.coinGold,
         hot: UIColor = GamePalette.coinGoldHot,
         tintsFaceTexture: Bool = false
     ) -> any RealityKit.Material {
+        _ = tintsFaceTexture
         warmTextures()
         var material = PhysicallyBasedMaterial()
-        if let texture = coinFaceTexture {
-            // Ember: white multiply preserves the polished gold face. Other biomes shift it.
-            let faceTint = tintsFaceTexture ? tint : UIColor.white
-            material.baseColor = .init(tint: faceTint, texture: .init(texture))
-            material.emissiveColor = .init(color: hot, texture: .init(texture))
-        } else {
-            material.baseColor = .init(tint: tint)
-            material.emissiveColor = .init(color: hot)
-        }
-        material.roughness = .init(floatLiteral: 0.28)
-        material.metallic = .init(floatLiteral: 0.92)
-        material.emissiveIntensity = 0.45
+        material.baseColor = .init(tint: tint.withAlphaComponent(0.55))
+        material.emissiveColor = .init(color: hot)
+        material.emissiveIntensity = 1.15
+        material.roughness = .init(floatLiteral: 0.12)
+        material.metallic = .init(floatLiteral: 0.35)
+        material.clearcoat = .init(floatLiteral: 0.9)
+        material.clearcoatRoughness = .init(floatLiteral: 0.08)
+        material.blending = .transparent(opacity: .init(floatLiteral: 0.72))
+        material.faceCulling = .none
         return material
     }
 
@@ -182,23 +181,27 @@ enum GameMaterials {
         UnlitMaterial(color: hot)
     }
 
+    /// Soft holographic bloom around a Data Token.
     static func coinAura(
         tint: UIColor = GamePalette.coinGold,
         hot: UIColor = GamePalette.coinGoldHot,
         tintsFaceTexture: Bool = false
     ) -> any RealityKit.Material {
+        _ = tintsFaceTexture
         var material = PhysicallyBasedMaterial()
-        // Ember keeps the original soft gold aura; biome-shifted coins derive aura from tint.
-        let auraBase = tintsFaceTexture
-            ? tint.withAlphaComponent(0.22)
-            : UIColor(red: 1.0, green: 0.85, blue: 0.35, alpha: 0.22)
-        material.baseColor = .init(tint: auraBase)
+        material.baseColor = .init(tint: tint.withAlphaComponent(0.18))
         material.emissiveColor = .init(color: hot)
-        material.emissiveIntensity = 0.4
+        material.emissiveIntensity = 0.55
         material.roughness = .init(floatLiteral: 1.0)
         material.metallic = .init(floatLiteral: 0.0)
-        material.blending = .transparent(opacity: .init(floatLiteral: 0.22))
+        material.blending = .transparent(opacity: .init(floatLiteral: 0.18))
+        material.faceCulling = .none
         return material
+    }
+
+    /// Neon edge stroke for Data Token wireframe facets.
+    static func dataTokenEdge(hot: UIColor) -> UnlitMaterial {
+        UnlitMaterial(color: hot)
     }
 
     static func portalRimHot() -> UnlitMaterial {
@@ -308,7 +311,10 @@ enum GameMaterials {
 // MARK: - Builders
 
 enum GameVisualBuilders {
-    /// Disc coin with emissive core + soft aura (spins / bobs via GameWorld).
+    /// Glowing geometric **Data Token** (Validation Packet) — octahedron /
+    /// diamond collectible with neon facet edges, pulsing core, and soft aura.
+    /// Spins / bobs via `GameWorld.animateCoins`. Entity name stays `"coin"` so
+    /// gameplay / FX plumbing stays unchanged; only the silhouette is new.
     /// Pass biome tints from `GameCoinTint` so non-Ember environments shift color at spawn.
     static func makeCoin(
         radius: Float,
@@ -319,38 +325,58 @@ enum GameVisualBuilders {
         let root = Entity()
         root.name = "coin"
 
-        // Flattened cylinder reads as a collectible disc, not a marble.
-        let discMesh = MeshResource.generateCylinder(height: radius * 0.28, radius: radius)
-        let disc = ModelEntity(
-            mesh: discMesh,
+        // Slightly stretched octahedron — reads as a floating diamond / data node.
+        let gemSeed: UInt64 = 0xDA7A_700E_5001
+        let gemMesh = (try? ProceduralGeometry.bipyramid(
+            sides: 4,
+            radius: radius * 0.92,
+            topHeight: radius * 1.45,
+            bottomHeight: radius * 1.45,
+            jitter: 0.04,
+            seed: gemSeed
+        )) ?? MeshResource.generateSphere(radius: radius)
+
+        let gem = ModelEntity(
+            mesh: gemMesh,
             materials: [GameMaterials.coinMetal(tint: tint, hot: hot, tintsFaceTexture: tintsFaceTexture)]
         )
-        disc.name = "coinDisc"
-        // Cylinder axis is Y; tip toward player (+Z) so the face is visible.
-        disc.orientation = simd_quatf(angle: .pi / 2, axis: SIMD3(1, 0, 0))
-        root.addChild(disc)
+        gem.name = "coinDisc" // retained name: animateCoins / lighting still find the body
+        root.addChild(gem)
+
+        // Neon facet wireframe — same hologram language as the obstacles.
+        let edge = GameMaterials.dataTokenEdge(hot: hot)
+        root.addChild(ProceduralGeometry.hologramBipyramidWireframe(
+            sides: 4,
+            radius: radius * 0.92,
+            topHeight: radius * 1.45,
+            bottomHeight: radius * 1.45,
+            jitter: 0.04,
+            seed: gemSeed,
+            edgeRadius: max(0.004, radius * 0.07),
+            material: edge
+        ))
 
         let core = ModelEntity(
-            mesh: MeshResource.generateSphere(radius: radius * 0.35),
+            mesh: MeshResource.generateSphere(radius: radius * 0.28),
             materials: [GameMaterials.coinCore(hot: hot)]
         )
         core.name = "coinCore"
         root.addChild(core)
 
         let aura = ModelEntity(
-            mesh: MeshResource.generateSphere(radius: radius * 1.55),
+            mesh: MeshResource.generateSphere(radius: radius * 1.45),
             materials: [GameMaterials.coinAura(tint: tint, hot: hot, tintsFaceTexture: tintsFaceTexture)]
         )
         aura.name = "coinAura"
         root.addChild(aura)
 
-        // Tiny orbiting sparkle for life.
+        // Tiny orbiting data mote.
         let spark = ModelEntity(
-            mesh: MeshResource.generateSphere(radius: radius * 0.14),
+            mesh: MeshResource.generateSphere(radius: radius * 0.11),
             materials: [UnlitMaterial(color: hot)]
         )
         spark.name = "coinSpark"
-        spark.position = SIMD3(radius * 0.85, radius * 0.2, 0)
+        spark.position = SIMD3(radius * 0.95, radius * 0.15, 0)
         root.addChild(spark)
 
         return root

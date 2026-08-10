@@ -124,7 +124,7 @@ enum LeaderboardMetric: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .score: return "Score"
-        case .coins: return "Coins"
+        case .coins: return "Tokens"
         }
     }
 }

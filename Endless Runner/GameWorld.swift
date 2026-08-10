@@ -105,6 +105,8 @@ final class GameWorld {
         var playfieldZ: Float
         var collected = false
         var lastLightingWeight: Float = -1
+        /// Airborne spin phase — Crystal Cave halves tumble until grabbed.
+        var spinPhase: Float = 0
 
         init(
             entity: Entity,
@@ -255,10 +257,13 @@ final class GameWorld {
     private static let gustBarZ: Float = -1.4
     /// Fraction of the telegraph used to finish the expand; remainder shrinks back.
     private static let gustExpandFinishAt: Float = 0.42
-    /// Coin bob amplitude / spin rates.
+    /// Data Token bob / tumble rates.
     private static let coinBobAmplitude: Float = 0.045
     private static let coinBobSpeed: Float = 2.6
     private static let coinSpinSpeed: Float = 1.8
+    private static let coinTumbleSpeed: Float = 1.15
+    /// Crystal half airborne spin (Crystal Cave pickups).
+    private static let crystalHalfSpinSpeed: Float = 2.4
 
     /// Playfield origin: floor at y=0, stand line at z=0, track extends along −Z.
     let root = Entity()
@@ -1303,6 +1308,7 @@ final class GameWorld {
         elapsedTime += deltaTime
         animatePortal(deltaTime: deltaTime)
         animateCoins(deltaTime: deltaTime)
+        animateHalves(deltaTime: deltaTime)
         visualFX.tick(deltaTime: deltaTime)
 
         // Pose is fixed after the initial placement. Allow a single upgrade from
@@ -1650,23 +1656,42 @@ final class GameWorld {
             coins[index].phase += deltaTime
             let phase = coins[index].phase
             let bob = sin(phase * GameWorld.coinBobSpeed) * GameWorld.coinBobAmplitude
-            // Coins stay portal-parented — bob in playfield Y, convert to portal-local.
+            // Data Tokens stay portal-parented — bob in playfield Y, convert to portal-local.
             coins[index].entity.position.y =
                 coins[index].baseY + bob - GameWorld.portalHeight * 0.5
-            coins[index].entity.orientation = simd_quatf(
-                angle: phase * GameWorld.coinSpinSpeed,
-                axis: SIMD3(0, 1, 0)
-            )
+            // Multi-axis tumble so the octahedron reads as a floating diamond, not a spinning disc.
+            let yaw = simd_quatf(angle: phase * GameWorld.coinSpinSpeed, axis: SIMD3(0, 1, 0))
+            let pitch = simd_quatf(angle: phase * GameWorld.coinTumbleSpeed, axis: SIMD3(1, 0, 0))
+            let roll = simd_quatf(angle: sin(phase * 0.7) * 0.35, axis: SIMD3(0, 0, 1))
+            coins[index].entity.orientation = yaw * pitch * roll
 
             if let spark = coins[index].entity.children.first(where: { $0.name == "coinSpark" }) {
                 let orbit = phase * 3.2
-                let r = GameWorld.coinRadius * 0.9
+                let r = GameWorld.coinRadius * 0.95
                 spark.position = SIMD3(cos(orbit) * r, sin(orbit * 0.7) * r * 0.35, sin(orbit) * r * 0.2)
             }
             if let aura = coins[index].entity.children.first(where: { $0.name == "coinAura" }) {
-                let s = 1.0 + 0.08 * sin(phase * 3.5)
+                let s = 1.0 + 0.12 * sin(phase * 3.5)
                 aura.scale = SIMD3(repeating: s)
             }
+            if let core = coins[index].entity.children.first(where: { $0.name == "coinCore" }) {
+                let pulse = 1.0 + 0.18 * sin(phase * 4.2)
+                core.scale = SIMD3(repeating: pulse)
+            }
+        }
+    }
+
+    /// Crystal Cave halves rotate in place until grabbed — sells them as live
+    /// holographic shards rather than static props on the stream.
+    private func animateHalves(deltaTime: Float) {
+        for half in halves {
+            guard !half.collected else { continue }
+            half.spinPhase += deltaTime
+            let spin = half.spinPhase * GameWorld.crystalHalfSpinSpeed
+            // Tip slightly so the fracture face stays readable while yawing.
+            let tip = simd_quatf(angle: 0.4, axis: SIMD3(1, 0, 0))
+            let yaw = simd_quatf(angle: spin, axis: SIMD3(0, 1, 0))
+            half.entity.orientation = yaw * tip
         }
     }
 

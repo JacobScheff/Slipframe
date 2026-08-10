@@ -26,7 +26,7 @@ struct PlayHUDView: View {
             } else {
                 HStack(spacing: 28) {
                     metricChip(title: "Score", value: "\(stats.score)", accent: neon)
-                    metricChip(title: "Coins", value: "\(stats.coinsCollected)", accent: gold)
+                    metricChip(title: "Tokens", value: "\(stats.coinsCollected)", accent: gold)
                 }
             }
 

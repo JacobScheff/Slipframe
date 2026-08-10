@@ -95,7 +95,7 @@ struct LeaderboardPanelView: View {
         }
     }
 
-    /// Primary Score / Coins sections — large, visual, spaced away from filters below.
+    /// Primary Score / Tokens sections — large, visual, spaced away from filters below.
     private var metricPicker: some View {
         HStack(spacing: 12) {
             ForEach(LeaderboardMetric.allCases) { option in
