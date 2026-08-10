@@ -200,3 +200,69 @@ enum WallCollision {
         wallZ - contactZ > halfDepth
     }
 }
+
+/// Pure motion helpers for walls rushing out of the portal tunnel into the room.
+enum WallEmerge {
+    /// Seconds to travel from deep tunnel depth to the playfield stream pose.
+    static let duration: Float = 1.05
+    /// Portal-local Z past the far back wall — reads as coming from tunnel infinity.
+    static let startDepth: Float = -16.0
+    /// Perspective shrink while still deep in the void.
+    static let startScale: Float = 0.22
+    /// Extra meters behind the mouth spawn pose so walls begin emerging earlier.
+    static let spawnLead: Float = 3.25
+
+    /// Ease-out cubic progress in `0...1` — fast exit from infinity, soft settle at the mouth.
+    static func progress(elapsed: Float, duration: Float = duration) -> Float {
+        guard duration > 0 else { return 1 }
+        let u = min(1, max(0, elapsed / duration))
+        let inv = 1 - u
+        return 1 - inv * inv * inv
+    }
+
+    /// Portal-local Z for the current emerge progress.
+    static func localZ(
+        progress: Float,
+        exitLocalZ: Float,
+        startDepth: Float = startDepth
+    ) -> Float {
+        startDepth + (exitLocalZ - startDepth) * progress
+    }
+
+    /// Uniform scale for the current emerge progress.
+    static func scale(progress: Float, startScale: Float = startScale) -> Float {
+        startScale + (1 - startScale) * progress
+    }
+
+    /// Stream Z where an emerging wall begins (further back than the mouth pose).
+    static func spawnPlayfieldZ(mouthSpawnZ: Float, spawnLead: Float = spawnLead) -> Float {
+        mouthSpawnZ - spawnLead
+    }
+
+    /// Portal-local Y for an emerging wall.
+    /// Floor-anchored kinds keep their bottom on the portal lip while scale grows,
+    /// so the track/void does not read as covering the missing lower half.
+    static func portalLocalY(
+        playfieldCenterY: Float,
+        scale: Float,
+        portalHeight: Float,
+        floorAnchored: Bool
+    ) -> Float {
+        let portalHalf = portalHeight * 0.5
+        if floorAnchored {
+            return -portalHalf + playfieldCenterY * scale
+        }
+        return playfieldCenterY - portalHalf
+    }
+
+    /// Blend from portal-world lighting (0) to room lighting (1) across the portal plane.
+    /// Smooths the harsh light pop that otherwise flickers while a thick wall crosses.
+    static func environmentLightingWeight(
+        portalLocalZ: Float,
+        halfDepth: Float
+    ) -> Float {
+        let span = max(0.05, halfDepth * 2)
+        let u = (portalLocalZ + halfDepth) / span
+        return min(1, max(0, u))
+    }
+}

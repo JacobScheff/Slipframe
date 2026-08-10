@@ -49,20 +49,37 @@ final class GameWorld {
         /// Adjacent double-lane walls seal the visual gap between slabs (collision only).
         let sealsBetweenSlabs: Bool
         var hasResolvedHit = false
-        /// Prior-frame Z for swept head/hand collision (prevents tunneling).
+        /// Prior-frame playfield Z for swept head/hand collision (prevents tunneling).
         var previousZ: Float
+        /// Logical stream depth in playfield space (advances with travel every frame).
+        var playfieldZ: Float
+        /// Elapsed emerge time while still inside `portalWorld`; nil once in the room.
+        var emergeElapsed: Float?
+        /// Resting playfield-space center Y (walls stay portal-parented; Y is converted each frame).
+        let emergePlayfieldY: Float
+        /// Last applied lighting weight — avoid rewriting the component every tick.
+        var lastLightingWeight: Float = -1
+
+        var isEmerging: Bool { emergeElapsed != nil }
+        /// Floor-sitting walls grow from the portal lip; duck gates keep a fixed center.
+        var anchorsEmergeToFloor: Bool { kind != .duck }
 
         init(
             entity: Entity,
             localSlabXs: [Float],
             kind: WallKind,
-            sealsBetweenSlabs: Bool = false
+            sealsBetweenSlabs: Bool = false,
+            playfieldZ: Float,
+            emergePlayfieldY: Float
         ) {
             self.entity = entity
             self.localSlabXs = localSlabXs
             self.kind = kind
             self.sealsBetweenSlabs = sealsBetweenSlabs
-            self.previousZ = entity.position.z
+            self.playfieldZ = playfieldZ
+            self.emergePlayfieldY = emergePlayfieldY
+            self.emergeElapsed = 0
+            self.previousZ = playfieldZ
         }
 
         func worldSlabXs() -> [Float] {
@@ -73,20 +90,32 @@ final class GameWorld {
     private struct CoinItem {
         let entity: Entity
         let baseY: Float
+        /// Logical stream depth — matches wall spawn lead so coins do not sit inside walls.
+        var playfieldZ: Float
         var phase: Float
         var collected = false
+        var lastLightingWeight: Float = -1
     }
 
     private final class HalfCrystalItem {
         let entity: Entity
         let type: CrystalHalfType
         let charged: Bool
+        /// Logical stream depth — matches wall spawn lead.
+        var playfieldZ: Float
         var collected = false
+        var lastLightingWeight: Float = -1
 
-        init(entity: Entity, type: CrystalHalfType, charged: Bool) {
+        init(
+            entity: Entity,
+            type: CrystalHalfType,
+            charged: Bool,
+            playfieldZ: Float
+        ) {
             self.entity = entity
             self.type = type
             self.charged = charged
+            self.playfieldZ = playfieldZ
         }
     }
 
@@ -194,7 +223,7 @@ final class GameWorld {
     /// Prefer snapping the portal onto a real wall in this band.
     private static let portalMinDistance: Float = 3.5
     private static let portalMaxDistance: Float = 10.0
-    /// Obstacles appear just in front of the portal mouth (toward the player).
+    /// Stream pose just in front of the portal mouth (toward the player) after emerge.
     private static let spawnInFrontOfPortal: Float = 0.35
     private static let wallMinimumBounds = SIMD2<Float>(0.8, 1.5)
 
@@ -202,7 +231,8 @@ final class GameWorld {
     private static let trackWidth: Float = 3.2
     /// Track slab extends this far behind the stand line (+Z).
     private static let trackNearZ: Float = 1.1
-    private static let trackPastPortal: Float = 0.35
+    /// End the track this far in front of the portal so the slab cannot occlude emerging walls.
+    private static let trackEndBeforePortal: Float = 0.12
     /// Used only when a floor plane has not been found yet.
     private static let fallbackEyeHeight: Float = 1.55
 
@@ -590,7 +620,8 @@ final class GameWorld {
             child.removeFromParent()
         }
 
-        let farZ = portalZ - GameWorld.trackPastPortal
+        // Stop short of the aperture — a track that crosses the portal lip hides wall bottoms.
+        let farZ = portalZ + GameWorld.trackEndBeforePortal
         let nearZ = GameWorld.trackNearZ
         let depth = max(1.0, nearZ - farZ)
         let centerZ = (nearZ + farZ) * 0.5
@@ -620,7 +651,15 @@ final class GameWorld {
         portalEntity.components.set(
             ModelComponent(mesh: portalMesh, materials: [PortalMaterial()])
         )
-        portalEntity.components.set(PortalComponent(target: portalWorld))
+        // Clipping keeps tunnel content inside the aperture; crossing lets thick
+        // walls exit into the room without z-fighting / flicker at the plane.
+        portalEntity.components.set(
+            PortalComponent(
+                target: portalWorld,
+                clippingMode: .plane(.positiveZ),
+                crossingMode: .plane(.positiveZ)
+            )
+        )
 
         buildPortalRim()
         buildPortalInterior()
@@ -655,8 +694,9 @@ final class GameWorld {
 
     /// Dark tunnel visible only through the portal — blocks passthrough cleanly.
     private func buildPortalInterior() {
-        for child in portalWorld.children {
-            child.removeFromParent()
+        // Only replace the tunnel mesh — emerging walls are also parented under portalWorld.
+        if let existing = portalWorld.children.first(where: { $0.name == "portalInterior" }) {
+            existing.removeFromParent()
         }
         portalWorld.addChild(GameVisualBuilders.makePortalInterior(portalHeight: GameWorld.portalHeight))
     }
@@ -975,6 +1015,10 @@ final class GameWorld {
 
         let animT = elapsed - GameWorld.gameOverClearDelay
         if gameOverWallBases.isEmpty, !walls.isEmpty {
+            // Finish any in-flight emerges before capturing dissolve bases.
+            for wall in walls where wall.isEmerging {
+                finishWallEmerge(wall)
+            }
             gameOverWallBases = walls.map { wall in
                 (wall.entity, wall.entity.position, wall.entity.scale)
             }
@@ -1300,7 +1344,7 @@ final class GameWorld {
             gameModel.addScore(gained)
         }
 
-        advanceEntities(by: travel)
+        advanceEntities(by: travel, deltaTime: dt)
         updateWind(deltaTime: dt)
         // Grab before hold-update so a newly closed hand can pick up this frame.
         if activeSpawnProfile.twist == .crystalHalves {
@@ -1555,7 +1599,9 @@ final class GameWorld {
             coins[index].phase += deltaTime
             let phase = coins[index].phase
             let bob = sin(phase * GameWorld.coinBobSpeed) * GameWorld.coinBobAmplitude
-            coins[index].entity.position.y = coins[index].baseY + bob
+            // Coins stay portal-parented — bob in playfield Y, convert to portal-local.
+            coins[index].entity.position.y =
+                coins[index].baseY + bob - GameWorld.portalHeight * 0.5
             coins[index].entity.orientation = simd_quatf(
                 angle: phase * GameWorld.coinSpinSpeed,
                 axis: SIMD3(0, 1, 0)
@@ -1573,16 +1619,194 @@ final class GameWorld {
         }
     }
 
-    private func advanceEntities(by travel: Float) {
+    private func advanceEntities(by travel: Float, deltaTime: Float) {
         for wall in walls {
-            wall.previousZ = wall.entity.position.z
-            wall.entity.position.z += travel
+            wall.previousZ = wall.playfieldZ
+            wall.playfieldZ += travel
+            if wall.isEmerging {
+                tickWallEmerge(wall, deltaTime: deltaTime)
+            } else {
+                // Stay under portalWorld for life — crossing renders them in the room.
+                applyPortalWallPose(wall, scale: 1)
+                setWallLightingWeight(wall, weight: 1)
+            }
         }
-        for coin in coins {
-            coin.entity.position.z += travel
+        for index in coins.indices {
+            guard !coins[index].collected else { continue }
+            coins[index].playfieldZ += travel
+            coins[index].entity.position.z = coins[index].playfieldZ - portalZ
+            setPickupLightingWeight(
+                entity: coins[index].entity,
+                playfieldZ: coins[index].playfieldZ,
+                lastWeight: &coins[index].lastLightingWeight
+            )
         }
         for half in halves {
-            half.entity.position.z += travel
+            guard !half.collected else { continue }
+            half.playfieldZ += travel
+            half.entity.position.z = half.playfieldZ - portalZ
+            setPickupLightingWeight(
+                entity: half.entity,
+                playfieldZ: half.playfieldZ,
+                lastWeight: &half.lastLightingWeight
+            )
+        }
+    }
+
+    /// Drive portal-local pose while a wall rushes from tunnel infinity to the mouth.
+    private func tickWallEmerge(_ wall: WallItem, deltaTime: Float) {
+        guard let elapsed = wall.emergeElapsed else { return }
+        let nextElapsed = elapsed + deltaTime
+        wall.emergeElapsed = nextElapsed
+        let progress = WallEmerge.progress(elapsed: nextElapsed)
+        let exitLocalZ = wall.playfieldZ - portalZ
+        // After the rush finishes, track the stream pose in portal space.
+        let localZ = progress >= 1
+            ? exitLocalZ
+            : WallEmerge.localZ(progress: progress, exitLocalZ: exitLocalZ)
+        let scale = progress >= 1 ? 1 : WallEmerge.scale(progress: progress)
+        let localY = WallEmerge.portalLocalY(
+            playfieldCenterY: wall.emergePlayfieldY,
+            scale: scale,
+            portalHeight: GameWorld.portalHeight,
+            floorAnchored: wall.anchorsEmergeToFloor
+        )
+        wall.entity.position = SIMD3(wall.entity.position.x, localY, localZ)
+        wall.entity.scale = SIMD3(repeating: scale)
+
+        let halfDepth = Self.emergeHalfDepth(for: wall.kind) * scale
+        let lighting = WallEmerge.environmentLightingWeight(
+            portalLocalZ: localZ,
+            halfDepth: halfDepth
+        )
+        setWallLightingWeight(wall, weight: lighting)
+
+        // Mark emerge done once fully clear — do NOT reparent (avoids a one-frame pop).
+        if progress >= 1, wall.playfieldZ - halfDepth >= portalZ + 0.02 {
+            finishWallEmerge(wall)
+        }
+    }
+
+    /// Snap emerge animation complete while keeping the wall in `portalWorld`.
+    private func finishWallEmerge(_ wall: WallItem) {
+        guard wall.isEmerging else { return }
+        wall.entity.scale = SIMD3(repeating: 1)
+        applyPortalWallPose(wall, scale: 1)
+        setWallLightingWeight(wall, weight: 1)
+        wall.previousZ = wall.playfieldZ
+        wall.emergeElapsed = nil
+    }
+
+    /// Portal-local pose matching the wall's playfield stream position.
+    private func applyPortalWallPose(_ wall: WallItem, scale: Float) {
+        let localY = WallEmerge.portalLocalY(
+            playfieldCenterY: wall.emergePlayfieldY,
+            scale: scale,
+            portalHeight: GameWorld.portalHeight,
+            floorAnchored: wall.anchorsEmergeToFloor
+        )
+        wall.entity.position = SIMD3(
+            wall.entity.position.x,
+            localY,
+            wall.playfieldZ - portalZ
+        )
+    }
+
+    /// Quantized lighting updates — rewriting the component every frame flickers.
+    private func setWallLightingWeight(_ wall: WallItem, weight: Float) {
+        let quantized = (min(1, max(0, weight)) * 8).rounded() / 8
+        guard abs(quantized - wall.lastLightingWeight) > 0.001 else { return }
+        wall.lastLightingWeight = quantized
+        wall.entity.components.set(
+            EnvironmentLightingConfigurationComponent(environmentLightingWeight: quantized)
+        )
+    }
+
+    private func setPickupLightingWeight(
+        entity: Entity,
+        playfieldZ: Float,
+        lastWeight: inout Float
+    ) {
+        let localZ = playfieldZ - portalZ
+        let weight = WallEmerge.environmentLightingWeight(portalLocalZ: localZ, halfDepth: 0.12)
+        let quantized = (weight * 8).rounded() / 8
+        guard abs(quantized - lastWeight) > 0.001 else { return }
+        lastWeight = quantized
+        entity.components.set(
+            EnvironmentLightingConfigurationComponent(environmentLightingWeight: quantized)
+        )
+    }
+
+    /// Stream Z shared by walls / coins / halves on the current beat.
+    private var patternStreamSpawnZ: Float {
+        WallEmerge.spawnPlayfieldZ(mouthSpawnZ: patternSpawnZ)
+    }
+
+    /// Place a pickup in the portal stream so it stays aligned with led-back walls.
+    private func attachPickupToPortalStream(
+        _ entity: Entity,
+        playfieldX: Float,
+        playfieldY: Float,
+        playfieldZ: Float
+    ) {
+        entity.position = SIMD3(
+            playfieldX,
+            playfieldY - GameWorld.portalHeight * 0.5,
+            playfieldZ - portalZ
+        )
+        entity.components.set(PortalCrossingComponent())
+        entity.components.set(
+            EnvironmentLightingConfigurationComponent(environmentLightingWeight: 0)
+        )
+        portalWorld.addChild(entity)
+    }
+
+    /// Parent a newly built wall under the portal tunnel and start its emerge animation.
+    private func beginWallEmerge(
+        parent: Entity,
+        playfieldY: Float,
+        playfieldZ: Float,
+        localSlabXs: [Float],
+        kind: WallKind,
+        sealsBetweenSlabs: Bool = false
+    ) {
+        // Start the stream pose further back so the emerge is visible sooner.
+        let streamZ = WallEmerge.spawnPlayfieldZ(mouthSpawnZ: playfieldZ)
+        let floorAnchored = kind != .duck
+        let startY = WallEmerge.portalLocalY(
+            playfieldCenterY: playfieldY,
+            scale: WallEmerge.startScale,
+            portalHeight: GameWorld.portalHeight,
+            floorAnchored: floorAnchored
+        )
+        parent.scale = SIMD3(repeating: WallEmerge.startScale)
+        parent.position = SIMD3(windCurrentX, startY, WallEmerge.startDepth)
+        // Required for thick walls to render smoothly across the portal plane.
+        parent.components.set(PortalCrossingComponent())
+        parent.components.set(
+            EnvironmentLightingConfigurationComponent(environmentLightingWeight: 0)
+        )
+        portalWorld.addChild(parent)
+        let item = WallItem(
+            entity: parent,
+            localSlabXs: localSlabXs,
+            kind: kind,
+            sealsBetweenSlabs: sealsBetweenSlabs,
+            playfieldZ: streamZ,
+            emergePlayfieldY: playfieldY
+        )
+        item.lastLightingWeight = 0
+        walls.append(item)
+    }
+
+    private static func emergeHalfDepth(for kind: WallKind) -> Float {
+        switch kind {
+        case .jump:
+            return jumpSlabDepth * 0.5
+        case .duck:
+            return wallThickness * 0.85 * 0.5
+        case .standard, .ghost:
+            return wallThickness * 0.5
         }
     }
 
@@ -1650,8 +1874,8 @@ final class GameWorld {
     private func beginWindTelegraph() {
         // Only defer when a wall is already in the near hit band (not merely "on screen").
         let imminent = walls.contains {
-            $0.entity.position.z > GameWorld.windDangerMinZ
-                && $0.entity.position.z < GameWorld.windDangerMaxZ
+            $0.playfieldZ > GameWorld.windDangerMinZ
+                && $0.playfieldZ < GameWorld.windDangerMaxZ
         }
         if imminent {
             timeUntilWind = 0.35
@@ -1697,8 +1921,8 @@ final class GameWorld {
     private func windDirectionPreferringSafeGap() -> Float {
         // Look at the nearest upcoming wall and shove away from its blocked center when possible.
         let ahead = walls
-            .filter { $0.entity.position.z < -1.2 && $0.kind != .duck }
-            .sorted { $0.entity.position.z > $1.entity.position.z }
+            .filter { $0.playfieldZ < -1.2 && $0.kind != .duck }
+            .sorted { $0.playfieldZ > $1.playfieldZ }
         if let nearest = ahead.first {
             let xs = nearest.worldSlabXs()
             let blockedCenter = xs.reduce(0, +) / Float(xs.count)
@@ -1954,7 +2178,6 @@ final class GameWorld {
         lastAdjacentDoubleOpenLaneRaw = openLaneRaw
 
         let parent = Entity()
-        parent.position = SIMD3(windCurrentX, GameWorld.wallHeight * 0.5, patternSpawnZ)
         parent.name = kind == .ghost ? "wallGhost" : "wall"
 
         var slabXs: [Float] = []
@@ -1972,14 +2195,13 @@ final class GameWorld {
             blockingLaneRaws: Set(lanes.map(\.rawValue))
         )
 
-        root.addChild(parent)
-        walls.append(
-            WallItem(
-                entity: parent,
-                localSlabXs: slabXs,
-                kind: kind,
-                sealsBetweenSlabs: sealsGap
-            )
+        beginWallEmerge(
+            parent: parent,
+            playfieldY: GameWorld.wallHeight * 0.5,
+            playfieldZ: patternSpawnZ,
+            localSlabXs: slabXs,
+            kind: kind,
+            sealsBetweenSlabs: sealsGap
         )
     }
 
@@ -2004,7 +2226,6 @@ final class GameWorld {
         let parent = Entity()
         // Center the hanging slab in the upper corridor band.
         let centerY = GameWorld.duckClearanceY + GameWorld.duckSlabHeight * 0.5
-        parent.position = SIMD3(windCurrentX, centerY, patternSpawnZ)
         parent.name = "wallDuck"
 
         let mesh = MeshResource.generateBox(
@@ -2023,8 +2244,13 @@ final class GameWorld {
         body.name = "duckSlab"
         parent.addChild(body)
 
-        root.addChild(parent)
-        walls.append(WallItem(entity: parent, localSlabXs: [0], kind: .duck))
+        beginWallEmerge(
+            parent: parent,
+            playfieldY: centerY,
+            playfieldZ: patternSpawnZ,
+            localSlabXs: [0],
+            kind: .duck
+        )
     }
 
     private func spawnJumpWall() {
@@ -2033,7 +2259,6 @@ final class GameWorld {
         let parent = Entity()
         // Sit the hurdle on the floor band (center at half slab height).
         let centerY = GameWorld.jumpSlabHeight * 0.5
-        parent.position = SIMD3(windCurrentX, centerY, patternSpawnZ)
         parent.name = "wallJump"
 
         let mesh = MeshResource.generateBox(
@@ -2052,8 +2277,13 @@ final class GameWorld {
         body.name = "jumpSlab"
         parent.addChild(body)
 
-        root.addChild(parent)
-        walls.append(WallItem(entity: parent, localSlabXs: [0], kind: .jump))
+        beginWallEmerge(
+            parent: parent,
+            playfieldY: centerY,
+            playfieldZ: patternSpawnZ,
+            localSlabXs: [0],
+            kind: .jump
+        )
     }
 
     private func makeWallSlab(kind: WallKind, profile: EnvironmentProfile) -> Entity {
@@ -2094,13 +2324,20 @@ final class GameWorld {
         // Mild outward offset — still a reach, but easier to snag mid-dodge.
         let outward: Float = lane == .center ? 0 : (lane.x > 0 ? GameWorld.coinOutwardOffset : -GameWorld.coinOutwardOffset)
         let baseY = underCeiling ? GameWorld.lowCrawlCoinHeight : GameWorld.coinHeight
-        coin.position = SIMD3(lane.x + outward + windCurrentX, baseY, patternSpawnZ)
-        root.addChild(coin)
+        let streamZ = patternStreamSpawnZ
+        attachPickupToPortalStream(
+            coin,
+            playfieldX: lane.x + outward + windCurrentX,
+            playfieldY: baseY,
+            playfieldZ: streamZ
+        )
         coins.append(
             CoinItem(
                 entity: coin,
                 baseY: baseY,
-                phase: nextFloat(in: 0...(Float.pi * 2))
+                playfieldZ: streamZ,
+                phase: nextFloat(in: 0...(Float.pi * 2)),
+                lastLightingWeight: 0
             )
         )
     }
@@ -2119,10 +2356,22 @@ final class GameWorld {
         let material = EnvironmentMaterials.crystalHalf(type: roll.type, charged: roll.charged)
         let entity = ModelEntity(mesh: mesh, materials: [material])
         let outward: Float = lane == .center ? 0 : (lane.x > 0 ? GameWorld.coinOutwardOffset : -GameWorld.coinOutwardOffset)
-        entity.position = SIMD3(lane.x + outward + windCurrentX, GameWorld.coinHeight, patternSpawnZ)
+        let streamZ = patternStreamSpawnZ
         entity.name = roll.charged ? "halfCrystalCharged" : "halfCrystal"
-        root.addChild(entity)
-        halves.append(HalfCrystalItem(entity: entity, type: roll.type, charged: roll.charged))
+        attachPickupToPortalStream(
+            entity,
+            playfieldX: lane.x + outward + windCurrentX,
+            playfieldY: GameWorld.coinHeight,
+            playfieldZ: streamZ
+        )
+        let item = HalfCrystalItem(
+            entity: entity,
+            type: roll.type,
+            charged: roll.charged,
+            playfieldZ: streamZ
+        )
+        item.lastLightingWeight = 0
+        halves.append(item)
     }
 
     // MARK: - Crystal hold / merge
@@ -2333,8 +2582,9 @@ final class GameWorld {
         )
 
         for wall in walls {
-            guard !wall.hasResolvedHit else { continue }
-            let wallZ = wall.entity.position.z
+            // Still inside the portal tunnel — not yet a real-room hazard.
+            guard !wall.hasResolvedHit, !wall.isEmerging else { continue }
+            let wallZ = wall.playfieldZ
             let previousZ = wall.previousZ
 
             let hit: Bool
@@ -2416,7 +2666,7 @@ final class GameWorld {
                     continue
                 }
                 wall.hasResolvedHit = true
-                visualFX.spawnHitFlash(near: SIMD3(head.x, head.y, wall.entity.position.z))
+                visualFX.spawnHitFlash(near: SIMD3(head.x, head.y, wall.playfieldZ))
                 // Quick squash so the hit reads before game-over UI.
                 wall.entity.scale = SIMD3(1.08, 0.92, 1.15)
                 GameSFX.shared.playWallHit()
@@ -2470,7 +2720,7 @@ final class GameWorld {
 
     private func pruneEntities() {
         walls.removeAll { item in
-            if item.entity.position.z > GameWorld.despawnZ {
+            if item.playfieldZ > GameWorld.despawnZ {
                 item.entity.removeFromParent()
                 return true
             }
@@ -2481,7 +2731,7 @@ final class GameWorld {
                 item.entity.removeFromParent()
                 return true
             }
-            if item.entity.position.z > GameWorld.despawnZ {
+            if item.playfieldZ > GameWorld.despawnZ {
                 item.entity.removeFromParent()
                 return true
             }
@@ -2489,7 +2739,7 @@ final class GameWorld {
         }
         halves.removeAll { item in
             if item.collected { return true }
-            if item.entity.position.z > GameWorld.despawnZ {
+            if item.playfieldZ > GameWorld.despawnZ {
                 item.entity.removeFromParent()
                 return true
             }
