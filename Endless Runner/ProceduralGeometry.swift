@@ -358,4 +358,138 @@ enum ProceduralGeometry {
         let len = simd_length(n)
         return len > 0.00001 ? n / len : SIMD3(0, 1, 0)
     }
+
+    // MARK: - Hologram wireframe
+
+    /// Thin neon segment between two points — building block for hologram edge cages.
+    static func neonSegment(
+        from a: SIMD3<Float>,
+        to b: SIMD3<Float>,
+        radius: Float,
+        material: UnlitMaterial
+    ) -> ModelEntity? {
+        let delta = b - a
+        let length = simd_length(delta)
+        guard length > 0.0005 else { return nil }
+        let mesh = MeshResource.generateCylinder(height: length, radius: max(0.002, radius))
+        let entity = ModelEntity(mesh: mesh, materials: [material])
+        entity.position = (a + b) * 0.5
+        entity.orientation = simd_quatf(from: SIMD3(0, 1, 0), to: delta / length)
+        return entity
+    }
+
+    /// Neon wireframe cage for an extruded polygon (front loop + back loop +
+    /// vertical struts + optional internal scanline rings). Sits in the same
+    /// local space as `extrudedPolygon` so it can be parented under the same
+    /// shard transform. This is the hologram "Fresnel edge" stand-in — bright
+    /// outline, empty interior.
+    static func hologramWireframeCage(
+        points: [SIMD2<Float>],
+        depth: Float,
+        edgeRadius: Float,
+        material: UnlitMaterial,
+        scanlineCount: Int = 2
+    ) -> Entity {
+        let root = Entity()
+        root.name = "hologramWireframe"
+        guard points.count >= 3 else { return root }
+        let half = max(0.001, depth) * 0.5
+        let n = points.count
+
+        // Front + back silhouette loops.
+        for zSign: Float in [-1, 1] {
+            let z = half * zSign
+            for i in 0..<n {
+                let p0 = points[i]
+                let p1 = points[(i + 1) % n]
+                if let seg = neonSegment(
+                    from: SIMD3(p0.x, p0.y, z),
+                    to: SIMD3(p1.x, p1.y, z),
+                    radius: edgeRadius,
+                    material: material
+                ) {
+                    root.addChild(seg)
+                }
+            }
+        }
+
+        // Vertical struts at each vertex (depth edges).
+        for p in points {
+            if let seg = neonSegment(
+                from: SIMD3(p.x, p.y, half),
+                to: SIMD3(p.x, p.y, -half),
+                radius: edgeRadius * 0.85,
+                material: material
+            ) {
+                root.addChild(seg)
+            }
+        }
+
+        // Internal scanline rings — faint holographic "grid" inside the volume.
+        if scanlineCount > 0 {
+            for s in 1...scanlineCount {
+                let t = Float(s) / Float(scanlineCount + 1)
+                let z = half * (1 - 2 * t)
+                let scale: Float = 0.78 + 0.08 * sin(t * Float.pi)
+                for i in 0..<n {
+                    let p0 = points[i] * scale
+                    let p1 = points[(i + 1) % n] * scale
+                    if let seg = neonSegment(
+                        from: SIMD3(p0.x, p0.y, z),
+                        to: SIMD3(p1.x, p1.y, z),
+                        radius: edgeRadius * 0.55,
+                        material: material
+                    ) {
+                        root.addChild(seg)
+                    }
+                }
+            }
+        }
+
+        return root
+    }
+
+    /// Neon edge cage for a bipyramid gem — waist ring + spokes to both apexes.
+    static func hologramBipyramidWireframe(
+        sides: Int,
+        radius: Float,
+        topHeight: Float,
+        bottomHeight: Float,
+        jitter: Float,
+        seed: UInt64,
+        edgeRadius: Float,
+        material: UnlitMaterial
+    ) -> Entity {
+        let root = Entity()
+        root.name = "hologramWireframe"
+        let n = max(3, sides)
+        let noise = jitter > 0 ? RadialNoise(seed: seed, octaves: 3) : nil
+        var ring: [SIMD3<Float>] = []
+        ring.reserveCapacity(n)
+        for i in 0..<n {
+            let theta = Float(i) / Float(n) * (2 * Float.pi)
+            var r = radius
+            if let noise {
+                r *= max(0.4, 1 + noise.value(at: theta) * jitter)
+            }
+            ring.append(SIMD3(cos(theta) * r, 0, sin(theta) * r))
+        }
+        let top = SIMD3<Float>(0, topHeight, 0)
+        let bottom = SIMD3<Float>(0, -bottomHeight, 0)
+
+        for i in 0..<n {
+            let a = ring[i]
+            let b = ring[(i + 1) % n]
+            if let seg = neonSegment(from: a, to: b, radius: edgeRadius, material: material) {
+                root.addChild(seg)
+            }
+            if let up = neonSegment(from: a, to: top, radius: edgeRadius * 0.85, material: material) {
+                root.addChild(up)
+            }
+            if let down = neonSegment(from: a, to: bottom, radius: edgeRadius * 0.85, material: material) {
+                root.addChild(down)
+            }
+        }
+        return root
+    }
 }

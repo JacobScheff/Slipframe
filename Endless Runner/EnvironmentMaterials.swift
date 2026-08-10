@@ -38,20 +38,37 @@ enum EnvironmentMaterials {
         SimpleMaterial(color: uiColor(tint), roughness: MaterialScalarParameter(floatLiteral: roughness), isMetallic: metallic)
     }
 
-    /// Translucent wall body. Opacity/tint come from the active biome palette
-    /// (or a ghost override) so USDA wall art can adopt the same parameters later.
+    /// Near-invisible holographic volume fill — the "glass box" look is
+    /// deliberately avoided. Neon silhouette comes from `hologramEdge` wireframe
+    /// overlays, not from a solid translucent slab. `opacity` from the palette
+    /// is treated as a soft upper bound; fill stays highly see-through.
     static func wallBody(
         tint: TintColor,
         emissive: TintColor,
         opacity: Float,
         emissiveIntensity: Float
     ) -> PhysicallyBasedMaterial {
+        hologramFill(
+            tint: tint,
+            emissive: emissive,
+            opacity: min(0.08, max(0.02, opacity * 0.14)),
+            emissiveIntensity: max(0.15, emissiveIntensity * 0.35)
+        )
+    }
+
+    /// Digital-hologram volume: barely-there tinted fill so the obstacle reads as
+    /// light, not glass. Pair with `hologramEdge` wireframe for the neon outline.
+    static func hologramFill(
+        tint: TintColor,
+        emissive: TintColor,
+        opacity: Float = 0.055,
+        emissiveIntensity: Float = 0.25
+    ) -> PhysicallyBasedMaterial {
         var material = PhysicallyBasedMaterial()
-        let clampedOpacity = max(0.02, min(1, opacity))
-        // Keep base color alpha in sync with blending so thick slabs don't read solid.
+        let clampedOpacity = max(0.015, min(0.1, opacity))
         let body = TintColor(r: tint.r, g: tint.g, b: tint.b, a: clampedOpacity)
         material.baseColor = .init(tint: uiColor(body))
-        material.roughness = .init(floatLiteral: 0.2)
+        material.roughness = .init(floatLiteral: 0.05)
         material.metallic = .init(floatLiteral: 0.0)
         material.emissiveColor = .init(color: uiColor(emissive))
         material.emissiveIntensity = emissiveIntensity
@@ -60,22 +77,42 @@ enum EnvironmentMaterials {
         return material
     }
 
-    /// Near-invisible glass for Ghost Glass — as transparent as the material allows.
-    /// Opacity is low enough that front+back alpha stacking on the jagged
-    /// shatter-pane mesh reads no differently than a single face would.
+    /// Bright neon unlit edge / wireframe stroke — biome-colored silhouette glow
+    /// that sells the hologram "Fresnel" rim without a custom shader.
+    static func hologramEdge(emissive: TintColor, alpha: Float = 1) -> UnlitMaterial {
+        let color = UIColor(
+            red: CGFloat(emissive.r),
+            green: CGFloat(emissive.g),
+            blue: CGFloat(emissive.b),
+            alpha: CGFloat(max(0.05, min(1, alpha)))
+        )
+        var material = UnlitMaterial(color: color)
+        if alpha < 0.99 {
+            material.blending = .transparent(opacity: .init(floatLiteral: max(0.05, min(1, alpha))))
+        }
+        return material
+    }
+
+    /// Ghost Glass fill — essentially invisible. The pane is conveyed by a
+    /// faint wireframe (`ghostHologramEdge`), not by a milky glass slab.
     static func ghostWallBody(opacity: Float) -> PhysicallyBasedMaterial {
         var material = PhysicallyBasedMaterial()
-        let clampedOpacity = max(0.001, min(0.02, opacity))
+        // Clamp extremely low; front+back faces must not stack into a visible plate.
+        let clampedOpacity = max(0.0002, min(0.004, opacity))
         let body = TintColor(r: 0.95, g: 0.97, b: 1.0, a: clampedOpacity)
         material.baseColor = .init(tint: uiColor(body))
-        material.roughness = .init(floatLiteral: 0.12)
+        material.roughness = .init(floatLiteral: 0.05)
         material.metallic = .init(floatLiteral: 0.0)
-        // No emissive — glow was making slabs read solid even at tiny alpha.
         material.emissiveColor = .init(color: uiColor(TintColor(r: 1, g: 1, b: 1, a: 1)))
         material.emissiveIntensity = 0
         material.blending = .transparent(opacity: .init(floatLiteral: clampedOpacity))
         material.faceCulling = .none
         return material
+    }
+
+    /// Barely-there cool wireframe for Ghost Glass — readable only at close range.
+    static func ghostHologramEdge() -> UnlitMaterial {
+        hologramEdge(emissive: TintColor(r: 0.8, g: 0.9, b: 1.0, a: 1), alpha: 0.18)
     }
 
     static func coin(_ tint: TintColor) -> SimpleMaterial {
@@ -97,20 +134,14 @@ enum EnvironmentMaterials {
         return material
     }
 
-    /// Full-gem crystal spire material for Crystal Cave's lane-blocking formations —
-    /// same family as `crystalHalf`, dimmer/cooler so it reads as scenery, not a pickup.
+    /// Crystal Cave obstacle fill — holographic gem volume (highly transparent)
+    /// rather than a solid crystal chunk. Neon wireframe edges carry the silhouette.
     static func crystalSpire(tint: TintColor, opacity: Float) -> PhysicallyBasedMaterial {
-        var material = PhysicallyBasedMaterial()
-        let body = TintColor(r: tint.r, g: tint.g, b: tint.b, a: max(0.35, min(1, opacity)))
-        material.baseColor = .init(tint: uiColor(body))
-        material.roughness = .init(floatLiteral: 0.18)
-        material.metallic = .init(floatLiteral: 0.1)
-        material.emissiveColor = .init(color: uiColor(tint))
-        material.emissiveIntensity = 0.5
-        material.clearcoat = .init(floatLiteral: 0.85)
-        material.clearcoatRoughness = .init(floatLiteral: 0.1)
-        material.blending = .transparent(opacity: .init(floatLiteral: max(0.35, min(1, opacity))))
-        material.faceCulling = .none
-        return material
+        hologramFill(
+            tint: tint,
+            emissive: tint,
+            opacity: min(0.09, max(0.03, opacity * 0.16)),
+            emissiveIntensity: 0.4
+        )
     }
 }
