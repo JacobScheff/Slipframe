@@ -637,7 +637,15 @@ final class GameWorld {
         portalEntity.components.set(
             ModelComponent(mesh: portalMesh, materials: [PortalMaterial()])
         )
-        portalEntity.components.set(PortalComponent(target: portalWorld))
+        // Clipping keeps tunnel content inside the aperture; crossing lets thick
+        // walls exit into the room without z-fighting / flicker at the plane.
+        portalEntity.components.set(
+            PortalComponent(
+                target: portalWorld,
+                clippingMode: .plane(.positiveZ),
+                crossingMode: .plane(.positiveZ)
+            )
+        )
 
         buildPortalRim()
         buildPortalInterior()
@@ -1620,7 +1628,7 @@ final class GameWorld {
         wall.emergeElapsed = nextElapsed
         let progress = WallEmerge.progress(elapsed: nextElapsed)
         let exitLocalZ = wall.playfieldZ - portalZ
-        // After the rush finishes, keep tracking in portal space until past the mouth.
+        // After the rush finishes, keep tracking in portal space until fully clear.
         let localZ = progress >= 1
             ? exitLocalZ
             : WallEmerge.localZ(progress: progress, exitLocalZ: exitLocalZ)
@@ -1633,8 +1641,18 @@ final class GameWorld {
         )
         wall.entity.position = SIMD3(wall.entity.position.x, localY, localZ)
         wall.entity.scale = SIMD3(repeating: scale)
-        // Only enter the room once the stream pose is at/ past the aperture front.
-        if progress >= 1, wall.playfieldZ >= portalZ + GameWorld.spawnInFrontOfPortal {
+
+        let halfDepth = Self.emergeHalfDepth(for: wall.kind) * scale
+        let lighting = WallEmerge.environmentLightingWeight(
+            portalLocalZ: localZ,
+            halfDepth: halfDepth
+        )
+        wall.entity.components.set(
+            EnvironmentLightingConfigurationComponent(environmentLightingWeight: lighting)
+        )
+
+        // Reparent only once the back face has cleared the portal plane.
+        if progress >= 1, wall.playfieldZ - halfDepth >= portalZ + 0.02 {
             finalizeWallEmerge(wall)
         }
     }
@@ -1643,6 +1661,8 @@ final class GameWorld {
     private func finalizeWallEmerge(_ wall: WallItem) {
         guard wall.isEmerging else { return }
         let x = wall.entity.position.x
+        wall.entity.components.remove(PortalCrossingComponent.self)
+        wall.entity.components.remove(EnvironmentLightingConfigurationComponent.self)
         wall.entity.removeFromParent()
         root.addChild(wall.entity)
         wall.entity.position = SIMD3(x, wall.emergePlayfieldY, wall.playfieldZ)
@@ -1671,6 +1691,11 @@ final class GameWorld {
         )
         parent.scale = SIMD3(repeating: WallEmerge.startScale)
         parent.position = SIMD3(windCurrentX, startY, WallEmerge.startDepth)
+        // Required for thick walls to render smoothly across the portal plane.
+        parent.components.set(PortalCrossingComponent())
+        parent.components.set(
+            EnvironmentLightingConfigurationComponent(environmentLightingWeight: 0)
+        )
         portalWorld.addChild(parent)
         walls.append(
             WallItem(
@@ -1682,6 +1707,17 @@ final class GameWorld {
                 emergePlayfieldY: playfieldY
             )
         )
+    }
+
+    private static func emergeHalfDepth(for kind: WallKind) -> Float {
+        switch kind {
+        case .jump:
+            return jumpSlabDepth * 0.5
+        case .duck:
+            return wallThickness * 0.85 * 0.5
+        case .standard, .ghost:
+            return wallThickness * 0.5
+        }
     }
 
     // MARK: - Wind (Storm Pass)

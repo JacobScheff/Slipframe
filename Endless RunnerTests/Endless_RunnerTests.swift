@@ -1350,6 +1350,35 @@ final class Endless_RunnerTests: XCTestCase {
         XCTAssertEqual(duckY, 1.375 - portalHalf, accuracy: 0.0001)
     }
 
+    func testWallEmergeEnvironmentLightingBlendsAcrossPortalPlane() {
+        let halfDepth: Float = 0.35
+        XCTAssertEqual(
+            WallEmerge.environmentLightingWeight(portalLocalZ: -1, halfDepth: halfDepth),
+            0,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            WallEmerge.environmentLightingWeight(portalLocalZ: -halfDepth, halfDepth: halfDepth),
+            0,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            WallEmerge.environmentLightingWeight(portalLocalZ: 0, halfDepth: halfDepth),
+            0.5,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            WallEmerge.environmentLightingWeight(portalLocalZ: halfDepth, halfDepth: halfDepth),
+            1,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            WallEmerge.environmentLightingWeight(portalLocalZ: 2, halfDepth: halfDepth),
+            1,
+            accuracy: 0.0001
+        )
+    }
+
     func testGameplayDeltaClampsHitchFramesInsteadOfDiscarding() {
         XCTAssertNil(GameTiming.clampedGameplayDelta(0))
         XCTAssertNil(GameTiming.clampedGameplayDelta(-0.016))

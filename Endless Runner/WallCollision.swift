@@ -254,4 +254,15 @@ enum WallEmerge {
         }
         return playfieldCenterY - portalHalf
     }
+
+    /// Blend from portal-world lighting (0) to room lighting (1) across the portal plane.
+    /// Smooths the harsh light pop that otherwise flickers while a thick wall crosses.
+    static func environmentLightingWeight(
+        portalLocalZ: Float,
+        halfDepth: Float
+    ) -> Float {
+        let span = max(0.05, halfDepth * 2)
+        let u = (portalLocalZ + halfDepth) / span
+        return min(1, max(0, u))
+    }
 }
