@@ -200,3 +200,35 @@ enum WallCollision {
         wallZ - contactZ > halfDepth
     }
 }
+
+/// Pure motion helpers for walls rushing out of the portal tunnel into the room.
+enum WallEmerge {
+    /// Seconds to travel from deep tunnel depth to the playfield stream pose.
+    static let duration: Float = 0.55
+    /// Portal-local Z near the far glow / back wall (~tunnel depth 12).
+    static let startDepth: Float = -10.5
+    /// Perspective shrink while still deep in the void.
+    static let startScale: Float = 0.38
+
+    /// Ease-out cubic progress in `0...1` — fast exit from infinity, soft settle at the mouth.
+    static func progress(elapsed: Float, duration: Float = duration) -> Float {
+        guard duration > 0 else { return 1 }
+        let u = min(1, max(0, elapsed / duration))
+        let inv = 1 - u
+        return 1 - inv * inv * inv
+    }
+
+    /// Portal-local Z for the current emerge progress.
+    static func localZ(
+        progress: Float,
+        exitLocalZ: Float,
+        startDepth: Float = startDepth
+    ) -> Float {
+        startDepth + (exitLocalZ - startDepth) * progress
+    }
+
+    /// Uniform scale for the current emerge progress.
+    static func scale(progress: Float, startScale: Float = startScale) -> Float {
+        startScale + (1 - startScale) * progress
+    }
+}

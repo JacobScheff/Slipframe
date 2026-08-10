@@ -1262,6 +1262,50 @@ final class Endless_RunnerTests: XCTestCase {
         }
     }
 
+    func testWallEmergeProgressEasesOutFromInfinity() {
+        XCTAssertEqual(WallEmerge.progress(elapsed: -1), 0, accuracy: 0.0001)
+        XCTAssertEqual(WallEmerge.progress(elapsed: 0), 0, accuracy: 0.0001)
+        XCTAssertEqual(WallEmerge.progress(elapsed: WallEmerge.duration), 1, accuracy: 0.0001)
+        XCTAssertEqual(WallEmerge.progress(elapsed: WallEmerge.duration * 2), 1, accuracy: 0.0001)
+
+        let early = WallEmerge.progress(elapsed: WallEmerge.duration * 0.25)
+        let mid = WallEmerge.progress(elapsed: WallEmerge.duration * 0.5)
+        let late = WallEmerge.progress(elapsed: WallEmerge.duration * 0.75)
+        // Ease-out: first quarter covers more than linear 0.25.
+        XCTAssertGreaterThan(early, 0.25)
+        XCTAssertGreaterThan(mid, early)
+        XCTAssertGreaterThan(late, mid)
+        XCTAssertLessThan(late, 1)
+    }
+
+    func testWallEmergeLocalZAndScaleLerpTowardExit() {
+        let exitLocalZ: Float = 0.35
+        XCTAssertEqual(
+            WallEmerge.localZ(progress: 0, exitLocalZ: exitLocalZ),
+            WallEmerge.startDepth,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            WallEmerge.localZ(progress: 1, exitLocalZ: exitLocalZ),
+            exitLocalZ,
+            accuracy: 0.0001
+        )
+        let midZ = WallEmerge.localZ(progress: 0.5, exitLocalZ: exitLocalZ)
+        XCTAssertEqual(
+            midZ,
+            WallEmerge.startDepth + (exitLocalZ - WallEmerge.startDepth) * 0.5,
+            accuracy: 0.0001
+        )
+
+        XCTAssertEqual(WallEmerge.scale(progress: 0), WallEmerge.startScale, accuracy: 0.0001)
+        XCTAssertEqual(WallEmerge.scale(progress: 1), 1, accuracy: 0.0001)
+        XCTAssertEqual(
+            WallEmerge.scale(progress: 0.5),
+            WallEmerge.startScale + (1 - WallEmerge.startScale) * 0.5,
+            accuracy: 0.0001
+        )
+    }
+
     func testGameplayDeltaClampsHitchFramesInsteadOfDiscarding() {
         XCTAssertNil(GameTiming.clampedGameplayDelta(0))
         XCTAssertNil(GameTiming.clampedGameplayDelta(-0.016))

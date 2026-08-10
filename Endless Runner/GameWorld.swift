@@ -49,20 +49,33 @@ final class GameWorld {
         /// Adjacent double-lane walls seal the visual gap between slabs (collision only).
         let sealsBetweenSlabs: Bool
         var hasResolvedHit = false
-        /// Prior-frame Z for swept head/hand collision (prevents tunneling).
+        /// Prior-frame playfield Z for swept head/hand collision (prevents tunneling).
         var previousZ: Float
+        /// Logical stream depth in playfield space (advances with travel every frame).
+        var playfieldZ: Float
+        /// Elapsed emerge time while still inside `portalWorld`; nil once in the room.
+        var emergeElapsed: Float?
+        /// Portal-local Y while parented under `portalWorld` (portal origin is aperture center).
+        let emergeLocalY: Float
+
+        var isEmerging: Bool { emergeElapsed != nil }
 
         init(
             entity: Entity,
             localSlabXs: [Float],
             kind: WallKind,
-            sealsBetweenSlabs: Bool = false
+            sealsBetweenSlabs: Bool = false,
+            playfieldZ: Float,
+            emergeLocalY: Float
         ) {
             self.entity = entity
             self.localSlabXs = localSlabXs
             self.kind = kind
             self.sealsBetweenSlabs = sealsBetweenSlabs
-            self.previousZ = entity.position.z
+            self.playfieldZ = playfieldZ
+            self.emergeLocalY = emergeLocalY
+            self.emergeElapsed = 0
+            self.previousZ = playfieldZ
         }
 
         func worldSlabXs() -> [Float] {
@@ -194,7 +207,7 @@ final class GameWorld {
     /// Prefer snapping the portal onto a real wall in this band.
     private static let portalMinDistance: Float = 3.5
     private static let portalMaxDistance: Float = 10.0
-    /// Obstacles appear just in front of the portal mouth (toward the player).
+    /// Stream pose just in front of the portal mouth (toward the player) after emerge.
     private static let spawnInFrontOfPortal: Float = 0.35
     private static let wallMinimumBounds = SIMD2<Float>(0.8, 1.5)
 
@@ -655,8 +668,9 @@ final class GameWorld {
 
     /// Dark tunnel visible only through the portal — blocks passthrough cleanly.
     private func buildPortalInterior() {
-        for child in portalWorld.children {
-            child.removeFromParent()
+        // Only replace the tunnel mesh — emerging walls are also parented under portalWorld.
+        if let existing = portalWorld.children.first(where: { $0.name == "portalInterior" }) {
+            existing.removeFromParent()
         }
         portalWorld.addChild(GameVisualBuilders.makePortalInterior(portalHeight: GameWorld.portalHeight))
     }
@@ -975,6 +989,10 @@ final class GameWorld {
 
         let animT = elapsed - GameWorld.gameOverClearDelay
         if gameOverWallBases.isEmpty, !walls.isEmpty {
+            // Dissolve runs in playfield space — finish any in-portal emerges first.
+            for wall in walls where wall.isEmerging {
+                finalizeWallEmerge(wall)
+            }
             gameOverWallBases = walls.map { wall in
                 (wall.entity, wall.entity.position, wall.entity.scale)
             }
@@ -1300,7 +1318,7 @@ final class GameWorld {
             gameModel.addScore(gained)
         }
 
-        advanceEntities(by: travel)
+        advanceEntities(by: travel, deltaTime: dt)
         updateWind(deltaTime: dt)
         // Grab before hold-update so a newly closed hand can pick up this frame.
         if activeSpawnProfile.twist == .crystalHalves {
@@ -1573,10 +1591,15 @@ final class GameWorld {
         }
     }
 
-    private func advanceEntities(by travel: Float) {
+    private func advanceEntities(by travel: Float, deltaTime: Float) {
         for wall in walls {
-            wall.previousZ = wall.entity.position.z
-            wall.entity.position.z += travel
+            wall.previousZ = wall.playfieldZ
+            wall.playfieldZ += travel
+            if wall.isEmerging {
+                tickWallEmerge(wall, deltaTime: deltaTime)
+            } else {
+                wall.entity.position.z = wall.playfieldZ
+            }
         }
         for coin in coins {
             coin.entity.position.z += travel
@@ -1584,6 +1607,60 @@ final class GameWorld {
         for half in halves {
             half.entity.position.z += travel
         }
+    }
+
+    /// Drive portal-local pose while a wall rushes from tunnel infinity to the mouth.
+    private func tickWallEmerge(_ wall: WallItem, deltaTime: Float) {
+        guard let elapsed = wall.emergeElapsed else { return }
+        let nextElapsed = elapsed + deltaTime
+        wall.emergeElapsed = nextElapsed
+        let progress = WallEmerge.progress(elapsed: nextElapsed)
+        let exitLocalZ = wall.playfieldZ - portalZ
+        let localZ = WallEmerge.localZ(progress: progress, exitLocalZ: exitLocalZ)
+        let scale = WallEmerge.scale(progress: progress)
+        wall.entity.position = SIMD3(wall.entity.position.x, wall.emergeLocalY, localZ)
+        wall.entity.scale = SIMD3(repeating: scale)
+        if progress >= 1 {
+            finalizeWallEmerge(wall)
+        }
+    }
+
+    /// Reparent from the portal world into the real playfield at the stream pose.
+    private func finalizeWallEmerge(_ wall: WallItem) {
+        guard wall.isEmerging else { return }
+        let x = wall.entity.position.x
+        let playfieldY = wall.emergeLocalY + GameWorld.portalHeight * 0.5
+        wall.entity.removeFromParent()
+        root.addChild(wall.entity)
+        wall.entity.position = SIMD3(x, playfieldY, wall.playfieldZ)
+        wall.entity.scale = SIMD3(repeating: 1)
+        wall.previousZ = wall.playfieldZ
+        wall.emergeElapsed = nil
+    }
+
+    /// Parent a newly built wall under the portal tunnel and start its emerge animation.
+    private func beginWallEmerge(
+        parent: Entity,
+        playfieldY: Float,
+        playfieldZ: Float,
+        localSlabXs: [Float],
+        kind: WallKind,
+        sealsBetweenSlabs: Bool = false
+    ) {
+        let emergeLocalY = playfieldY - GameWorld.portalHeight * 0.5
+        parent.scale = SIMD3(repeating: WallEmerge.startScale)
+        parent.position = SIMD3(windCurrentX, emergeLocalY, WallEmerge.startDepth)
+        portalWorld.addChild(parent)
+        walls.append(
+            WallItem(
+                entity: parent,
+                localSlabXs: localSlabXs,
+                kind: kind,
+                sealsBetweenSlabs: sealsBetweenSlabs,
+                playfieldZ: playfieldZ,
+                emergeLocalY: emergeLocalY
+            )
+        )
     }
 
     // MARK: - Wind (Storm Pass)
@@ -1650,8 +1727,8 @@ final class GameWorld {
     private func beginWindTelegraph() {
         // Only defer when a wall is already in the near hit band (not merely "on screen").
         let imminent = walls.contains {
-            $0.entity.position.z > GameWorld.windDangerMinZ
-                && $0.entity.position.z < GameWorld.windDangerMaxZ
+            $0.playfieldZ > GameWorld.windDangerMinZ
+                && $0.playfieldZ < GameWorld.windDangerMaxZ
         }
         if imminent {
             timeUntilWind = 0.35
@@ -1697,8 +1774,8 @@ final class GameWorld {
     private func windDirectionPreferringSafeGap() -> Float {
         // Look at the nearest upcoming wall and shove away from its blocked center when possible.
         let ahead = walls
-            .filter { $0.entity.position.z < -1.2 && $0.kind != .duck }
-            .sorted { $0.entity.position.z > $1.entity.position.z }
+            .filter { $0.playfieldZ < -1.2 && $0.kind != .duck }
+            .sorted { $0.playfieldZ > $1.playfieldZ }
         if let nearest = ahead.first {
             let xs = nearest.worldSlabXs()
             let blockedCenter = xs.reduce(0, +) / Float(xs.count)
@@ -1954,7 +2031,6 @@ final class GameWorld {
         lastAdjacentDoubleOpenLaneRaw = openLaneRaw
 
         let parent = Entity()
-        parent.position = SIMD3(windCurrentX, GameWorld.wallHeight * 0.5, patternSpawnZ)
         parent.name = kind == .ghost ? "wallGhost" : "wall"
 
         var slabXs: [Float] = []
@@ -1972,14 +2048,13 @@ final class GameWorld {
             blockingLaneRaws: Set(lanes.map(\.rawValue))
         )
 
-        root.addChild(parent)
-        walls.append(
-            WallItem(
-                entity: parent,
-                localSlabXs: slabXs,
-                kind: kind,
-                sealsBetweenSlabs: sealsGap
-            )
+        beginWallEmerge(
+            parent: parent,
+            playfieldY: GameWorld.wallHeight * 0.5,
+            playfieldZ: patternSpawnZ,
+            localSlabXs: slabXs,
+            kind: kind,
+            sealsBetweenSlabs: sealsGap
         )
     }
 
@@ -2004,7 +2079,6 @@ final class GameWorld {
         let parent = Entity()
         // Center the hanging slab in the upper corridor band.
         let centerY = GameWorld.duckClearanceY + GameWorld.duckSlabHeight * 0.5
-        parent.position = SIMD3(windCurrentX, centerY, patternSpawnZ)
         parent.name = "wallDuck"
 
         let mesh = MeshResource.generateBox(
@@ -2023,8 +2097,13 @@ final class GameWorld {
         body.name = "duckSlab"
         parent.addChild(body)
 
-        root.addChild(parent)
-        walls.append(WallItem(entity: parent, localSlabXs: [0], kind: .duck))
+        beginWallEmerge(
+            parent: parent,
+            playfieldY: centerY,
+            playfieldZ: patternSpawnZ,
+            localSlabXs: [0],
+            kind: .duck
+        )
     }
 
     private func spawnJumpWall() {
@@ -2033,7 +2112,6 @@ final class GameWorld {
         let parent = Entity()
         // Sit the hurdle on the floor band (center at half slab height).
         let centerY = GameWorld.jumpSlabHeight * 0.5
-        parent.position = SIMD3(windCurrentX, centerY, patternSpawnZ)
         parent.name = "wallJump"
 
         let mesh = MeshResource.generateBox(
@@ -2052,8 +2130,13 @@ final class GameWorld {
         body.name = "jumpSlab"
         parent.addChild(body)
 
-        root.addChild(parent)
-        walls.append(WallItem(entity: parent, localSlabXs: [0], kind: .jump))
+        beginWallEmerge(
+            parent: parent,
+            playfieldY: centerY,
+            playfieldZ: patternSpawnZ,
+            localSlabXs: [0],
+            kind: .jump
+        )
     }
 
     private func makeWallSlab(kind: WallKind, profile: EnvironmentProfile) -> Entity {
@@ -2333,8 +2416,9 @@ final class GameWorld {
         )
 
         for wall in walls {
-            guard !wall.hasResolvedHit else { continue }
-            let wallZ = wall.entity.position.z
+            // Still inside the portal tunnel — not yet a real-room hazard.
+            guard !wall.hasResolvedHit, !wall.isEmerging else { continue }
+            let wallZ = wall.playfieldZ
             let previousZ = wall.previousZ
 
             let hit: Bool
@@ -2416,7 +2500,7 @@ final class GameWorld {
                     continue
                 }
                 wall.hasResolvedHit = true
-                visualFX.spawnHitFlash(near: SIMD3(head.x, head.y, wall.entity.position.z))
+                visualFX.spawnHitFlash(near: SIMD3(head.x, head.y, wall.playfieldZ))
                 // Quick squash so the hit reads before game-over UI.
                 wall.entity.scale = SIMD3(1.08, 0.92, 1.15)
                 GameSFX.shared.playWallHit()
@@ -2470,7 +2554,7 @@ final class GameWorld {
 
     private func pruneEntities() {
         walls.removeAll { item in
-            if item.entity.position.z > GameWorld.despawnZ {
+            if item.playfieldZ > GameWorld.despawnZ {
                 item.entity.removeFromParent()
                 return true
             }
