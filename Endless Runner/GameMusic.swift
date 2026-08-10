@@ -1,8 +1,8 @@
 //
 //  GameMusic.swift
-//  Endless Runner
+//  Slipframe
 //
-//  Plays one bundled track per biome. Drop files into Endless Runner/Music/
+//  Plays one bundled track per biome. Drop files into Music/
 //  named after each EnvironmentID.musicCue (see Music/README.md).
 //
 

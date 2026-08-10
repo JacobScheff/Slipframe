@@ -1,6 +1,6 @@
 //
 //  GameModel.swift
-//  Endless Runner
+//  Slipframe
 //
 //  Shared UI / run state for the endless-runner loop.
 //

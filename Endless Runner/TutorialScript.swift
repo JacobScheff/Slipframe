@@ -1,13 +1,13 @@
 //
 //  TutorialScript.swift
-//  Endless Runner
+//  Slipframe
 //
 //  Timestamped sections for the single bundled tutorial track (`tutorial.m4a`).
 //
 
 import Foundation
 
-/// Filename stem for `Endless Runner/Music/tutorial.m4a` (or .mp3 / .wav / …).
+/// Filename stem for `Music/tutorial.m4a` (or .mp3 / .wav / …).
 enum TutorialMusic {
     static let cue = "tutorial"
     /// Built-in silence / hand-off beat in the master track (do not cut playback early).

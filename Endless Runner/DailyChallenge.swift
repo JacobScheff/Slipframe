@@ -1,6 +1,6 @@
 //
 //  DailyChallenge.swift
-//  Endless Runner
+//  Slipframe
 //
 //  Shared daily seed (America/New_York day boundary) so every player
 //  gets the same endless random sequence for a given calendar day.

@@ -1,4 +1,4 @@
-# Endless Runner — Game Design Plan
+# Slipframe — Game Design Plan
 
 VisionOS / RealityKit immersive game using hand tracking and body position. Simple core loop, clear feedback, room to grow.
 
@@ -207,4 +207,4 @@ The six biomes in the random pool:
 - Telegraph briefly (e.g. 1s color wash or audio sting) so the change doesn’t feel like a glitch.
 - Spawn rules for the new twist apply to newly spawned obstacles; don’t unfairly rewrite what’s already on top of the player.
 - Drop any held Crystal Cave halves on environment exit (they vanish; no carry into the next biome).
-- Audio files live in `Endless Runner/Music/` named by biome cue (`emberRun.m4a`, `summitStep.m4a`, …).
+- Audio files live in `Music/` named by biome cue (`emberRun.m4a`, `summitStep.m4a`, …).

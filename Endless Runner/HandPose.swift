@@ -1,6 +1,6 @@
 //
 //  HandPose.swift
-//  Endless Runner
+//  Slipframe
 //
 //  Grab-pose heuristic from ARKit hand joints for Crystal Cave.
 //

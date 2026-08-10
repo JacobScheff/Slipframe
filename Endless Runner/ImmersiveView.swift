@@ -1,6 +1,6 @@
 //
 //  ImmersiveView.swift
-//  Endless Runner
+//  Slipframe
 //
 //  Mixed immersive play space with an optional wall-anchored portal window.
 //

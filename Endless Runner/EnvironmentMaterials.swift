@@ -1,6 +1,6 @@
 //
 //  EnvironmentMaterials.swift
-//  Endless Runner
+//  Slipframe
 //
 //  Builds RealityKit materials from EnvironmentPalette / TintColor so custom
 //  assets can later reuse the same tint entry points.

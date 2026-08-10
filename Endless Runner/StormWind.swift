@@ -1,6 +1,6 @@
 //
 //  StormWind.swift
-//  Endless Runner
+//  Slipframe
 //
 //  Pure helpers for Storm Pass shove telegraph + direction rules.
 //

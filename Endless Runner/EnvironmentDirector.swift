@@ -1,6 +1,6 @@
 //
 //  EnvironmentDirector.swift
-//  Endless Runner
+//  Slipframe
 //
 //  Owns biome timing, mode-based selection, and palette blending.
 //  Biome dwell time follows each track's length via GameMusic.

@@ -1,9 +1,9 @@
 //
 //  GameVisuals.swift
-//  Endless Runner
+//  Slipframe
 //
 //  Shared palette, materials, and polished procedural mesh builders.
-//  Placeholder geometry until custom USDZ art lands (see ASSET_SPEC.md).
+//  See ASSET_SPEC.md for authored USDZ swap guidance.
 //
 
 import RealityKit

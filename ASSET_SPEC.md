@@ -1,8 +1,8 @@
-# Custom Asset Spec — Endless Runner
+# Custom Asset Spec — Slipframe
 
-Procedural meshes and catalog textures currently stand in for final art. Replace each item below with authored assets; keep the listed dimensions, pivot, and readability rules so gameplay stays fair in mixed reality.
+Authored USDZ/texture targets for Slipframe. Keep the listed dimensions, pivot, and readability rules so gameplay stays fair in mixed reality.
 
-Art direction: **Synth Riders–adjacent neon corridor** — deep ink floors, cyan guide light, molten-gold collectibles, translucent hazard red. Avoid purple-gradient UI tropes and flat unlit placeholders.
+Art direction: **Synth Riders–adjacent neon corridor** — deep ink floors, cyan guide light, molten-gold collectibles, translucent hazard red. Avoid purple-gradient UI tropes.
 
 ---
 
@@ -68,7 +68,7 @@ Art direction: **Synth Riders–adjacent neon corridor** — deep ink floors, cy
 
 **Replace in code:** `GameVisualBuilders.makeTrack`.
 
-**Catalog texture already shipping:** `TrackFloor`, `LaneStripe` (procedural stand-ins).
+**Catalog texture already shipping:** `TrackFloor`, `LaneStripe`.
 
 ---
 
@@ -167,7 +167,7 @@ Art direction: **Synth Riders–adjacent neon corridor** — deep ink floors, cy
 - Rounded display type; score/coins in accent chips (cyan / gold).
 - Start button tinted cyan; Restart tinted hazard red after a hit.
 
-Already implemented in `PlayHUDView`. Optional future: custom SF Symbol replacements or a small wordmark SVG for “ENDLESS RUNNER”.
+Already implemented in `PlayHUDView`. Optional future: custom SF Symbol replacements or a small wordmark SVG for “Slipframe”.
 
 ---
 

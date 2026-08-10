@@ -1,12 +1,12 @@
 //
 //  GameWorld.swift
-//  Endless Runner
+//  Slipframe
 //
 //  Mixed-immersive endless runner with rotating biome environments:
 //  - Playfield sits on the real floor and locks pose when a run starts
 //  - Synth Riders-style portal window at the end of a fixed track
 //  - Obstacles emerge from the portal into the real room
-//  - Biomes tint ambience / walls / coins (ready for custom assets later)
+//  - Biomes tint ambience / walls / coins
 //  - Each biome applies one gameplay twist via EnvironmentDirector
 //  Visuals: polished procedural meshes + catalog textures (see ASSET_SPEC.md).
 //

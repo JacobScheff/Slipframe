@@ -1,6 +1,6 @@
 //
 //  GameCenterAuthWindow.swift
-//  Endless Runner
+//  Slipframe
 //
 //  Presents GameKit’s sign-in UI from a real window scene.
 //  Immersive attachments cannot reliably host UIKit modal presentation,

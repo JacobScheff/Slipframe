@@ -1,6 +1,6 @@
 //
 //  TutorialOverlayView.swift
-//  Endless Runner
+//  Slipframe
 //
 //  Lazy-locked coaching copy + finale success banner for the tutorial run.
 //

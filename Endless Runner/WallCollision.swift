@@ -1,6 +1,6 @@
 //
 //  WallCollision.swift
-//  Endless Runner
+//  Slipframe
 //
 //  Pure AABB helpers for wall / duck / jump-hazard hits. A contact (head, hand,
 //  or body probe) only counts when it overlaps a slab's kill box — not merely
