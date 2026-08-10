@@ -119,9 +119,12 @@ enum ProceduralTextures {
                     ctx.fillPath()
 
                     // Panel seam — thin, glowing cyan/violet alternating per row.
-                    let seamTint = (cx + cy) % 2 == 0
-                        ? UIColor(red: 0.22, green: 0.55, blue: 0.62, alpha: 0.55)
-                        : UIColor(red: 0.34, green: 0.24, blue: 0.55, alpha: 0.45)
+                    let seamTint: UIColor
+                    if (cx + cy) % 2 == 0 {
+                        seamTint = UIColor(red: 0.22, green: 0.55, blue: 0.62, alpha: 0.55)
+                    } else {
+                        seamTint = UIColor(red: 0.34, green: 0.24, blue: 0.55, alpha: 0.45)
+                    }
                     ctx.setStrokeColor(seamTint.cgColor)
                     ctx.setLineWidth(CGFloat.random(in: 1.4...2.6, using: &seed))
                     ctx.addPath(path)
@@ -142,7 +145,8 @@ enum ProceduralTextures {
                 let x = CGFloat.random(in: 0...w, using: &seed)
                 let y = CGFloat.random(in: 0...h, using: &seed)
                 let a = CGFloat.random(in: 0.02...0.07, using: &seed)
-                ctx.setFillColor(UIColor(white: CGFloat.random(in: 0...1, using: &seed), alpha: a).cgColor)
+                let shade = CGFloat.random(in: 0...1, using: &seed)
+                ctx.setFillColor(UIColor(white: shade, alpha: a).cgColor)
                 ctx.fill(CGRect(x: x, y: y, width: 1.2, height: 1.2))
             }
         }
@@ -243,12 +247,14 @@ enum ProceduralTextures {
             ctx.fillEllipse(in: CGRect(x: center.x - coreR, y: center.y - coreR, width: coreR * 2, height: coreR * 2))
 
             // Fine brushed-metal noise.
+            let twoPi: CGFloat = 2 * CGFloat.pi
             for _ in 0..<900 {
-                let a = CGFloat.random(in: 0...(2 * CGFloat.pi), using: &seed)
+                let a = CGFloat.random(in: 0...twoPi, using: &seed)
                 let r = CGFloat.random(in: 0...maxR, using: &seed)
                 let x = center.x + cos(a) * r
                 let y = center.y + sin(a) * r
-                ctx.setFillColor(UIColor(white: CGFloat.random(in: 0.4...1, using: &seed), alpha: 0.05).cgColor)
+                let shade = CGFloat.random(in: 0.4...1.0, using: &seed)
+                ctx.setFillColor(UIColor(white: shade, alpha: 0.05).cgColor)
                 ctx.fill(CGRect(x: x, y: y, width: 1, height: 1))
             }
         }
@@ -277,23 +283,29 @@ enum ProceduralTextures {
             }
 
             // Faint jagged corona ring — the tear's energy edge leaking outward.
-            let noiseHarmonics: [(CGFloat, CGFloat, CGFloat)] = (0..<4).map { i in
-                (
-                    CGFloat(2 + i * 2),
-                    CGFloat.random(in: 0...(2 * CGFloat.pi), using: &seed),
-                    CGFloat.random(in: 0.3...1, using: &seed) / CGFloat(i + 1)
-                )
+            // Built with an explicit loop (not a nested map/tuple expression) so
+            // the type checker doesn't choke on CGFloat.random ranges inside map.
+            let twoPi: CGFloat = 2 * CGFloat.pi
+            var noiseHarmonics: [(freq: CGFloat, phase: CGFloat, amp: CGFloat)] = []
+            noiseHarmonics.reserveCapacity(4)
+            for i in 0..<4 {
+                let freq = CGFloat(2 + i * 2)
+                let phase = CGFloat.random(in: 0...twoPi, using: &seed)
+                let amp = CGFloat.random(in: 0.3...1.0, using: &seed) / CGFloat(i + 1)
+                noiseHarmonics.append((freq, phase, amp))
             }
             func noise(_ theta: CGFloat) -> CGFloat {
                 var total: CGFloat = 0
-                for (freq, phase, amp) in noiseHarmonics { total += sin(theta * freq + phase) * amp }
+                for harmonic in noiseHarmonics {
+                    total += sin(theta * harmonic.freq + harmonic.phase) * harmonic.amp
+                }
                 return total / 2.2
             }
 
             let ringPath = CGMutablePath()
             let sides = 48
             for i in 0...sides {
-                let theta = CGFloat(i) / CGFloat(sides) * (2 * .pi)
+                let theta = CGFloat(i) / CGFloat(sides) * twoPi
                 let r = maxR * (0.62 + noise(theta) * 0.1)
                 let p = CGPoint(x: center.x + cos(theta) * r, y: center.y + sin(theta) * r)
                 if i == 0 { ringPath.move(to: p) } else { ringPath.addLine(to: p) }
@@ -306,15 +318,18 @@ enum ProceduralTextures {
 
             // Streaks radiating outward — energy leaking from the wound.
             for _ in 0..<14 {
-                let theta = CGFloat.random(in: 0...(2 * CGFloat.pi), using: &seed)
+                let theta = CGFloat.random(in: 0...twoPi, using: &seed)
                 let innerR = maxR * CGFloat.random(in: 0.15...0.3, using: &seed)
                 let outerR = maxR * CGFloat.random(in: 0.55...0.95, using: &seed)
                 let p0 = CGPoint(x: center.x + cos(theta) * innerR, y: center.y + sin(theta) * innerR)
                 let p1 = CGPoint(x: center.x + cos(theta) * outerR, y: center.y + sin(theta) * outerR)
                 let hot = Bool.random(using: &seed)
-                let tint = hot
-                    ? UIColor(red: 0.8, green: 0.98, blue: 1.0, alpha: 0.35)
-                    : UIColor(red: 0.7, green: 0.5, blue: 1.0, alpha: 0.28)
+                let tint: UIColor
+                if hot {
+                    tint = UIColor(red: 0.8, green: 0.98, blue: 1.0, alpha: 0.35)
+                } else {
+                    tint = UIColor(red: 0.7, green: 0.5, blue: 1.0, alpha: 0.28)
+                }
                 ctx.setStrokeColor(tint.cgColor)
                 ctx.setLineWidth(CGFloat.random(in: 1...3, using: &seed))
                 ctx.move(to: p0)
