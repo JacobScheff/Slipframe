@@ -1,6 +1,6 @@
 //
 //  TutorialDirector.swift
-//  Endless Runner
+//  Slipframe
 //
 //  Advances tutorial sections from song timestamps (wall-clock, started with the track).
 //

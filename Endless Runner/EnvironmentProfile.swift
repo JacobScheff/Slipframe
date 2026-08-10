@@ -1,6 +1,6 @@
 //
 //  EnvironmentProfile.swift
-//  Endless Runner
+//  Slipframe
 //
 //  Biome roster, palettes, and twist parameters. Materials / custom assets
 //  should read tints from these profiles so art can be swapped in later.
@@ -30,7 +30,7 @@ enum EnvironmentID: String, CaseIterable, Identifiable, Codable {
         }
     }
 
-    /// Filename stem for the biome track in `Endless Runner/Music/`
+    /// Filename stem for the biome track in `Music/`
     /// (e.g. `emberRun.m4a`). See Music/README.md.
     var musicCue: String { rawValue }
 }

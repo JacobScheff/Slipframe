@@ -1,6 +1,6 @@
 //
 //  PlayHUDView.swift
-//  Endless Runner
+//  Slipframe
 //
 //  World-anchored play / score panel fixed above the track.
 //

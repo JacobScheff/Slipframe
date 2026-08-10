@@ -41,6 +41,8 @@
 		B01A10432C72000100A00043 /* TutorialDirector.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A10422C72000100A00042 /* TutorialDirector.swift */; };
 		B01A10452C72000100A00045 /* LazyLock.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A10442C72000100A00044 /* LazyLock.swift */; };
 		B01A10472C72000100A00047 /* TutorialOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A10462C72000100A00046 /* TutorialOverlayView.swift */; };
+		B01A10512C72000100A00051 /* SlipframeLinks.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A10502C72000100A00050 /* SlipframeLinks.swift */; };
+		B01A10532C72000100A00053 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = B01A10522C72000100A00052 /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -54,7 +56,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		3A9B45212C503B710080BBBE /* Endless Runner.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Endless Runner.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		3A9B45212C503B710080BBBE /* Slipframe.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Slipframe.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		3A9B45252C503B710080BBBE /* RealityKitContent */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = RealityKitContent; sourceTree = "<group>"; };
 		3A9B45282C503B710080BBBE /* Endless_RunnerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Endless_RunnerApp.swift; sourceTree = "<group>"; };
 		3A9B452A2C503B710080BBBE /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -92,6 +94,8 @@
 		B01A10422C72000100A00042 /* TutorialDirector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TutorialDirector.swift; sourceTree = "<group>"; };
 		B01A10442C72000100A00044 /* LazyLock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LazyLock.swift; sourceTree = "<group>"; };
 		B01A10462C72000100A00046 /* TutorialOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TutorialOverlayView.swift; sourceTree = "<group>"; };
+		B01A10502C72000100A00050 /* SlipframeLinks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlipframeLinks.swift; sourceTree = "<group>"; };
+		B01A10522C72000100A00052 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -129,7 +133,7 @@
 		3A9B45222C503B710080BBBE /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				3A9B45212C503B710080BBBE /* Endless Runner.app */,
+				3A9B45212C503B710080BBBE /* Slipframe.app */,
 				3A9B45382C503B7D0080BBBE /* Endless RunnerTests.xctest */,
 			);
 			name = Products;
@@ -165,9 +169,11 @@
 				B01A10332C72000100A00033 /* GameCenterAuthWindow.swift */,
 				B01A10062C72000100A00007 /* PlayHUDView.swift */,
 				B01A10082C72000100A00009 /* GameSFX.swift */,
+				B01A10502C72000100A00050 /* SlipframeLinks.swift */,
 				B01A10202C72000100A00020 /* Music */,
 				3A9B452E2C503B7D0080BBBE /* Assets.xcassets */,
 				3A9B45332C503B7D0080BBBE /* Info.plist */,
+				B01A10522C72000100A00052 /* PrivacyInfo.xcprivacy */,
 				B01A10322C72000100A00032 /* Endless_Runner.entitlements */,
 				3A9B45302C503B7D0080BBBE /* Preview Content */,
 			);
@@ -226,8 +232,8 @@
 			packageProductDependencies = (
 				3A9B45262C503B710080BBBE /* RealityKitContent */,
 			);
-			productName = "Endless Runner";
-			productReference = 3A9B45212C503B710080BBBE /* Endless Runner.app */;
+			productName = Slipframe;
+			productReference = 3A9B45212C503B710080BBBE /* Slipframe.app */;
 			productType = "com.apple.product-type.application";
 		};
 		3A9B45372C503B7D0080BBBE /* Endless RunnerTests */ = {
@@ -293,6 +299,7 @@
 			files = (
 				3A9B45322C503B7D0080BBBE /* Preview Assets.xcassets in Resources */,
 				3A9B452F2C503B7D0080BBBE /* Assets.xcassets in Resources */,
+				B01A10532C72000100A00053 /* PrivacyInfo.xcprivacy in Resources */,
 				B01A10212C72000100A00021 /* Music in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -337,6 +344,7 @@
 				B01A10342C72000100A00034 /* GameCenterAuthWindow.swift in Sources */,
 				B01A10072C72000100A00008 /* PlayHUDView.swift in Sources */,
 				B01A10092C72000100A0000A /* GameSFX.swift in Sources */,
+				B01A10512C72000100A00051 /* SlipframeLinks.swift in Sources */,
 				3A9B45292C503B710080BBBE /* Endless_RunnerApp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -492,15 +500,17 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "$(TARGET_NAME)/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = Slipframe;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.games";
 				INFOPLIST_KEY_NSHandsTrackingUsageDescription = "Tracks your hands so you can grab coins and dodge obstacles.";
-				INFOPLIST_KEY_NSWorldSensingUsageDescription = "Detects the floor and walls to place the track and portal.";
+				INFOPLIST_KEY_NSWorldSensingUsageDescription = "Detects the floor and walls to place the track and portal in your space.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "Jacob-Scheff.Slipframe";
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = Slipframe;
 				SUPPORTED_PLATFORMS = "xros xrsimulator";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -521,15 +531,17 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "$(TARGET_NAME)/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = Slipframe;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.games";
 				INFOPLIST_KEY_NSHandsTrackingUsageDescription = "Tracks your hands so you can grab coins and dodge obstacles.";
-				INFOPLIST_KEY_NSWorldSensingUsageDescription = "Detects the floor and walls to place the track and portal.";
+				INFOPLIST_KEY_NSWorldSensingUsageDescription = "Detects the floor and walls to place the track and portal in your space.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "Jacob-Scheff.Slipframe";
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = Slipframe;
 				SUPPORTED_PLATFORMS = "xros xrsimulator";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -553,7 +565,7 @@
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2,7";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Endless Runner.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Endless Runner";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Slipframe.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Slipframe";
 				XROS_DEPLOYMENT_TARGET = 2.0;
 			};
 			name = Debug;
@@ -574,7 +586,7 @@
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2,7";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Endless Runner.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Endless Runner";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Slipframe.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Slipframe";
 				XROS_DEPLOYMENT_TARGET = 2.0;
 			};
 			name = Release;

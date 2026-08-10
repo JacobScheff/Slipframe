@@ -1,6 +1,6 @@
 //
 //  ContentView.swift
-//  Endless Runner
+//  Slipframe
 //
 //  Unused launcher — the app opens ImmersiveSpace directly.
 //  Kept for SwiftUI previews only.

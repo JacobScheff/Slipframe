@@ -1,6 +1,6 @@
 //
 //  Endless_RunnerApp.swift
-//  Endless Runner
+//  Slipframe
 //
 //  Created by Jacob Scheff on 7/23/24.
 //

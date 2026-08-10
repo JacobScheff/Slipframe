@@ -1,6 +1,6 @@
 //
 //  PersonalBestStore.swift
-//  Endless Runner
+//  Slipframe
 //
 //  Local personal bests per leaderboard category (Normal, each Loop biome, Daily).
 //  Game Center submission / remote loads live in GameCenterService.

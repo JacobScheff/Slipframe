@@ -1,6 +1,6 @@
 //
 //  GameCenterService.swift
-//  Endless Runner
+//  Slipframe
 //
 //  Game Center auth, score submission, and leaderboard loads.
 //

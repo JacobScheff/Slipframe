@@ -1,8 +1,8 @@
 //
 //  GameSFX.swift
-//  Endless Runner
+//  Slipframe
 //
-//  Temporary placeholder tones until real audio assets are added.
+//  Lightweight synthesized SFX for collect, hit, and wind telegraph cues.
 //
 
 import AVFoundation
@@ -77,7 +77,7 @@ final class GameSFX {
         player.play()
     }
 
-    /// Storm Pass wind-shove telegraph (placeholder until real gust SFX lands).
+    /// Storm Pass wind-shove telegraph.
     func playWindWhoosh() {
         prepareSessionIfNeeded()
         guard let player = windPlayer else { return }

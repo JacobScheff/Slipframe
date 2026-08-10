@@ -1,6 +1,6 @@
 //
 //  CrystalCombine.swift
-//  Endless Runner
+//  Slipframe
 //
 //  Pure Crystal Cave half-crystal rules (grab/merge coin awards).
 //

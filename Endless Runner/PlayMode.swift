@@ -1,6 +1,6 @@
 //
 //  PlayMode.swift
-//  Endless Runner
+//  Slipframe
 //
 //  Player-facing run configuration: Normal, Playlist, Loop, Daily, Tutorial.
 //

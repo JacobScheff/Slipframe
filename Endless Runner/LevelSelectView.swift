@@ -1,6 +1,6 @@
 //
 //  LevelSelectView.swift
-//  Endless Runner
+//  Slipframe
 //
 //  World-anchored mode / level picker at the left track edge.
 //
@@ -33,6 +33,8 @@ struct LevelSelectView: View {
             if gameModel.hasCompletedTutorial {
                 replayTutorialFooter
             }
+
+            privacyFooter
         }
         .padding(.horizontal, 28)
         .padding(.vertical, 24)
@@ -49,9 +51,25 @@ struct LevelSelectView: View {
     }
 
     private var header: some View {
-        Text("Mode Selection")
-            .font(.system(size: 28, weight: .semibold, design: .rounded))
-            .foregroundStyle(.primary)
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Slipframe")
+                .font(.system(size: 32, weight: .bold, design: .rounded))
+                .foregroundStyle(neon)
+            Text("Mode Selection")
+                .font(.system(size: 17, weight: .semibold, design: .rounded))
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var privacyFooter: some View {
+        Link(destination: SlipframeLinks.privacyPolicy) {
+            Text("Privacy Policy")
+                .font(.system(size: 12, weight: .medium, design: .rounded))
+                .foregroundStyle(.secondary)
+                .underline()
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Privacy Policy")
     }
 
     private var playTutorialButton: some View {

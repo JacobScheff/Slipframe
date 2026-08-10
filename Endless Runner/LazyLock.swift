@@ -1,6 +1,6 @@
 //
 //  LazyLock.swift
-//  Endless Runner
+//  Slipframe
 //
 //  Head-relative pose that stays put for small motion, then eases to a new seat.
 //

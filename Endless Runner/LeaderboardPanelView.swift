@@ -1,6 +1,6 @@
 //
 //  LeaderboardPanelView.swift
-//  Endless Runner
+//  Slipframe
 //
 //  Right-track leaderboard: local personal bests always, plus Game Center
 //  All Players / Friends when signed in.
