@@ -53,7 +53,7 @@ gameplay fairness.
 | Portal aperture | `GameWorld.buildPortal` | The `PortalComponent` plane itself is a jagged `filledPolygon`, not a rounded rect — same seed as the rim's hot inner edge so they stay concentric. |
 | Obstacles (per biome) | `GameVisualsObstacles.makeBiomeObstacle` | Dispatches per `EnvironmentID`: Ember Run (magma obelisk cluster), Summit Step (rock outcrop), Storm Pass (levitating debris + sparks), Low Crawl (rib lattice fence), Crystal Cave (geode spire cluster), Ghost Glass (jagged shatter pane). |
 | Duck / jump hazards | `makeDuckTendrilCurtain` / `makeSummitSpikeRidge` | Bespoke silhouettes instead of a shared bar. |
-| Coin | `GameVisualBuilders.makeCoin` | Disc + core + aura + orbiting spark. |
+| Data Token | `GameVisualBuilders.makeCoin` | Glowing octahedron / diamond + neon facet wireframe + pulsing core + aura. |
 | Crystal halves | `ProceduralGeometry.crystalHalf` | Faceted half-gem (spawn, held, and merge burst all share this mesh). |
 | Track | `GameVisualBuilders.makeTrack` | Etched-plating floor, neon lane guides, segmented alien conduit rails (`makeConduitRail`). |
 | Start pad | `GameVisualBuilders.makeStartMarker` | Jagged calibration sigil instead of a rounded rect. |

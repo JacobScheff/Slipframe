@@ -79,7 +79,7 @@ struct TutorialOverlayView: View {
 #Preview {
     let model = GameModel()
     model.tutorialOverlayTitle = "The Basics"
-    model.tutorialOverlayBody = "Side-step the red walls. Reach for gold coins with your hands."
+    model.tutorialOverlayBody = "Side-step the red walls. Reach for glowing Data Tokens with your hands."
     model.tutorialOverlayOpacity = 1
     return TutorialOverlayView()
         .environmentObject(model)
