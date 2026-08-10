@@ -1,195 +1,113 @@
-# Custom Asset Spec — Slipframe
+# Visual Asset Pipeline — Slipframe
 
-Authored USDZ/texture targets for Slipframe. Keep the listed dimensions, pivot, and readability rules so gameplay stays fair in mixed reality.
+Slipframe ships **zero authored art assets** (no USDZ, no PNG). Every mesh,
+material, and surface texture is generated procedurally at runtime in Swift.
+This keeps the "Xenotech Rift" look — irregular, hand-torn geometry and
+etched alien plating — perfectly consistent across every biome and lets any
+palette/shape tweak land in code instead of a re-export pipeline.
 
-Art direction: **Synth Riders–adjacent neon corridor** — deep ink floors, cyan guide light, molten-gold collectibles, translucent hazard red. Avoid purple-gradient UI tropes.
-
----
-
-## 1. Hazard Wall (`WallHazard.usdz`)
-
-**Role:** Lane-blocking obstacle the player dodges with head/hands.
-
-**Detailed look:**
-- A thick rectangular energy barrier, ~0.70 m wide × 1.80 m tall × 0.70 m deep.
-- Body is a semi-transparent crimson plasma slab (opacity ~0.4–0.5) with faint internal turbulence — soft vertical streaks and heat-haze distortion, not opaque plastic.
-- Front face has a bright coral/peach emissive frame (~2–3 cm) on all four edges so the silhouette reads against passthrough at 6–8 m.
-- Three thin vertical energy veins on the front face, pulsing slowly.
-- Corner orbs (small glowing pips) at each front corner for craft detail.
-- Optional subtle danger chevron watermark inside the slab (desaturated red, low contrast) — readable up close, not noisy at distance.
-- Soft outer volumetric glow / aura slightly larger than the collision volume (visual only).
-
-**Technical:**
-- Pivot at geometric center.
-- Collision should still match current kill-box sizing (code uses width/height/thickness constants).
-- Prefer a single root with named children: `Body`, `Frame`, `Glow`.
-- Material: translucent PBR + emissive; avoid heavy refraction (MR readability).
-
-**Replace in code:** `GameVisualBuilders.makeWallSlab`.
+Art direction: **Xenotech Rift** — the portal is a literal tear in reality,
+its edges jagged and shard-fringed with energy tendrils leaking into the
+room. Obstacles read as alien-machined debris (a different silhouette
+language per biome), crystals are faceted cut gems, and the HUD reads as
+synthetic instrumentation (glass panels, gradient hairlines, corner-bracket
+reticles) rather than a stock rounded card.
 
 ---
 
-## 2. Collectible Coin (`CoinGold.usdz`)
+## 1. Geometry toolkit — `ProceduralGeometry.swift`
 
-**Role:** Hand-collected score pickup.
+Shared deterministic mesh-building primitives used by every visual builder:
 
-**Detailed look:**
-- Classic arcade coin disc, radius ~7 cm, thickness ~2 cm.
-- Polished molten gold metal with a warm specular highlight streak.
-- Embossed face: concentric rings + a simple centered star or runner glyph (keep silhouette clear at arm’s length).
-- Soft yellow emissive core visible through a subtle rim light so coins “pop” in bright rooms.
-- Optional tiny orbiting sparkle particle (can stay code-driven).
-- Idle motion (code): gentle Y bob + Y-axis spin.
+- `RadialNoise` — cheap seeded angular noise (summed sine harmonics) used to
+  perturb outlines so nothing reads as a perfect circle/rectangle.
+- `jaggedOutline` — a closed irregular polygon (radius-per-angle around the
+  origin) — the "torn reality" silhouette reused by the portal rift, shatter
+  panes, and obstacle clusters.
+- `filledPolygon` — flat fan-triangulated mesh from a 2D outline (portal
+  aperture, rim layers, rings).
+- `extrudedPolygon` — flat-shaded prism extruded from a 2D outline along Z
+  (obstacle chunks, rail vertebrae, shatter pane bodies).
+- `edgeShard` — a single thin outward-tapering shard between two boundary
+  points (the rift's torn-edge debris fringe).
+- `bipyramid` / `crystalHalf` — faceted full/half gem meshes (Crystal Cave
+  spires and the hand-held collectible crystal halves).
 
-**Technical:**
-- Pivot at center.
-- Face should be visible when the disc’s flat side faces the player (±Z).
-- Keep collect radius feel (~24 cm hand proximity in code).
+All builders are seeded (`SeededGenerator`, shared with `DailyChallenge`) so
+a given spawn looks identical on replay while still reading as hand-cut
+rather than stamped out.
 
-**Replace in code:** `GameVisualBuilders.makeCoin`.
-
----
-
-## 3. Track Floor Module (`TrackFloor.usdz` or tiled trim sheet)
-
-**Role:** Fixed play corridor from stand line to portal.
-
-**Detailed look:**
-- Dark ink / charcoal metal plating with a faint cyan grid etched into the surface.
-- Three lane grooves or inlays under the left/center/right paths, each with a soft neon core and wider dim under-glow.
-- Side rails: dark brushed metal bars with a thin cyan LED strip on top.
-- Occasional distance tick marks or rivet rows for parallax while obstacles approach.
-- Slight edge bevel so the slab feels physical on the real floor, not a paper decal.
-
-**Technical:**
-- Authored for arbitrary length (tilable in Z) or one stretch mesh scaled in code.
-- Width ~3.2 m; Y ≈ 0 at the walking surface.
-- Avoid high-frequency normal maps that shimmer under head motion.
-
-**Replace in code:** `GameVisualBuilders.makeTrack`.
-
-**Catalog texture already shipping:** `TrackFloor`, `LaneStripe`.
+**Collision stays decoupled:** every obstacle's hit-test is a plain AABB
+(`WallCollision.swift`) sized independently from its jagged visual mesh, so
+shapes can be as irregular as the art direction wants without ever touching
+gameplay fairness.
 
 ---
 
-## 4. Portal Aperture Frame (`PortalFrame.usdz`)
+## 2. Mesh builders — `GameVisuals.swift` / `GameVisualsObstacles.swift`
 
-**Role:** Always-visible Synth Riders–style window at track end; obstacles emerge from it.
-
-**Detailed look:**
-- Rounded rectangular aperture ~3.6 m × 2.5 m, corner radius ~0.85 m.
-- Layered neon rim: outer soft cyan bloom, mid saturated cyan band, inner near-white hot edge.
-- Four corner spark nodes that feel machined, not pasted sprites.
-- Subtle breathing pulse (scale or emissive intensity) — code already pulses the rim root.
-- The portal *plane* itself stays a RealityKit `PortalMaterial` mesh; art is the surrounding frame only.
-
-**Technical:**
-- Pivot at aperture center.
-- Frame should leave the inner rounded rect fully open (no mesh covering the portal plane).
-- Keep GPU cost modest — bloom via emissive meshes, not giant transparent cards.
-
-**Replace in code:** `GameVisualBuilders.makePortalRim`.
-
-**Catalog texture already shipping:** `PortalGlow`.
+| System | Builder | Notes |
+|---|---|---|
+| Portal rift | `GameVisualBuilders.makePortalRim` | Layered jagged bloom/mid/hot rim bands, torn-edge shard fringe, crackling energy tendrils arcing into the room. |
+| Portal tunnel | `GameVisualBuilders.makePortalInterior` | 26 m deep void with receding jagged rift echoes, alien monolith silhouettes, and ambient drifting motes (`RiftMoteComponent`, animated in `GameWorld.animateRiftMotes`). |
+| Portal aperture | `GameWorld.buildPortal` | The `PortalComponent` plane itself is a jagged `filledPolygon`, not a rounded rect — same seed as the rim's hot inner edge so they stay concentric. |
+| Obstacles (per biome) | `GameVisualsObstacles.makeBiomeObstacle` | Dispatches per `EnvironmentID`: Ember Run (magma obelisk cluster), Summit Step (rock outcrop), Storm Pass (levitating debris + sparks), Low Crawl (rib lattice fence), Crystal Cave (geode spire cluster), Ghost Glass (jagged shatter pane). |
+| Duck / jump hazards | `makeDuckTendrilCurtain` / `makeSummitSpikeRidge` | Bespoke silhouettes instead of a shared bar. |
+| Data Token | `GameVisualBuilders.makeCoin` | Glowing octahedron / diamond + neon facet wireframe + pulsing core + aura. |
+| Crystal halves | `ProceduralGeometry.crystalHalf` | Faceted half-gem (spawn, held, and merge burst all share this mesh). |
+| Track | `GameVisualBuilders.makeTrack` | Etched-plating floor, neon lane guides, segmented alien conduit rails (`makeConduitRail`). |
+| Start pad | `GameVisualBuilders.makeStartMarker` | Jagged calibration sigil instead of a rounded rect. |
 
 ---
 
-## 5. Portal Tunnel Interior (`PortalTunnel.usdz`)
+## 3. Surface textures — `ProceduralTextures.swift`
 
-**Role:** World seen *through* the portal (`WorldComponent` target).
+Every texture the materials use is drawn at launch with Core Graphics
+(`CGContext` + `CGPath`/`CGGradient`) and wrapped in a `TextureResource` —
+no imagesets, no shipped PNGs:
 
-**Detailed look:**
-- Closed dark tunnel box so passthrough does not leak through the aperture.
-- Receding neon rings / ribs that shrink with depth.
-- Floor chevrons pointing toward the player (content streaming outward).
-- Cyan floor rails and a distant hot glow / vanishing-point light.
-- Mood: cool void, slight fog falloff, no busy props that distract from emerging walls/coins.
+| Texture | Used by | Look |
+|---|---|---|
+| `trackFloor()` | `GameMaterials.trackFloor` | Etched xenotech hull plating — jittered panel grid, glowing seams, rivet glints, grain. |
+| `coinFace()` | `GameMaterials.coinMetal` | Embossed alien rune disc — concentric grooves, rim tick marks, hexagonal sigil + spokes. |
+| `portalGlow()` | `GameMaterials.portalRimBloom` | Alien corona bloom — cyan-to-violet radial falloff, jagged energy ring, outward streaks. |
+| `laneStripe()` | `GameMaterials.laneCore` | Energized conduit — bright core gradient + segmented circuit-tick bands. |
+| `startPad()` | `GameMaterials.startPad` | Warm calibration glow glyph with etched circuit arcs. |
 
-**Technical:**
-- Built in portal-local space; depth ~10–12 m behind the aperture.
-- Unlit / emissive friendly — portal interiors are often dim.
-
-**Replace in code:** `GameVisualBuilders.makePortalInterior`.
-
----
-
-## 6. Start Stand Zone (`StartPad.usdz`)
-
-**Role:** Shows where to stand before pressing Start.
-
-**Detailed look:**
-- Soft warm cream/amber glowing pad on the floor (~2.4–2.6 m wide).
-- Crisp stand line across the pad.
-- Center tick marking the midline.
-- Two or three forward-pointing chevrons toward the portal (−Z) so orientation is obvious at a glance.
-- Keep it quiet — readable, not a UI billboard.
-
-**Technical:**
-- Pivot on floor at stand line (z = 0).
-- Very low height; must not trip visual “collision” with feet passthrough.
-
-**Replace in code:** `GameVisualBuilders.makeStartMarker`.
-
-**Catalog texture already shipping:** `StartPad`.
+`GameMaterials.warmTextures()` generates each texture once and caches the
+result; biome retinting (`GameWorld.applyPalette`) recolors the *tint*
+passed into `trackFloor(tint:)` / `laneCore(tint:)` rather than discarding
+the texture for a flat fill.
 
 ---
 
-## 7. VFX: Coin Collect Burst
+## 4. HUD chrome — `XenotechPanel.swift`
 
-**Role:** Feedback when a hand grabs a coin.
+Every world-anchored SwiftUI panel (`PlayHUDView`, `LevelSelectView`,
+`LeaderboardPanelView`, `TutorialOverlayView`) shares one modifier,
+`.xenotechPanel(primary:secondary:cornerRadius:)`:
 
-**Detailed look:**
-- 8–12 small gold/cyan sparks exploding outward with short gravity falloff (~0.3 s).
-- Optional soft radial flash (gold, additive) lasting 1–2 frames.
-
-**Replace in code:** `GameVisualBuilders.makeCollectBurst` / `VisualFXController`.
-
----
-
-## 8. VFX: Wall Hit Flash
-
-**Role:** Pain feedback on head/hand wall contact.
-
-**Detailed look:**
-- Brief crimson wash plane near the hit (~0.25 s), slight scale-up.
-- Optional shatter shards of the wall frame flying outward (future).
-
-**Replace in code:** `GameVisualBuilders.makeHitFlash`.
+- Tinted glass fill + `glassBackgroundEffect(in:)` on a `RoundedRectangle`
+  (the only shapes visionOS renders with proper specular glass edges).
+- A gradient hairline border blending the panel's two accent colors.
+- `XenotechCornerBrackets` — four L-shaped reticle marks just inside the
+  bounds, the shared "alien instrumentation" framing motif tying every
+  panel back to the game's identity.
 
 ---
 
-## 9. HUD / Brand chrome (2D)
+## 5. Adding a new biome obstacle
 
-**Role:** World-anchored play panel.
+1. Add a case to `EnvironmentID` / `EnvironmentCatalog` as usual.
+2. Add a builder function to `GameVisualsObstacles.swift` (or reuse
+   `makeJaggedShardCluster` with new parameters) returning an `Entity`
+   named `"wallSlab"`.
+3. Wire it into `GameVisualBuilders.makeBiomeObstacle`'s switch.
+4. Leave `WallCollision.swift` untouched — the AABB is sized from the
+   `width`/`height`/`depth` constants only, not the mesh.
 
-**Detailed look:**
-- Frosted glass panel with cyan→gold hairline gradient stroke.
-- Rounded display type; score/coins in accent chips (cyan / gold).
-- Start button tinted cyan; Restart tinted hazard red after a hit.
+## 6. Regenerating a texture
 
-Already implemented in `PlayHUDView`. Optional future: custom SF Symbol replacements or a small wordmark SVG for “Slipframe”.
-
----
-
-## 10. App Icon layers (visionOS solid image stack)
-
-**Back:** Dark ink rounded field with faint cyan grid.
-**Middle:** Neon rounded portal aperture facing camera, soft bloom.
-**Front:** Gold coin disc slightly offset + thin red hazard slab silhouette for game identity.
-
----
-
-## Delivery checklist for artists
-
-| Asset | Format | Scale | Pivot | Notes |
-|-------|--------|-------|-------|-------|
-| WallHazard | USDZ | meters | center | Translucent + emissive frame |
-| CoinGold | USDZ | meters | center | Disc faces ±Z |
-| TrackFloor | USDZ / trim | meters | floor Y=0 | Tilable in Z |
-| PortalFrame | USDZ | meters | aperture center | Hollow center |
-| PortalTunnel | USDZ | meters | aperture center | Behind −Z |
-| StartPad | USDZ | meters | stand line | Flat on floor |
-| CollectBurst | USDZ or particles | — | — | Short-lived |
-| HitFlash | material / mesh | — | — | Additive red |
-
-When dropping in USDZ files, load via `Entity(named:in:realityKitContentBundle)` (or app bundle) and swap the corresponding `GameVisualBuilders` factory while keeping gameplay transforms/collision constants unchanged.
+Edit the matching function in `ProceduralTextures.swift` — every draw call
+is deterministic Core Graphics, so tweaking a gradient stop or line width is
+a normal code change with no export/re-import step.

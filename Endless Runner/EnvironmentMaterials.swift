@@ -14,6 +14,22 @@ enum EnvironmentMaterials {
         UIColor(red: CGFloat(tint.r), green: CGFloat(tint.g), blue: CGFloat(tint.b), alpha: CGFloat(tint.a))
     }
 
+    /// Linear component-wise blend between two colors — used to give procedural
+    /// rift/obstacle debris a per-instance gradient without a texture lookup.
+    static func lerpColor(_ a: UIColor, _ b: UIColor, _ t: Float) -> UIColor {
+        var ar: CGFloat = 0, ag: CGFloat = 0, ab: CGFloat = 0, aa: CGFloat = 0
+        var br: CGFloat = 0, bg: CGFloat = 0, bb: CGFloat = 0, ba: CGFloat = 0
+        a.getRed(&ar, green: &ag, blue: &ab, alpha: &aa)
+        b.getRed(&br, green: &bg, blue: &bb, alpha: &ba)
+        let u = CGFloat(max(0, min(1, t)))
+        return UIColor(
+            red: ar + (br - ar) * u,
+            green: ag + (bg - ag) * u,
+            blue: ab + (bb - ab) * u,
+            alpha: aa + (ba - aa) * u
+        )
+    }
+
     static func unlit(_ tint: TintColor) -> UnlitMaterial {
         UnlitMaterial(color: uiColor(tint))
     }
@@ -45,7 +61,8 @@ enum EnvironmentMaterials {
     }
 
     /// Near-invisible glass for Ghost Glass — as transparent as the material allows.
-    /// Back-face culling avoids front+back alpha stacking on thick slabs.
+    /// Opacity is low enough that front+back alpha stacking on the jagged
+    /// shatter-pane mesh reads no differently than a single face would.
     static func ghostWallBody(opacity: Float) -> PhysicallyBasedMaterial {
         var material = PhysicallyBasedMaterial()
         let clampedOpacity = max(0.001, min(0.02, opacity))
@@ -57,7 +74,7 @@ enum EnvironmentMaterials {
         material.emissiveColor = .init(color: uiColor(TintColor(r: 1, g: 1, b: 1, a: 1)))
         material.emissiveIntensity = 0
         material.blending = .transparent(opacity: .init(floatLiteral: clampedOpacity))
-        material.faceCulling = .back
+        material.faceCulling = .none
         return material
     }
 
@@ -69,10 +86,31 @@ enum EnvironmentMaterials {
         let tint = CrystalCombine.tint(for: type, charged: charged)
         var material = PhysicallyBasedMaterial()
         material.baseColor = .init(tint: uiColor(tint))
-        material.roughness = .init(floatLiteral: charged ? 0.15 : 0.35)
-        material.metallic = .init(floatLiteral: 0.2)
+        material.roughness = .init(floatLiteral: charged ? 0.1 : 0.28)
+        material.metallic = .init(floatLiteral: 0.15)
         material.emissiveColor = .init(color: uiColor(tint))
         material.emissiveIntensity = charged ? 1.1 : 0.55
+        // Faceted glassy sheen so the new gem silhouette reads as a cut crystal, not plastic.
+        material.clearcoat = .init(floatLiteral: charged ? 1.0 : 0.7)
+        material.clearcoatRoughness = .init(floatLiteral: 0.08)
+        material.faceCulling = .none
+        return material
+    }
+
+    /// Full-gem crystal spire material for Crystal Cave's lane-blocking formations —
+    /// same family as `crystalHalf`, dimmer/cooler so it reads as scenery, not a pickup.
+    static func crystalSpire(tint: TintColor, opacity: Float) -> PhysicallyBasedMaterial {
+        var material = PhysicallyBasedMaterial()
+        let body = TintColor(r: tint.r, g: tint.g, b: tint.b, a: max(0.35, min(1, opacity)))
+        material.baseColor = .init(tint: uiColor(body))
+        material.roughness = .init(floatLiteral: 0.18)
+        material.metallic = .init(floatLiteral: 0.1)
+        material.emissiveColor = .init(color: uiColor(tint))
+        material.emissiveIntensity = 0.5
+        material.clearcoat = .init(floatLiteral: 0.85)
+        material.clearcoatRoughness = .init(floatLiteral: 0.1)
+        material.blending = .transparent(opacity: .init(floatLiteral: max(0.35, min(1, opacity))))
+        material.faceCulling = .none
         return material
     }
 }

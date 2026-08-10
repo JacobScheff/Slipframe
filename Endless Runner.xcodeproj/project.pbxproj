@@ -21,6 +21,10 @@
 		B01A10092C72000100A0000A /* GameSFX.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A10082C72000100A00009 /* GameSFX.swift */; };
 		B01A100B2C72000100A0000C /* WallCollision.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A100A2C72000100A0000B /* WallCollision.swift */; };
 		B01A100D2C72000100A0000E /* GameVisuals.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A100C2C72000100A0000D /* GameVisuals.swift */; };
+		B01A20012C72000100A00102 /* ProceduralGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A20002C72000100A00101 /* ProceduralGeometry.swift */; };
+		B01A20032C72000100A00104 /* GameVisualsObstacles.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A20022C72000100A00103 /* GameVisualsObstacles.swift */; };
+		B01A20052C72000100A00106 /* ProceduralTextures.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A20042C72000100A00105 /* ProceduralTextures.swift */; };
+		B01A20072C72000100A00108 /* XenotechPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A20062C72000100A00107 /* XenotechPanel.swift */; };
 		B01A10112C72000100A00011 /* EnvironmentProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A10102C72000100A00010 /* EnvironmentProfile.swift */; };
 		B01A10132C72000100A00013 /* EnvironmentDirector.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A10122C72000100A00012 /* EnvironmentDirector.swift */; };
 		B01A10152C72000100A00015 /* GameMusic.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A10142C72000100A00014 /* GameMusic.swift */; };
@@ -73,6 +77,10 @@
 		B01A10082C72000100A00009 /* GameSFX.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameSFX.swift; sourceTree = "<group>"; };
 		B01A100A2C72000100A0000B /* WallCollision.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WallCollision.swift; sourceTree = "<group>"; };
 		B01A100C2C72000100A0000D /* GameVisuals.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameVisuals.swift; sourceTree = "<group>"; };
+		B01A20002C72000100A00101 /* ProceduralGeometry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProceduralGeometry.swift; sourceTree = "<group>"; };
+		B01A20022C72000100A00103 /* GameVisualsObstacles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameVisualsObstacles.swift; sourceTree = "<group>"; };
+		B01A20042C72000100A00105 /* ProceduralTextures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProceduralTextures.swift; sourceTree = "<group>"; };
+		B01A20062C72000100A00107 /* XenotechPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XenotechPanel.swift; sourceTree = "<group>"; };
 		B01A10102C72000100A00010 /* EnvironmentProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentProfile.swift; sourceTree = "<group>"; };
 		B01A10122C72000100A00012 /* EnvironmentDirector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentDirector.swift; sourceTree = "<group>"; };
 		B01A10142C72000100A00014 /* GameMusic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameMusic.swift; sourceTree = "<group>"; };
@@ -148,6 +156,9 @@
 				B01A10022C72000100A00003 /* GameModel.swift */,
 				B01A10042C72000100A00005 /* GameWorld.swift */,
 				B01A100C2C72000100A0000D /* GameVisuals.swift */,
+				B01A20002C72000100A00101 /* ProceduralGeometry.swift */,
+				B01A20022C72000100A00103 /* GameVisualsObstacles.swift */,
+				B01A20042C72000100A00105 /* ProceduralTextures.swift */,
 				B01A100A2C72000100A0000B /* WallCollision.swift */,
 				B01A10102C72000100A00010 /* EnvironmentProfile.swift */,
 				B01A10122C72000100A00012 /* EnvironmentDirector.swift */,
@@ -168,6 +179,7 @@
 				B01A102E2C72000100A0002E /* GameCenterService.swift */,
 				B01A10332C72000100A00033 /* GameCenterAuthWindow.swift */,
 				B01A10062C72000100A00007 /* PlayHUDView.swift */,
+				B01A20062C72000100A00107 /* XenotechPanel.swift */,
 				B01A10082C72000100A00009 /* GameSFX.swift */,
 				B01A10502C72000100A00050 /* SlipframeLinks.swift */,
 				B01A10202C72000100A00020 /* Music */,
@@ -323,6 +335,9 @@
 				B01A10032C72000100A00004 /* GameModel.swift in Sources */,
 				B01A10052C72000100A00006 /* GameWorld.swift in Sources */,
 				B01A100D2C72000100A0000E /* GameVisuals.swift in Sources */,
+				B01A20012C72000100A00102 /* ProceduralGeometry.swift in Sources */,
+				B01A20032C72000100A00104 /* GameVisualsObstacles.swift in Sources */,
+				B01A20052C72000100A00106 /* ProceduralTextures.swift in Sources */,
 				B01A100B2C72000100A0000C /* WallCollision.swift in Sources */,
 				B01A10112C72000100A00011 /* EnvironmentProfile.swift in Sources */,
 				B01A10132C72000100A00013 /* EnvironmentDirector.swift in Sources */,
@@ -343,6 +358,7 @@
 				B01A102F2C72000100A0002F /* GameCenterService.swift in Sources */,
 				B01A10342C72000100A00034 /* GameCenterAuthWindow.swift in Sources */,
 				B01A10072C72000100A00008 /* PlayHUDView.swift in Sources */,
+				B01A20072C72000100A00108 /* XenotechPanel.swift in Sources */,
 				B01A10092C72000100A0000A /* GameSFX.swift in Sources */,
 				B01A10512C72000100A00051 /* SlipframeLinks.swift in Sources */,
 				3A9B45292C503B710080BBBE /* Endless_RunnerApp.swift in Sources */,

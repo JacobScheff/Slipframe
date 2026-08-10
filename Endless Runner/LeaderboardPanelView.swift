@@ -51,11 +51,7 @@ struct LeaderboardPanelView: View {
         .padding(.horizontal, 28)
         .padding(.vertical, 22)
         .frame(width: 620, alignment: .topLeading)
-        .background {
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .strokeBorder(gold.opacity(0.4), lineWidth: 1.2)
-        }
-        .glassBackgroundEffect()
+        .xenotechPanel(primary: gold, secondary: neon, cornerRadius: 22)
         .onAppear {
             syncBoardToPlayMode()
             reloadRemote()
@@ -99,7 +95,7 @@ struct LeaderboardPanelView: View {
         }
     }
 
-    /// Primary Score / Coins sections — large, visual, spaced away from filters below.
+    /// Primary Score / Tokens sections — large, visual, spaced away from filters below.
     private var metricPicker: some View {
         HStack(spacing: 12) {
             ForEach(LeaderboardMetric.allCases) { option in

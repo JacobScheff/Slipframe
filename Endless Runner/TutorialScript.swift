@@ -54,7 +54,7 @@ enum TutorialCatalog {
             endTime: 26,
             environment: .emberRun,
             title: "The Basics",
-            body: "Side-step the red walls. Reach for gold coins with your hands.",
+            body: "Side-step the red walls. Reach for glowing Data Tokens with your hands.",
             speedMultiplier: 1.0,
             hidesOverlay: false,
             portalOverdrive: false,

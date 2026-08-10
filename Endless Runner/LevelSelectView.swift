@@ -35,11 +35,7 @@ struct LevelSelectView: View {
         .padding(.horizontal, 28)
         .padding(.vertical, 24)
         .frame(width: 420, alignment: .leading)
-        .background {
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .strokeBorder(neon.opacity(0.45), lineWidth: 1.2)
-        }
-        .glassBackgroundEffect()
+        .xenotechPanel(primary: neon, secondary: gold, cornerRadius: 22)
         // System confirmationDialog does not present from RealityKit attachments.
         .onChange(of: gameModel.isPlaying) { _, playing in
             if playing { showReplayConfirm = false }

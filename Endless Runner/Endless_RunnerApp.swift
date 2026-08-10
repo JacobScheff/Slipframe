@@ -5,6 +5,7 @@
 //  Created by Jacob Scheff on 7/23/24.
 //
 
+import RealityKit
 import SwiftUI
 
 @main
@@ -15,6 +16,8 @@ struct Endless_RunnerApp: App {
 
     init() {
         _gameModel = StateObject(wrappedValue: GameModel())
+        // Must happen before any RealityView loads entities that carry it.
+        RiftMoteComponent.registerComponent()
     }
 
     var body: some SwiftUI.Scene {
