@@ -248,9 +248,15 @@ enum GameMaterials {
         UnlitMaterial(color: GamePalette.tunnelAccent)
     }
 
-    /// Opaque neon so depth rings do not alpha-sort / flicker against emerging walls.
-    static func portalRing() -> UnlitMaterial {
-        UnlitMaterial(color: UIColor(red: 0.25, green: 0.85, blue: 1.0, alpha: 1))
+    static func portalRing() -> any RealityKit.Material {
+        var material = PhysicallyBasedMaterial()
+        material.baseColor = .init(tint: UIColor(red: 0.2, green: 0.7, blue: 0.9, alpha: 0.45))
+        material.emissiveColor = .init(color: UIColor(red: 0.25, green: 0.75, blue: 0.95, alpha: 1))
+        material.emissiveIntensity = 0.5
+        material.roughness = .init(floatLiteral: 1.0)
+        material.metallic = .init(floatLiteral: 0.0)
+        material.blending = .transparent(opacity: .init(floatLiteral: 0.45))
+        return material
     }
 
     static func startLine() -> UnlitMaterial {
@@ -585,17 +591,20 @@ enum GameVisualBuilders {
         back.position = SIMD3(0, 0, -tunnelDepth)
         interior.addChild(back)
 
-        // Receding neon frames — open centers so emerging walls do not z-fight
-        // through solid translucent planes on the way out.
+        // Receding neon rings — classic portal depth cue.
         for i in 0..<7 {
             let t = Float(i) / 6.0
             let z = -1.2 - t * (tunnelDepth - 2.4)
             let scale = 1.0 - t * 0.35
-            let ring = makePortalDepthRing(
-                width: tunnelW * 0.72 * scale,
-                height: tunnelH * 0.82 * scale,
-                material: ringMat
+            let ring = ModelEntity(
+                mesh: MeshResource.generatePlane(
+                    width: tunnelW * 0.72 * scale,
+                    height: tunnelH * 0.82 * scale,
+                    cornerRadius: 0.55 * scale
+                ),
+                materials: [ringMat]
             )
+            ring.name = "portalRing"
             ring.position = SIMD3(0, 0, z)
             interior.addChild(ring)
         }
@@ -643,45 +652,6 @@ enum GameVisualBuilders {
         interior.addChild(farBloom)
 
         return interior
-    }
-
-    /// Hollow rectangular neon frame — open middle so walls can travel through cleanly.
-    private static func makePortalDepthRing(
-        width: Float,
-        height: Float,
-        material: UnlitMaterial,
-        barThickness: Float = 0.055
-    ) -> Entity {
-        let ring = Entity()
-        ring.name = "portalRing"
-        let t = barThickness
-        let hw = width * 0.5
-        let hh = height * 0.5
-        let sideHeight = max(t, height - 2 * t)
-
-        let top = ModelEntity(
-            mesh: MeshResource.generateBox(width: width, height: t, depth: t),
-            materials: [material]
-        )
-        top.position = SIMD3(0, hh - t * 0.5, 0)
-        ring.addChild(top)
-
-        let bottom = ModelEntity(
-            mesh: MeshResource.generateBox(width: width, height: t, depth: t),
-            materials: [material]
-        )
-        bottom.position = SIMD3(0, -(hh - t * 0.5), 0)
-        ring.addChild(bottom)
-
-        for sign: Float in [-1, 1] {
-            let side = ModelEntity(
-                mesh: MeshResource.generateBox(width: t, height: sideHeight, depth: t),
-                materials: [material]
-            )
-            side.position = SIMD3(sign * (hw - t * 0.5), 0, 0)
-            ring.addChild(side)
-        }
-        return ring
     }
 
     private static func makeFloorChevron(material: UnlitMaterial) -> Entity {
