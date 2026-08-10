@@ -1318,6 +1318,38 @@ final class Endless_RunnerTests: XCTestCase {
         XCTAssertGreaterThan(WallEmerge.spawnLead, 0)
     }
 
+    func testWallEmergeFloorAnchorKeepsBottomOnPortalLip() {
+        let portalHeight: Float = 2.5
+        let centerY: Float = 0.9
+        let portalHalf = portalHeight * 0.5
+
+        let startY = WallEmerge.portalLocalY(
+            playfieldCenterY: centerY,
+            scale: WallEmerge.startScale,
+            portalHeight: portalHeight,
+            floorAnchored: true
+        )
+        let startBottom = startY - centerY * WallEmerge.startScale
+        XCTAssertEqual(startBottom, -portalHalf, accuracy: 0.0001)
+
+        let endY = WallEmerge.portalLocalY(
+            playfieldCenterY: centerY,
+            scale: 1,
+            portalHeight: portalHeight,
+            floorAnchored: true
+        )
+        XCTAssertEqual(endY, centerY - portalHalf, accuracy: 0.0001)
+
+        // Duck / non-floor kinds keep a fixed center while scaling.
+        let duckY = WallEmerge.portalLocalY(
+            playfieldCenterY: 1.375,
+            scale: WallEmerge.startScale,
+            portalHeight: portalHeight,
+            floorAnchored: false
+        )
+        XCTAssertEqual(duckY, 1.375 - portalHalf, accuracy: 0.0001)
+    }
+
     func testGameplayDeltaClampsHitchFramesInsteadOfDiscarding() {
         XCTAssertNil(GameTiming.clampedGameplayDelta(0))
         XCTAssertNil(GameTiming.clampedGameplayDelta(-0.016))

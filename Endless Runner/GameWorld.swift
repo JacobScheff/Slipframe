@@ -55,10 +55,12 @@ final class GameWorld {
         var playfieldZ: Float
         /// Elapsed emerge time while still inside `portalWorld`; nil once in the room.
         var emergeElapsed: Float?
-        /// Portal-local Y while parented under `portalWorld` (portal origin is aperture center).
-        let emergeLocalY: Float
+        /// Resting playfield-space center Y (used while emerging and after reparent).
+        let emergePlayfieldY: Float
 
         var isEmerging: Bool { emergeElapsed != nil }
+        /// Floor-sitting walls grow from the portal lip; duck gates keep a fixed center.
+        var anchorsEmergeToFloor: Bool { kind != .duck }
 
         init(
             entity: Entity,
@@ -66,14 +68,14 @@ final class GameWorld {
             kind: WallKind,
             sealsBetweenSlabs: Bool = false,
             playfieldZ: Float,
-            emergeLocalY: Float
+            emergePlayfieldY: Float
         ) {
             self.entity = entity
             self.localSlabXs = localSlabXs
             self.kind = kind
             self.sealsBetweenSlabs = sealsBetweenSlabs
             self.playfieldZ = playfieldZ
-            self.emergeLocalY = emergeLocalY
+            self.emergePlayfieldY = emergePlayfieldY
             self.emergeElapsed = 0
             self.previousZ = playfieldZ
         }
@@ -215,7 +217,8 @@ final class GameWorld {
     private static let trackWidth: Float = 3.2
     /// Track slab extends this far behind the stand line (+Z).
     private static let trackNearZ: Float = 1.1
-    private static let trackPastPortal: Float = 0.35
+    /// End the track this far in front of the portal so the slab cannot occlude emerging walls.
+    private static let trackEndBeforePortal: Float = 0.12
     /// Used only when a floor plane has not been found yet.
     private static let fallbackEyeHeight: Float = 1.55
 
@@ -603,7 +606,8 @@ final class GameWorld {
             child.removeFromParent()
         }
 
-        let farZ = portalZ - GameWorld.trackPastPortal
+        // Stop short of the aperture — a track that crosses the portal lip hides wall bottoms.
+        let farZ = portalZ + GameWorld.trackEndBeforePortal
         let nearZ = GameWorld.trackNearZ
         let depth = max(1.0, nearZ - farZ)
         let centerZ = (nearZ + farZ) * 0.5
@@ -1621,7 +1625,13 @@ final class GameWorld {
             ? exitLocalZ
             : WallEmerge.localZ(progress: progress, exitLocalZ: exitLocalZ)
         let scale = progress >= 1 ? 1 : WallEmerge.scale(progress: progress)
-        wall.entity.position = SIMD3(wall.entity.position.x, wall.emergeLocalY, localZ)
+        let localY = WallEmerge.portalLocalY(
+            playfieldCenterY: wall.emergePlayfieldY,
+            scale: scale,
+            portalHeight: GameWorld.portalHeight,
+            floorAnchored: wall.anchorsEmergeToFloor
+        )
+        wall.entity.position = SIMD3(wall.entity.position.x, localY, localZ)
         wall.entity.scale = SIMD3(repeating: scale)
         // Only enter the room once the stream pose is at/ past the aperture front.
         if progress >= 1, wall.playfieldZ >= portalZ + GameWorld.spawnInFrontOfPortal {
@@ -1633,10 +1643,9 @@ final class GameWorld {
     private func finalizeWallEmerge(_ wall: WallItem) {
         guard wall.isEmerging else { return }
         let x = wall.entity.position.x
-        let playfieldY = wall.emergeLocalY + GameWorld.portalHeight * 0.5
         wall.entity.removeFromParent()
         root.addChild(wall.entity)
-        wall.entity.position = SIMD3(x, playfieldY, wall.playfieldZ)
+        wall.entity.position = SIMD3(x, wall.emergePlayfieldY, wall.playfieldZ)
         wall.entity.scale = SIMD3(repeating: 1)
         wall.previousZ = wall.playfieldZ
         wall.emergeElapsed = nil
@@ -1651,11 +1660,17 @@ final class GameWorld {
         kind: WallKind,
         sealsBetweenSlabs: Bool = false
     ) {
-        let emergeLocalY = playfieldY - GameWorld.portalHeight * 0.5
         // Start the stream pose further back so the emerge is visible sooner.
         let streamZ = WallEmerge.spawnPlayfieldZ(mouthSpawnZ: playfieldZ)
+        let floorAnchored = kind != .duck
+        let startY = WallEmerge.portalLocalY(
+            playfieldCenterY: playfieldY,
+            scale: WallEmerge.startScale,
+            portalHeight: GameWorld.portalHeight,
+            floorAnchored: floorAnchored
+        )
         parent.scale = SIMD3(repeating: WallEmerge.startScale)
-        parent.position = SIMD3(windCurrentX, emergeLocalY, WallEmerge.startDepth)
+        parent.position = SIMD3(windCurrentX, startY, WallEmerge.startDepth)
         portalWorld.addChild(parent)
         walls.append(
             WallItem(
@@ -1664,7 +1679,7 @@ final class GameWorld {
                 kind: kind,
                 sealsBetweenSlabs: sealsBetweenSlabs,
                 playfieldZ: streamZ,
-                emergeLocalY: emergeLocalY
+                emergePlayfieldY: playfieldY
             )
         )
     }

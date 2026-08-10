@@ -238,4 +238,20 @@ enum WallEmerge {
     static func spawnPlayfieldZ(mouthSpawnZ: Float, spawnLead: Float = spawnLead) -> Float {
         mouthSpawnZ - spawnLead
     }
+
+    /// Portal-local Y for an emerging wall.
+    /// Floor-anchored kinds keep their bottom on the portal lip while scale grows,
+    /// so the track/void does not read as covering the missing lower half.
+    static func portalLocalY(
+        playfieldCenterY: Float,
+        scale: Float,
+        portalHeight: Float,
+        floorAnchored: Bool
+    ) -> Float {
+        let portalHalf = portalHeight * 0.5
+        if floorAnchored {
+            return -portalHalf + playfieldCenterY * scale
+        }
+        return playfieldCenterY - portalHalf
+    }
 }
