@@ -132,7 +132,7 @@ final class GameWorld {
     private static let crystalCollectDistance: Float = 0.16
     private static let baseSpeed: Float = 3.0
     private static let maxSpeed: Float = 7.0
-    private static let speedRampPerSecond: Float = 0.055
+    private static let speedRampPerSecond: Float = 0.055 / 3
     /// Continuous obstacle stream with a bit of breathing room between beats.
     private static let spawnGapMin: Float = 2.2
     private static let spawnGapMax: Float = 2.9
