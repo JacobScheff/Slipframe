@@ -1616,11 +1616,15 @@ final class GameWorld {
         wall.emergeElapsed = nextElapsed
         let progress = WallEmerge.progress(elapsed: nextElapsed)
         let exitLocalZ = wall.playfieldZ - portalZ
-        let localZ = WallEmerge.localZ(progress: progress, exitLocalZ: exitLocalZ)
-        let scale = WallEmerge.scale(progress: progress)
+        // After the rush finishes, keep tracking in portal space until past the mouth.
+        let localZ = progress >= 1
+            ? exitLocalZ
+            : WallEmerge.localZ(progress: progress, exitLocalZ: exitLocalZ)
+        let scale = progress >= 1 ? 1 : WallEmerge.scale(progress: progress)
         wall.entity.position = SIMD3(wall.entity.position.x, wall.emergeLocalY, localZ)
         wall.entity.scale = SIMD3(repeating: scale)
-        if progress >= 1 {
+        // Only enter the room once the stream pose is at/ past the aperture front.
+        if progress >= 1, wall.playfieldZ >= portalZ + GameWorld.spawnInFrontOfPortal {
             finalizeWallEmerge(wall)
         }
     }
@@ -1648,6 +1652,8 @@ final class GameWorld {
         sealsBetweenSlabs: Bool = false
     ) {
         let emergeLocalY = playfieldY - GameWorld.portalHeight * 0.5
+        // Start the stream pose further back so the emerge is visible sooner.
+        let streamZ = WallEmerge.spawnPlayfieldZ(mouthSpawnZ: playfieldZ)
         parent.scale = SIMD3(repeating: WallEmerge.startScale)
         parent.position = SIMD3(windCurrentX, emergeLocalY, WallEmerge.startDepth)
         portalWorld.addChild(parent)
@@ -1657,7 +1663,7 @@ final class GameWorld {
                 localSlabXs: localSlabXs,
                 kind: kind,
                 sealsBetweenSlabs: sealsBetweenSlabs,
-                playfieldZ: playfieldZ,
+                playfieldZ: streamZ,
                 emergeLocalY: emergeLocalY
             )
         )

@@ -1306,6 +1306,18 @@ final class Endless_RunnerTests: XCTestCase {
         )
     }
 
+    func testWallEmergeSpawnPlayfieldZStartsFurtherBack() {
+        let mouth: Float = -7.65
+        XCTAssertEqual(
+            WallEmerge.spawnPlayfieldZ(mouthSpawnZ: mouth),
+            mouth - WallEmerge.spawnLead,
+            accuracy: 0.0001
+        )
+        XCTAssertLessThan(WallEmerge.startDepth, -12)
+        XCTAssertGreaterThan(WallEmerge.duration, 0.55)
+        XCTAssertGreaterThan(WallEmerge.spawnLead, 0)
+    }
+
     func testGameplayDeltaClampsHitchFramesInsteadOfDiscarding() {
         XCTAssertNil(GameTiming.clampedGameplayDelta(0))
         XCTAssertNil(GameTiming.clampedGameplayDelta(-0.016))
