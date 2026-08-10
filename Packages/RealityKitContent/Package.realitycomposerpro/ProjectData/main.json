@@ -8,5 +8,10 @@
     "RealityKitContent\/Sources\/RealityKitContent\/RealityKitContent.rkassets\/Immersive.usda" : "AF09ED6F-1707-48FD-8720-65B998362C09",
     "RealityKitContent\/Sources\/RealityKitContent\/RealityKitContent.rkassets\/Scene.usda" : "D66134B1-3681-4A8E-AFE5-29F257229F3B",
     "RealityKitContent\/Sources\/RealityKitContent\/RealityKitContent.rkassets\/Wall.usda" : "D62BD346-BD82-44EC-89D6-0145558D16E7"
+  },
+  "projectID" : -4369121673025804063,
+  "uuidToIntID" : {
+    "D62BD346-BD82-44EC-89D6-0145558D16E7" : 6158613561173563490,
+    "D66134B1-3681-4A8E-AFE5-29F257229F3B" : 6952337606055550114
   }
 }
