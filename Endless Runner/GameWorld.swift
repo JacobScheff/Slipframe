@@ -55,8 +55,10 @@ final class GameWorld {
         var playfieldZ: Float
         /// Elapsed emerge time while still inside `portalWorld`; nil once in the room.
         var emergeElapsed: Float?
-        /// Resting playfield-space center Y (used while emerging and after reparent).
+        /// Resting playfield-space center Y (walls stay portal-parented; Y is converted each frame).
         let emergePlayfieldY: Float
+        /// Last applied lighting weight — avoid rewriting the component every tick.
+        var lastLightingWeight: Float = -1
 
         var isEmerging: Bool { emergeElapsed != nil }
         /// Floor-sitting walls grow from the portal lip; duck gates keep a fixed center.
@@ -1001,9 +1003,9 @@ final class GameWorld {
 
         let animT = elapsed - GameWorld.gameOverClearDelay
         if gameOverWallBases.isEmpty, !walls.isEmpty {
-            // Dissolve runs in playfield space — finish any in-portal emerges first.
+            // Finish any in-flight emerges before capturing dissolve bases.
             for wall in walls where wall.isEmerging {
-                finalizeWallEmerge(wall)
+                finishWallEmerge(wall)
             }
             gameOverWallBases = walls.map { wall in
                 (wall.entity, wall.entity.position, wall.entity.scale)
@@ -1610,7 +1612,9 @@ final class GameWorld {
             if wall.isEmerging {
                 tickWallEmerge(wall, deltaTime: deltaTime)
             } else {
-                wall.entity.position.z = wall.playfieldZ
+                // Stay under portalWorld for life — crossing renders them in the room.
+                applyPortalWallPose(wall, scale: 1)
+                setWallLightingWeight(wall, weight: 1)
             }
         }
         for coin in coins {
@@ -1628,7 +1632,7 @@ final class GameWorld {
         wall.emergeElapsed = nextElapsed
         let progress = WallEmerge.progress(elapsed: nextElapsed)
         let exitLocalZ = wall.playfieldZ - portalZ
-        // After the rush finishes, keep tracking in portal space until fully clear.
+        // After the rush finishes, track the stream pose in portal space.
         let localZ = progress >= 1
             ? exitLocalZ
             : WallEmerge.localZ(progress: progress, exitLocalZ: exitLocalZ)
@@ -1647,28 +1651,47 @@ final class GameWorld {
             portalLocalZ: localZ,
             halfDepth: halfDepth
         )
-        wall.entity.components.set(
-            EnvironmentLightingConfigurationComponent(environmentLightingWeight: lighting)
-        )
+        setWallLightingWeight(wall, weight: lighting)
 
-        // Reparent only once the back face has cleared the portal plane.
+        // Mark emerge done once fully clear — do NOT reparent (avoids a one-frame pop).
         if progress >= 1, wall.playfieldZ - halfDepth >= portalZ + 0.02 {
-            finalizeWallEmerge(wall)
+            finishWallEmerge(wall)
         }
     }
 
-    /// Reparent from the portal world into the real playfield at the stream pose.
-    private func finalizeWallEmerge(_ wall: WallItem) {
+    /// Snap emerge animation complete while keeping the wall in `portalWorld`.
+    private func finishWallEmerge(_ wall: WallItem) {
         guard wall.isEmerging else { return }
-        let x = wall.entity.position.x
-        wall.entity.components.remove(PortalCrossingComponent.self)
-        wall.entity.components.remove(EnvironmentLightingConfigurationComponent.self)
-        wall.entity.removeFromParent()
-        root.addChild(wall.entity)
-        wall.entity.position = SIMD3(x, wall.emergePlayfieldY, wall.playfieldZ)
         wall.entity.scale = SIMD3(repeating: 1)
+        applyPortalWallPose(wall, scale: 1)
+        setWallLightingWeight(wall, weight: 1)
         wall.previousZ = wall.playfieldZ
         wall.emergeElapsed = nil
+    }
+
+    /// Portal-local pose matching the wall's playfield stream position.
+    private func applyPortalWallPose(_ wall: WallItem, scale: Float) {
+        let localY = WallEmerge.portalLocalY(
+            playfieldCenterY: wall.emergePlayfieldY,
+            scale: scale,
+            portalHeight: GameWorld.portalHeight,
+            floorAnchored: wall.anchorsEmergeToFloor
+        )
+        wall.entity.position = SIMD3(
+            wall.entity.position.x,
+            localY,
+            wall.playfieldZ - portalZ
+        )
+    }
+
+    /// Quantized lighting updates — rewriting the component every frame flickers.
+    private func setWallLightingWeight(_ wall: WallItem, weight: Float) {
+        let quantized = (min(1, max(0, weight)) * 8).rounded() / 8
+        guard abs(quantized - wall.lastLightingWeight) > 0.001 else { return }
+        wall.lastLightingWeight = quantized
+        wall.entity.components.set(
+            EnvironmentLightingConfigurationComponent(environmentLightingWeight: quantized)
+        )
     }
 
     /// Parent a newly built wall under the portal tunnel and start its emerge animation.
@@ -1697,16 +1720,16 @@ final class GameWorld {
             EnvironmentLightingConfigurationComponent(environmentLightingWeight: 0)
         )
         portalWorld.addChild(parent)
-        walls.append(
-            WallItem(
-                entity: parent,
-                localSlabXs: localSlabXs,
-                kind: kind,
-                sealsBetweenSlabs: sealsBetweenSlabs,
-                playfieldZ: streamZ,
-                emergePlayfieldY: playfieldY
-            )
+        let item = WallItem(
+            entity: parent,
+            localSlabXs: localSlabXs,
+            kind: kind,
+            sealsBetweenSlabs: sealsBetweenSlabs,
+            playfieldZ: streamZ,
+            emergePlayfieldY: playfieldY
         )
+        item.lastLightingWeight = 0
+        walls.append(item)
     }
 
     private static func emergeHalfDepth(for kind: WallKind) -> Float {
