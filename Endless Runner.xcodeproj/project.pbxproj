@@ -492,7 +492,6 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "$(TARGET_NAME)/Info.plist";
-				INFOPLIST_KEY_NFCReaderUsageDescription = "";
 				INFOPLIST_KEY_NSHandsTrackingUsageDescription = "Tracks your hands so you can grab coins and dodge obstacles.";
 				INFOPLIST_KEY_NSWorldSensingUsageDescription = "Detects the floor and walls to place the track and portal.";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -522,7 +521,6 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "$(TARGET_NAME)/Info.plist";
-				INFOPLIST_KEY_NFCReaderUsageDescription = "";
 				INFOPLIST_KEY_NSHandsTrackingUsageDescription = "Tracks your hands so you can grab coins and dodge obstacles.";
 				INFOPLIST_KEY_NSWorldSensingUsageDescription = "Detects the floor and walls to place the track and portal.";
 				LD_RUNPATH_SEARCH_PATHS = (
