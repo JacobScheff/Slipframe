@@ -90,20 +90,32 @@ final class GameWorld {
     private struct CoinItem {
         let entity: Entity
         let baseY: Float
+        /// Logical stream depth — matches wall spawn lead so coins do not sit inside walls.
+        var playfieldZ: Float
         var phase: Float
         var collected = false
+        var lastLightingWeight: Float = -1
     }
 
     private final class HalfCrystalItem {
         let entity: Entity
         let type: CrystalHalfType
         let charged: Bool
+        /// Logical stream depth — matches wall spawn lead.
+        var playfieldZ: Float
         var collected = false
+        var lastLightingWeight: Float = -1
 
-        init(entity: Entity, type: CrystalHalfType, charged: Bool) {
+        init(
+            entity: Entity,
+            type: CrystalHalfType,
+            charged: Bool,
+            playfieldZ: Float
+        ) {
             self.entity = entity
             self.type = type
             self.charged = charged
+            self.playfieldZ = playfieldZ
         }
     }
 
@@ -1587,7 +1599,9 @@ final class GameWorld {
             coins[index].phase += deltaTime
             let phase = coins[index].phase
             let bob = sin(phase * GameWorld.coinBobSpeed) * GameWorld.coinBobAmplitude
-            coins[index].entity.position.y = coins[index].baseY + bob
+            // Coins stay portal-parented — bob in playfield Y, convert to portal-local.
+            coins[index].entity.position.y =
+                coins[index].baseY + bob - GameWorld.portalHeight * 0.5
             coins[index].entity.orientation = simd_quatf(
                 angle: phase * GameWorld.coinSpinSpeed,
                 axis: SIMD3(0, 1, 0)
@@ -1617,11 +1631,25 @@ final class GameWorld {
                 setWallLightingWeight(wall, weight: 1)
             }
         }
-        for coin in coins {
-            coin.entity.position.z += travel
+        for index in coins.indices {
+            guard !coins[index].collected else { continue }
+            coins[index].playfieldZ += travel
+            coins[index].entity.position.z = coins[index].playfieldZ - portalZ
+            setPickupLightingWeight(
+                entity: coins[index].entity,
+                playfieldZ: coins[index].playfieldZ,
+                lastWeight: &coins[index].lastLightingWeight
+            )
         }
         for half in halves {
-            half.entity.position.z += travel
+            guard !half.collected else { continue }
+            half.playfieldZ += travel
+            half.entity.position.z = half.playfieldZ - portalZ
+            setPickupLightingWeight(
+                entity: half.entity,
+                playfieldZ: half.playfieldZ,
+                lastWeight: &half.lastLightingWeight
+            )
         }
     }
 
@@ -1692,6 +1720,45 @@ final class GameWorld {
         wall.entity.components.set(
             EnvironmentLightingConfigurationComponent(environmentLightingWeight: quantized)
         )
+    }
+
+    private func setPickupLightingWeight(
+        entity: Entity,
+        playfieldZ: Float,
+        lastWeight: inout Float
+    ) {
+        let localZ = playfieldZ - portalZ
+        let weight = WallEmerge.environmentLightingWeight(portalLocalZ: localZ, halfDepth: 0.12)
+        let quantized = (weight * 8).rounded() / 8
+        guard abs(quantized - lastWeight) > 0.001 else { return }
+        lastWeight = quantized
+        entity.components.set(
+            EnvironmentLightingConfigurationComponent(environmentLightingWeight: quantized)
+        )
+    }
+
+    /// Stream Z shared by walls / coins / halves on the current beat.
+    private var patternStreamSpawnZ: Float {
+        WallEmerge.spawnPlayfieldZ(mouthSpawnZ: patternSpawnZ)
+    }
+
+    /// Place a pickup in the portal stream so it stays aligned with led-back walls.
+    private func attachPickupToPortalStream(
+        _ entity: Entity,
+        playfieldX: Float,
+        playfieldY: Float,
+        playfieldZ: Float
+    ) {
+        entity.position = SIMD3(
+            playfieldX,
+            playfieldY - GameWorld.portalHeight * 0.5,
+            playfieldZ - portalZ
+        )
+        entity.components.set(PortalCrossingComponent())
+        entity.components.set(
+            EnvironmentLightingConfigurationComponent(environmentLightingWeight: 0)
+        )
+        portalWorld.addChild(entity)
     }
 
     /// Parent a newly built wall under the portal tunnel and start its emerge animation.
@@ -2257,13 +2324,20 @@ final class GameWorld {
         // Mild outward offset — still a reach, but easier to snag mid-dodge.
         let outward: Float = lane == .center ? 0 : (lane.x > 0 ? GameWorld.coinOutwardOffset : -GameWorld.coinOutwardOffset)
         let baseY = underCeiling ? GameWorld.lowCrawlCoinHeight : GameWorld.coinHeight
-        coin.position = SIMD3(lane.x + outward + windCurrentX, baseY, patternSpawnZ)
-        root.addChild(coin)
+        let streamZ = patternStreamSpawnZ
+        attachPickupToPortalStream(
+            coin,
+            playfieldX: lane.x + outward + windCurrentX,
+            playfieldY: baseY,
+            playfieldZ: streamZ
+        )
         coins.append(
             CoinItem(
                 entity: coin,
                 baseY: baseY,
-                phase: nextFloat(in: 0...(Float.pi * 2))
+                playfieldZ: streamZ,
+                phase: nextFloat(in: 0...(Float.pi * 2)),
+                lastLightingWeight: 0
             )
         )
     }
@@ -2282,10 +2356,22 @@ final class GameWorld {
         let material = EnvironmentMaterials.crystalHalf(type: roll.type, charged: roll.charged)
         let entity = ModelEntity(mesh: mesh, materials: [material])
         let outward: Float = lane == .center ? 0 : (lane.x > 0 ? GameWorld.coinOutwardOffset : -GameWorld.coinOutwardOffset)
-        entity.position = SIMD3(lane.x + outward + windCurrentX, GameWorld.coinHeight, patternSpawnZ)
+        let streamZ = patternStreamSpawnZ
         entity.name = roll.charged ? "halfCrystalCharged" : "halfCrystal"
-        root.addChild(entity)
-        halves.append(HalfCrystalItem(entity: entity, type: roll.type, charged: roll.charged))
+        attachPickupToPortalStream(
+            entity,
+            playfieldX: lane.x + outward + windCurrentX,
+            playfieldY: GameWorld.coinHeight,
+            playfieldZ: streamZ
+        )
+        let item = HalfCrystalItem(
+            entity: entity,
+            type: roll.type,
+            charged: roll.charged,
+            playfieldZ: streamZ
+        )
+        item.lastLightingWeight = 0
+        halves.append(item)
     }
 
     // MARK: - Crystal hold / merge
@@ -2645,7 +2731,7 @@ final class GameWorld {
                 item.entity.removeFromParent()
                 return true
             }
-            if item.entity.position.z > GameWorld.despawnZ {
+            if item.playfieldZ > GameWorld.despawnZ {
                 item.entity.removeFromParent()
                 return true
             }
@@ -2653,7 +2739,7 @@ final class GameWorld {
         }
         halves.removeAll { item in
             if item.collected { return true }
-            if item.entity.position.z > GameWorld.despawnZ {
+            if item.playfieldZ > GameWorld.despawnZ {
                 item.entity.removeFromParent()
                 return true
             }
