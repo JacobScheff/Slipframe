@@ -30,11 +30,7 @@ struct LevelSelectView: View {
 
             modeBody
 
-            if gameModel.hasCompletedTutorial {
-                replayTutorialFooter
-            }
-
-            privacyFooter
+            footerRow
         }
         .padding(.horizontal, 28)
         .padding(.vertical, 24)
@@ -59,6 +55,18 @@ struct LevelSelectView: View {
                 .font(.system(size: 17, weight: .semibold, design: .rounded))
                 .foregroundStyle(.secondary)
         }
+    }
+
+    /// Privacy + optional replay control share one footer row to save vertical space.
+    private var footerRow: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            privacyFooter
+            Spacer(minLength: 8)
+            if gameModel.hasCompletedTutorial {
+                replayTutorialFooter
+            }
+        }
+        .padding(.top, 4)
     }
 
     private var privacyFooter: some View {
@@ -130,8 +138,6 @@ struct LevelSelectView: View {
                     .foregroundStyle(gold.opacity(0.9))
                 }
             }
-            .padding(.top, 6)
-            .frame(maxWidth: .infinity, alignment: .trailing)
             .transition(.opacity.combined(with: .move(edge: .bottom)))
         } else {
             Button {
@@ -145,8 +151,6 @@ struct LevelSelectView: View {
             }
             .buttonStyle(.plain)
             .disabled(gameModel.isPlaying)
-            .padding(.top, 4)
-            .frame(maxWidth: .infinity, alignment: .trailing)
             .accessibilityLabel("Replay tutorial")
         }
     }
