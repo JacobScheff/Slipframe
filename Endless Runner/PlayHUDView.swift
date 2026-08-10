@@ -35,26 +35,7 @@ struct PlayHUDView: View {
         .padding(.horizontal, 40)
         .padding(.vertical, 28)
         .frame(minWidth: 420)
-        .background {
-            RoundedRectangle(cornerRadius: 26, style: .continuous)
-                .fill(Color.black.opacity(0.18))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 26, style: .continuous)
-                        .strokeBorder(
-                            LinearGradient(
-                                colors: [
-                                    neon.opacity(0.65),
-                                    Color.white.opacity(0.08),
-                                    gold.opacity(0.35)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 1.25
-                        )
-                }
-        }
-        .glassBackgroundEffect()
+        .xenotechPanel(primary: neon, secondary: gold, cornerRadius: 26)
         // Dissolve center HUD during overdrive / outro — coaching overlay owns the moment.
         .opacity(centerHUDOpacity)
         .animation(.easeInOut(duration: 0.45), value: gameModel.tutorialOverlayOpacity)

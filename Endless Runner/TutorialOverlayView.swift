@@ -42,15 +42,7 @@ struct TutorialOverlayView: View {
         }
         .padding(.horizontal, 36)
         .padding(.vertical, 28)
-        .background {
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(Color.black.opacity(0.42))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .strokeBorder(neon.opacity(0.55), lineWidth: 1.2)
-                }
-        }
-        .glassBackgroundEffect()
+        .xenotechPanel(primary: neon, cornerRadius: 24, fillOpacity: 0.3)
         .opacity(Double(gameModel.tutorialOverlayOpacity))
     }
 
@@ -76,27 +68,8 @@ struct TutorialOverlayView: View {
             )
             .padding(.horizontal, 48)
             .padding(.vertical, 30)
-            .background {
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .fill(Color.black.opacity(0.5))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 22, style: .continuous)
-                            .strokeBorder(
-                                LinearGradient(
-                                    colors: [
-                                        success.opacity(0.95),
-                                        neon.opacity(0.75),
-                                        success.opacity(0.55 + glow * 0.35)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 2.2
-                            )
-                    }
-                    .shadow(color: success.opacity(0.35 + glow * 0.35), radius: 18 + glow * 16)
-            }
-            .glassBackgroundEffect()
+            .xenotechPanel(primary: success, secondary: neon, cornerRadius: 22, fillOpacity: 0.36)
+            .shadow(color: success.opacity(0.35 + glow * 0.35), radius: 18 + glow * 16)
             .scaleEffect(scale)
             .offset(y: lift)
             .opacity(opacity)

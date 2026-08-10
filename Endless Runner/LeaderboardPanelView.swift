@@ -51,11 +51,7 @@ struct LeaderboardPanelView: View {
         .padding(.horizontal, 28)
         .padding(.vertical, 22)
         .frame(width: 620, alignment: .topLeading)
-        .background {
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .strokeBorder(gold.opacity(0.4), lineWidth: 1.2)
-        }
-        .glassBackgroundEffect()
+        .xenotechPanel(primary: gold, secondary: neon, cornerRadius: 22)
         .onAppear {
             syncBoardToPlayMode()
             reloadRemote()
