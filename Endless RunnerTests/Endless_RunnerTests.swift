@@ -567,6 +567,47 @@ final class Endless_RunnerTests: XCTestCase {
         XCTAssertEqual(JumpHeightDetection.medianHeight(of: samples), 1.55, accuracy: 0.0001)
     }
 
+    func testPlayfieldFloorYDoesNotBuryTrackWhenHeadsetPoseIsUnset() {
+        // First immersive-space frame often reports headset Y at the origin.
+        // Subtracting eye height would place the track 1.55m underground.
+        XCTAssertEqual(
+            PlayfieldPlacement.floorY(headWorldY: 0, anchoredFloorY: nil),
+            0,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            PlayfieldPlacement.floorY(headWorldY: 0.4, anchoredFloorY: nil),
+            0,
+            accuracy: 0.0001
+        )
+    }
+
+    func testPlayfieldFloorYUsesDetectedFloorWhenAvailable() {
+        XCTAssertEqual(
+            PlayfieldPlacement.floorY(headWorldY: 0, anchoredFloorY: 0.02),
+            0.02,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            PlayfieldPlacement.floorY(headWorldY: 1.6, anchoredFloorY: -0.04),
+            -0.04,
+            accuracy: 0.0001
+        )
+    }
+
+    func testPlayfieldFloorYFallsBackToEyeHeightOnceHeadsetIsPlausible() {
+        let headY: Float = 1.6
+        XCTAssertEqual(
+            PlayfieldPlacement.floorY(headWorldY: headY, anchoredFloorY: nil),
+            headY - PlayfieldPlacement.fallbackEyeHeight,
+            accuracy: 0.0001
+        )
+        XCTAssertGreaterThanOrEqual(
+            PlayfieldPlacement.minPlausibleHeadWorldY,
+            0.9
+        )
+    }
+
     func testSweptZCatchesTunnelingWall() {
         // Wall jumped from z=-0.4 to z=0.4 in one frame past a head at z=0.
         XCTAssertTrue(

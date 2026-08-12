@@ -115,8 +115,17 @@ struct ImmersiveView: View {
         didOfferAutoTutorial = true
         guard !gameModel.hasCompletedTutorial else { return }
         Task { @MainActor in
-            // Let the playfield snap and side panels mount before diving in.
-            try? await Task.sleep(nanoseconds: 1_100_000_000)
+            // Let the playfield snap to a real floor plane (and side panels
+            // mount) before diving in. First launch often has no floor yet.
+            let timeoutNanoseconds: UInt64 = 4_000_000_000
+            let pollNanoseconds: UInt64 = 100_000_000
+            var waited: UInt64 = 0
+            while !gameWorld.hasSnappedToFloor, waited < timeoutNanoseconds {
+                try? await Task.sleep(nanoseconds: pollNanoseconds)
+                waited += pollNanoseconds
+                guard gameModel.immersiveSpaceOpen else { return }
+            }
+            try? await Task.sleep(nanoseconds: 400_000_000)
             guard gameModel.immersiveSpaceOpen,
                   !gameModel.isPlaying,
                   !gameModel.hasCompletedTutorial
