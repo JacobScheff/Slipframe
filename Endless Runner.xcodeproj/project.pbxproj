@@ -47,6 +47,7 @@
 		B01A10472C72000100A00047 /* TutorialOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A10462C72000100A00046 /* TutorialOverlayView.swift */; };
 		B01A10512C72000100A00051 /* SlipframeLinks.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A10502C72000100A00050 /* SlipframeLinks.swift */; };
 		B01A10532C72000100A00053 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = B01A10522C72000100A00052 /* PrivacyInfo.xcprivacy */; };
+		B01A10552C72000100A00055 /* DailyScoreShare.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A10542C72000100A00054 /* DailyScoreShare.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -104,6 +105,7 @@
 		B01A10462C72000100A00046 /* TutorialOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TutorialOverlayView.swift; sourceTree = "<group>"; };
 		B01A10502C72000100A00050 /* SlipframeLinks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlipframeLinks.swift; sourceTree = "<group>"; };
 		B01A10522C72000100A00052 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		B01A10542C72000100A00054 /* DailyScoreShare.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyScoreShare.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -173,6 +175,7 @@
 				B01A10442C72000100A00044 /* LazyLock.swift */,
 				B01A10462C72000100A00046 /* TutorialOverlayView.swift */,
 				B01A10262C72000100A00026 /* DailyChallenge.swift */,
+				B01A10542C72000100A00054 /* DailyScoreShare.swift */,
 				B01A10282C72000100A00028 /* LevelSelectView.swift */,
 				B01A102A2C72000100A0002A /* LeaderboardPanelView.swift */,
 				B01A102C2C72000100A0002C /* PersonalBestStore.swift */,
@@ -361,6 +364,7 @@
 				B01A20072C72000100A00108 /* XenotechPanel.swift in Sources */,
 				B01A10092C72000100A0000A /* GameSFX.swift in Sources */,
 				B01A10512C72000100A00051 /* SlipframeLinks.swift in Sources */,
+				B01A10552C72000100A00055 /* DailyScoreShare.swift in Sources */,
 				3A9B45292C503B710080BBBE /* Endless_RunnerApp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -524,7 +528,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.1;
 				PRODUCT_BUNDLE_IDENTIFIER = "Jacob-Scheff.Slipframe";
 				PRODUCT_NAME = Slipframe;
 				SUPPORTED_PLATFORMS = "xros xrsimulator";
@@ -555,7 +559,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.1;
 				PRODUCT_BUNDLE_IDENTIFIER = "Jacob-Scheff.Slipframe";
 				PRODUCT_NAME = Slipframe;
 				SUPPORTED_PLATFORMS = "xros xrsimulator";
@@ -574,7 +578,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = YXK432W64A;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.1;
 				PRODUCT_BUNDLE_IDENTIFIER = "Jacob-Scheff.Endless-RunnerTests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "xros xrsimulator";
@@ -595,7 +599,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = YXK432W64A;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.1;
 				PRODUCT_BUNDLE_IDENTIFIER = "Jacob-Scheff.Endless-RunnerTests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "xros xrsimulator";

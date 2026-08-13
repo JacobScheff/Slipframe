@@ -12,6 +12,7 @@ struct LeaderboardPanelView: View {
     @EnvironmentObject private var gameModel: GameModel
     @EnvironmentObject private var personalBests: PersonalBestStore
     @EnvironmentObject private var gameCenter: GameCenterService
+    @Environment(\.openURL) private var openURL
 
     @State private var selectedBoard: LeaderboardBoard = .normal
     @State private var metric: LeaderboardMetric = .score
@@ -19,6 +20,7 @@ struct LeaderboardPanelView: View {
 
     private let neon = Color(red: 0.35, green: 0.92, blue: 1.0)
     private let gold = Color(red: 1.0, green: 0.82, blue: 0.32)
+    private let dailyAccent = Color(red: 0.45, green: 0.88, blue: 0.78)
 
     private var boards: [LeaderboardBoard] {
         LeaderboardBoard.browseable()
@@ -45,6 +47,10 @@ struct LeaderboardPanelView: View {
             Divider().opacity(0.35)
 
             localBestRow
+
+            if case .daily = selectedBoard, metric == .score {
+                dailyMessagesShareButton
+            }
 
             remoteBlock
         }
@@ -223,6 +229,41 @@ struct LeaderboardPanelView: View {
                     }
             }
         }
+    }
+
+    @ViewBuilder
+    private var dailyMessagesShareButton: some View {
+        let value = personalBests.value(.score, for: selectedBoard)
+        Button {
+            guard value > 0, let url = DailyScoreShare.messagesURL(score: value) else { return }
+            openURL(url)
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "message.fill")
+                    .font(.system(size: 15, weight: .semibold))
+                Text(value > 0 ? "Share Daily best to Messages" : "Play Daily to share")
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                Spacer(minLength: 4)
+            }
+            .foregroundStyle(value > 0 ? dailyAccent : .secondary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(dailyAccent.opacity(value > 0 ? 0.16 : 0.08))
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(dailyAccent.opacity(value > 0 ? 0.55 : 0.22), lineWidth: 1)
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(value <= 0)
+        .accessibilityLabel(
+            value > 0
+            ? "Share Daily best score \(value) to Messages"
+            : "Play Daily to unlock Messages share"
+        )
     }
 
     @ViewBuilder
