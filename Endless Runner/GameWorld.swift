@@ -29,6 +29,31 @@ enum GameTiming {
     }
 }
 
+/// Resolves playfield floor Y before / after a real floor plane is available.
+enum PlayfieldPlacement {
+    /// Used only when a floor plane has not been found yet.
+    static let fallbackEyeHeight: Float = 1.55
+    /// Headset world Y below this is treated as "pose not ready" (origin / untracked).
+    static let minPlausibleHeadWorldY: Float = 0.9
+
+    /// World-space Y for the playfield origin (floor at y=0 in playfield space).
+    ///
+    /// Prefers a detected floor plane. Otherwise subtracts standing eye height
+    /// from a plausible headset Y. If the headset pose is still at the origin
+    /// (typical on first immersive-space open), keep Y at 0 — the immersive
+    /// origin sits on the real floor — instead of `0 - eyeHeight`, which buries
+    /// the track underground until the app is reopened.
+    static func floorY(headWorldY: Float, anchoredFloorY: Float?) -> Float {
+        if let anchoredFloorY {
+            return anchoredFloorY
+        }
+        if headWorldY >= minPlausibleHeadWorldY {
+            return headWorldY - fallbackEyeHeight
+        }
+        return 0
+    }
+}
+
 @MainActor
 final class GameWorld {
     private enum Lane: Int, CaseIterable {
@@ -236,7 +261,7 @@ final class GameWorld {
     /// End the track this far in front of the portal so the slab cannot occlude emerging walls.
     private static let trackEndBeforePortal: Float = 0.12
     /// Used only when a floor plane has not been found yet.
-    private static let fallbackEyeHeight: Float = 1.55
+    private static let fallbackEyeHeight: Float = PlayfieldPlacement.fallbackEyeHeight
 
     // Storm Pass wind.
     private static let windMinInterval: Float = 2.4
@@ -334,6 +359,10 @@ final class GameWorld {
     private var isPlayfieldLocked = false
     /// True once we've placed using a tracked WorldTracking device anchor.
     private var didSnapWithWorldTracking = false
+    /// True once we've placed using a detected floor plane (not eye-height fallback).
+    private var didSnapWithFloor = false
+    /// True after the playfield has been placed on a real floor plane.
+    var hasSnappedToFloor: Bool { didSnapWithFloor }
     /// Standing eye height in playfield space — median of idle headset samples.
     private var standingEyeHeight: Float = GameWorld.fallbackEyeHeight
     /// Rolling headset-Y samples gathered while idle (menu / game over).
@@ -407,6 +436,7 @@ final class GameWorld {
         content.add(wallAnchor)
         isPlayfieldLocked = false
         didSnapWithWorldTracking = false
+        didSnapWithFloor = false
         lastPreviewMode = gameModel.resolvedPlayMode
         elapsedTime = 0
         GameMaterials.warmTextures()
@@ -527,6 +557,7 @@ final class GameWorld {
         updateSubscription = nil
         isPlayfieldLocked = false
         didSnapWithWorldTracking = false
+        didSnapWithFloor = false
         elapsedTime = 0
         portalZ = GameWorld.defaultPortalZ
         activeSpawnZ = GameWorld.defaultPortalZ + GameWorld.spawnInFrontOfPortal
@@ -891,14 +922,18 @@ final class GameWorld {
     /// Places the playfield from the current headset pose and locks it in place.
     private func placePlayfield() {
         let usedWorldTracking = hasTrackedDeviceAnchor
+        let usedFloor = floorAnchor.isAnchored
         snapPlayfieldToPlayer()
         // Seed standing-height calibration from the placement pose.
+        standingHeightSamples.removeAll()
+        standingEyeHeight = PlayfieldPlacement.fallbackEyeHeight
         recordStandingHeightSample(playfieldHeadPosition().y)
         timeUntilStandingSample = GameWorld.standingSampleInterval
         updatePortalAndTrack()
         rebuildFixedTrack(force: true)
         isPlayfieldLocked = true
         didSnapWithWorldTracking = usedWorldTracking
+        didSnapWithFloor = usedFloor
     }
 
     /// While idle, sample headset height every few seconds and use the median
@@ -923,15 +958,41 @@ final class GameWorld {
         }
     }
 
-    /// One-time upgrade from head-anchor fallback → WorldTracking once the device is tracked.
-    /// Only before a run starts — never mid-run or after the player has already begun.
-    private func upgradePlayfieldWithWorldTrackingIfNeeded() {
-        guard isPlayfieldLocked,
-              !didSnapWithWorldTracking,
-              gameModel?.isPlaying != true,
-              hasTrackedDeviceAnchor
-        else { return }
+    /// One-time upgrades after the initial placement:
+    /// - head-anchor fallback → WorldTracking once the device is tracked
+    /// - eye-height fallback → real floor once a floor plane is anchored
+    /// Idle: full re-place. Mid-run: only lift/drop onto the floor so XZ/yaw stay put.
+    private func upgradePlayfieldIfNeeded() {
+        guard isPlayfieldLocked else { return }
+
+        let needsWorldTrackingUpgrade = !didSnapWithWorldTracking && hasTrackedDeviceAnchor
+        let needsFloorUpgrade = !didSnapWithFloor && floorAnchor.isAnchored
+        guard needsWorldTrackingUpgrade || needsFloorUpgrade else { return }
+
+        if gameModel?.isPlaying == true {
+            if needsFloorUpgrade {
+                snapPlayfieldToFloorY()
+            }
+            return
+        }
+
         placePlayfield()
+    }
+
+    /// Mid-run floor correction: keep XZ/yaw, move only Y onto the detected plane.
+    private func snapPlayfieldToFloorY() {
+        guard floorAnchor.isAnchored else { return }
+        let floorY = floorAnchor.position(relativeTo: nil).y
+        var position = root.position(relativeTo: nil)
+        if abs(position.y - floorY) > 0.01 {
+            position.y = floorY
+            root.setPosition(position, relativeTo: nil)
+            standingHeightSamples.removeAll()
+            standingEyeHeight = PlayfieldPlacement.fallbackEyeHeight
+            recordStandingHeightSample(playfieldHeadPosition().y)
+            timeUntilStandingSample = GameWorld.standingSampleInterval
+        }
+        didSnapWithFloor = true
     }
 
     private func snapPlayfieldToPlayer() {
@@ -965,12 +1026,13 @@ final class GameWorld {
             flatForward = flattened
         }
 
-        let floorY: Float
-        if floorAnchor.isAnchored {
-            floorY = floorAnchor.position(relativeTo: nil).y
-        } else {
-            floorY = headWorld.y - GameWorld.fallbackEyeHeight
-        }
+        let anchoredFloorY: Float? = floorAnchor.isAnchored
+            ? floorAnchor.position(relativeTo: nil).y
+            : nil
+        let floorY = PlayfieldPlacement.floorY(
+            headWorldY: headWorld.y,
+            anchoredFloorY: anchoredFloorY
+        )
 
         let position = SIMD3<Float>(headWorld.x, floorY, headWorld.z)
         let facing = suitableWallForward(from: position) ?? flatForward
@@ -1311,9 +1373,11 @@ final class GameWorld {
         animateHalves(deltaTime: deltaTime)
         visualFX.tick(deltaTime: deltaTime)
 
-        // Pose is fixed after the initial placement. Allow a single upgrade from
-        // head-anchor fallback to WorldTracking before the first run starts.
-        upgradePlayfieldWithWorldTrackingIfNeeded()
+        // Pose is fixed after the initial placement. Allow one-time upgrades
+        // from head-anchor / eye-height fallbacks once WorldTracking or a
+        // floor plane becomes available (full re-place while idle; Y-only
+        // during a run so a late floor detection can un-bury the track).
+        upgradePlayfieldIfNeeded()
 
         guard let gameModel else { return }
 
