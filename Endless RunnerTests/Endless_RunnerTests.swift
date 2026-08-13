@@ -773,6 +773,36 @@ final class Endless_RunnerTests: XCTestCase {
         XCTAssertGreaterThan(DailyChallenge.secondsUntilRollover(), 0)
     }
 
+    func testDailyScoreShareMessageIncludesScoreAndDate() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = DailyChallenge.timeZone
+        let date = calendar.date(from: DateComponents(year: 2026, month: 8, day: 13, hour: 12))!
+        let display = DailyChallenge.displayDate(for: date)
+
+        let withScore = DailyScoreShare.message(score: 420, date: date)
+        XCTAssertTrue(withScore.contains("420"))
+        XCTAssertTrue(withScore.contains("Slipframe Daily"))
+        XCTAssertTrue(withScore.contains(display))
+
+        let withoutScore = DailyScoreShare.message(score: 0, date: date)
+        XCTAssertFalse(withoutScore.contains("I scored"))
+        XCTAssertTrue(withoutScore.contains(display))
+    }
+
+    func testDailyScoreShareMessagesURLPrefillsBody() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = DailyChallenge.timeZone
+        let date = calendar.date(from: DateComponents(year: 2026, month: 8, day: 13, hour: 12))!
+        let url = DailyScoreShare.messagesURL(score: 88, date: date)
+        XCTAssertNotNil(url)
+        XCTAssertEqual(url?.scheme, "sms")
+        let body = URLComponents(url: url!, resolvingAgainstBaseURL: false)?
+            .queryItems?
+            .first(where: { $0.name == "body" })?
+            .value
+        XCTAssertEqual(body, DailyScoreShare.message(score: 88, date: date))
+    }
+
     func testDailyGameplaySeedIsStableAndDistinctFromBiomeSeed() {
         let key = "2026-07-31"
         XCTAssertEqual(DailyChallenge.gameplaySeed(for: key), DailyChallenge.gameplaySeed(for: key))

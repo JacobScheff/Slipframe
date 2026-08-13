@@ -9,6 +9,7 @@ import SwiftUI
 
 struct LevelSelectView: View {
     @EnvironmentObject private var gameModel: GameModel
+    @Environment(\.openURL) private var openURL
     @State private var showReplayConfirm = false
 
     private let neon = Color(red: 0.35, green: 0.92, blue: 1.0)
@@ -275,6 +276,10 @@ struct LevelSelectView: View {
     private var dailyBody: some View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
             let remaining = DailyChallenge.secondsUntilRollover(from: context.date)
+            let dayKey = DailyChallenge.dayKey(for: context.date)
+            let bestScore = gameModel.personalBests
+                .best(for: .daily(dayKey: dayKey))
+                .bestScore
 
             VStack(alignment: .leading, spacing: 12) {
                 Text(DailyChallenge.displayDate(for: context.date))
@@ -298,8 +303,62 @@ struct LevelSelectView: View {
                         .foregroundStyle(.secondary)
                 }
                 .padding(.top, 4)
+
+                dailyBestShareRow(bestScore: bestScore, date: context.date)
             }
         }
+    }
+
+    private func dailyBestShareRow(bestScore: Int, date: Date) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("YOUR BEST TODAY")
+                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .tracking(1.2)
+                    .foregroundStyle(dailyAccent.opacity(0.85))
+                Spacer(minLength: 8)
+                Text(bestScore > 0 ? "\(bestScore)" : "—")
+                    .font(.system(size: 26, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(bestScore > 0 ? .primary : .secondary)
+            }
+
+            Button {
+                shareDailyBest(score: bestScore, date: date)
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "message.fill")
+                        .font(.system(size: 16, weight: .semibold))
+                    Text(bestScore > 0 ? "Share to Messages" : "Play Daily to share")
+                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    Spacer(minLength: 4)
+                }
+                .foregroundStyle(bestScore > 0 ? dailyAccent : .secondary)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 11)
+                .background {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(dailyAccent.opacity(bestScore > 0 ? 0.16 : 0.08))
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .strokeBorder(dailyAccent.opacity(bestScore > 0 ? 0.55 : 0.22), lineWidth: 1)
+                }
+            }
+            .buttonStyle(.plain)
+            .disabled(bestScore <= 0 || gameModel.isPlaying)
+            .accessibilityLabel(
+                bestScore > 0
+                ? "Share today’s Daily best score \(bestScore) to Messages"
+                : "Play Daily to unlock Messages share"
+            )
+        }
+        .padding(.top, 4)
+    }
+
+    private func shareDailyBest(score: Int, date: Date) {
+        guard score > 0, let url = DailyScoreShare.messagesURL(score: score, date: date) else { return }
+        openURL(url)
     }
 
     private enum BiomeSelection {
