@@ -2,7 +2,7 @@
 //  LevelSelectView.swift
 //  Slipframe
 //
-//  World-anchored mode / level picker at the left track edge.
+//  Play-tab content for the centered command console.
 //
 
 import SwiftUI
@@ -16,41 +16,27 @@ struct LevelSelectView: View {
     private let gold = Color(red: 1.0, green: 0.82, blue: 0.32)
     private let dailyAccent = Color(red: 0.45, green: 0.88, blue: 0.78)
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            header
+    private let biomeColumns = [
+        GridItem(.flexible(), spacing: 10),
+        GridItem(.flexible(), spacing: 10),
+        GridItem(.flexible(), spacing: 10)
+    ]
 
-            // First-time only — once completed, tutorial moves to a quiet footer control.
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
             if !gameModel.hasCompletedTutorial {
                 playTutorialButton
             }
 
             modePicker
 
-            Divider().opacity(0.35)
-
             modeBody
 
             footerRow
         }
-        .padding(.horizontal, 28)
-        .padding(.vertical, 24)
-        .frame(width: 420, alignment: .leading)
-        .xenotechPanel(primary: neon, secondary: gold, cornerRadius: 22)
-        // System confirmationDialog does not present from RealityKit attachments.
+        .frame(maxWidth: .infinity, alignment: .leading)
         .onChange(of: gameModel.isPlaying) { _, playing in
             if playing { showReplayConfirm = false }
-        }
-    }
-
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Slipframe")
-                .font(.system(size: 32, weight: .bold, design: .rounded))
-                .foregroundStyle(neon)
-            Text("Mode Selection")
-                .font(.system(size: 17, weight: .semibold, design: .rounded))
-                .foregroundStyle(.secondary)
         }
     }
 
@@ -81,9 +67,15 @@ struct LevelSelectView: View {
         Button {
             gameModel.startTutorial()
         } label: {
-            HStack(spacing: 10) {
-                Image(systemName: "sparkles.rectangle.stack")
-                    .font(.system(size: 18, weight: .semibold))
+            HStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(gold.opacity(0.22))
+                        .frame(width: 40, height: 40)
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(gold)
+                }
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Play Tutorial")
                         .font(.system(size: 17, weight: .bold, design: .rounded))
@@ -92,6 +84,9 @@ struct LevelSelectView: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 4)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(gold.opacity(0.7))
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
@@ -153,29 +148,54 @@ struct LevelSelectView: View {
     }
 
     private var modePicker: some View {
-        HStack(spacing: 8) {
+        LazyVGrid(
+            columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)],
+            spacing: 10
+        ) {
             ForEach(PlayModeKind.allCases) { kind in
-                let selected = gameModel.playKind == kind
-                Button {
-                    gameModel.playKind = kind
-                } label: {
-                    Text(kind.title)
-                        .font(.system(size: 15, weight: selected ? .bold : .medium, design: .rounded))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .frame(maxWidth: .infinity)
-                        .background {
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(selected ? neon.opacity(0.22) : Color.white.opacity(0.06))
-                        }
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .strokeBorder(selected ? neon.opacity(0.7) : Color.white.opacity(0.12), lineWidth: 1)
-                        }
-                }
-                .buttonStyle(.plain)
+                modeCard(kind)
             }
         }
+    }
+
+    private func modeCard(_ kind: PlayModeKind) -> some View {
+        let selected = gameModel.playKind == kind
+        return Button {
+            gameModel.playKind = kind
+        } label: {
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(selected ? neon.opacity(0.28) : Color.white.opacity(0.08))
+                        .frame(width: 44, height: 44)
+                    Image(systemName: kind.symbolName)
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundStyle(selected ? neon : .secondary)
+                        .symbolRenderingMode(.hierarchical)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(kind.title)
+                        .font(.system(size: 17, weight: selected ? .bold : .semibold, design: .rounded))
+                        .foregroundStyle(.primary)
+                    Text(kind.cardBlurb)
+                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(12)
+            .background {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(selected ? neon.opacity(0.16) : Color.white.opacity(0.05))
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .strokeBorder(selected ? neon.opacity(0.75) : Color.white.opacity(0.1), lineWidth: selected ? 1.5 : 1)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(kind.title)
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     @ViewBuilder
@@ -193,10 +213,41 @@ struct LevelSelectView: View {
     }
 
     private var normalBody: some View {
-        Text(PlayModeKind.normal.subtitle)
-            .font(.system(size: 16, weight: .regular, design: .rounded))
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: 12) {
+            Text(PlayModeKind.normal.subtitle)
+                .font(.system(size: 15, weight: .regular, design: .rounded))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: 10) {
+                ForEach(EnvironmentID.allCases) { id in
+                    biomePip(id)
+                }
+            }
+            .frame(maxWidth: .infinity)
+        }
+    }
+
+    private func biomePip(_ id: EnvironmentID) -> some View {
+        let tint = EnvironmentCatalog.profile(for: id).palette.portalRim
+        let color = Color(red: Double(tint.r), green: Double(tint.g), blue: Double(tint.b))
+        return VStack(spacing: 6) {
+            ZStack {
+                Circle()
+                    .fill(color.opacity(0.28))
+                    .frame(width: 36, height: 36)
+                Image(systemName: id.symbolName)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(color)
+            }
+            Text(id.displayName)
+                .font(.system(size: 10, weight: .medium, design: .rounded))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityLabel(id.displayName)
     }
 
     private var soloBody: some View {
@@ -280,33 +331,53 @@ struct LevelSelectView: View {
             let bestScore = gameModel.personalBests
                 .best(for: .daily(dayKey: dayKey))
                 .bestScore
+            let progress = countdownProgress(remaining)
 
-            VStack(alignment: .leading, spacing: 12) {
-                Text(DailyChallenge.displayDate(for: context.date))
-                    .font(.system(size: 22, weight: .semibold, design: .rounded))
-                    .foregroundStyle(dailyAccent)
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(spacing: 16) {
+                    ZStack {
+                        Circle()
+                            .stroke(dailyAccent.opacity(0.18), lineWidth: 8)
+                            .frame(width: 86, height: 86)
+                        Circle()
+                            .trim(from: 0, to: progress)
+                            .stroke(
+                                dailyAccent,
+                                style: StrokeStyle(lineWidth: 8, lineCap: .round)
+                            )
+                            .rotationEffect(.degrees(-90))
+                            .frame(width: 86, height: 86)
+                        VStack(spacing: 0) {
+                            Image(systemName: "calendar")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(dailyAccent)
+                            Text(DailyChallenge.formatCountdown(remaining))
+                                .font(.system(size: 13, weight: .bold, design: .rounded))
+                                .monospacedDigit()
+                                .foregroundStyle(dailyAccent)
+                        }
+                    }
 
-                Text(PlayModeKind.daily.subtitle)
-                    .font(.system(size: 14, weight: .regular, design: .rounded))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                HStack(spacing: 8) {
-                    Image(systemName: "timer")
-                        .foregroundStyle(dailyAccent)
-                    Text(DailyChallenge.formatCountdown(remaining))
-                        .font(.system(size: 28, weight: .bold, design: .rounded))
-                        .monospacedDigit()
-                        .foregroundStyle(dailyAccent)
-                    Text("left today")
-                        .font(.system(size: 14, weight: .medium, design: .rounded))
-                        .foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(DailyChallenge.displayDate(for: context.date))
+                            .font(.system(size: 22, weight: .semibold, design: .rounded))
+                            .foregroundStyle(dailyAccent)
+                        Text(PlayModeKind.daily.subtitle)
+                            .font(.system(size: 14, weight: .regular, design: .rounded))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
-                .padding(.top, 4)
 
                 dailyBestShareRow(bestScore: bestScore, date: context.date)
             }
         }
+    }
+
+    /// Fraction of the Eastern-Time day still remaining (1 at midnight, 0 at next midnight).
+    private func countdownProgress(_ remaining: TimeInterval) -> CGFloat {
+        let day: TimeInterval = 24 * 60 * 60
+        return CGFloat(max(0, min(1, remaining / day)))
     }
 
     private func dailyBestShareRow(bestScore: Int, date: Date) -> some View {
@@ -367,66 +438,36 @@ struct LevelSelectView: View {
     }
 
     private func biomeGrid(selection: BiomeSelection) -> some View {
-        VStack(spacing: 8) {
+        LazyVGrid(columns: biomeColumns, spacing: 10) {
             ForEach(EnvironmentID.allCases) { id in
-                biomeRow(id: id, selection: selection)
-            }
-        }
-    }
-
-    private func biomeRow(id: EnvironmentID, selection: BiomeSelection) -> some View {
-        let isOn: Bool = {
-            switch selection {
-            case .solo: return gameModel.soloEnvironment == id
-            case .playlist: return gameModel.playlistEnvironments.contains(id)
-            }
-        }()
-
-        return Button {
-            switch selection {
-            case .solo:
-                gameModel.soloEnvironment = id
-            case .playlist:
-                if gameModel.playlistEnvironments.contains(id) {
-                    gameModel.playlistEnvironments.remove(id)
-                    if gameModel.playlistStart == id {
-                        gameModel.playlistStart = nil
+                let isOn: Bool = {
+                    switch selection {
+                    case .solo: return gameModel.soloEnvironment == id
+                    case .playlist: return gameModel.playlistEnvironments.contains(id)
                     }
-                } else {
-                    gameModel.playlistEnvironments.insert(id)
+                }()
+                BiomeCard(
+                    id: id,
+                    isOn: isOn,
+                    selectionStyle: selection == .solo ? .radio : .check,
+                    accent: neon
+                ) {
+                    switch selection {
+                    case .solo:
+                        gameModel.soloEnvironment = id
+                    case .playlist:
+                        if gameModel.playlistEnvironments.contains(id) {
+                            gameModel.playlistEnvironments.remove(id)
+                            if gameModel.playlistStart == id {
+                                gameModel.playlistStart = nil
+                            }
+                        } else {
+                            gameModel.playlistEnvironments.insert(id)
+                        }
+                    }
                 }
-            }
-        } label: {
-            HStack(spacing: 12) {
-                Circle()
-                    .fill(biomeColor(id))
-                    .frame(width: 12, height: 12)
-                Text(id.displayName)
-                    .font(.system(size: 17, weight: isOn ? .bold : .medium, design: .rounded))
-                Spacer(minLength: 4)
-                if isOn {
-                    Image(systemName: selection == .solo ? "checkmark.circle.fill" : "checkmark")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundStyle(neon)
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(isOn ? neon.opacity(0.14) : Color.white.opacity(0.04))
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .strokeBorder(isOn ? neon.opacity(0.55) : Color.white.opacity(0.1), lineWidth: 1)
             }
         }
-        .buttonStyle(.plain)
-    }
-
-    private func biomeColor(_ id: EnvironmentID) -> Color {
-        let tint = EnvironmentCatalog.profile(for: id).palette.portalRim
-        return Color(red: Double(tint.r), green: Double(tint.g), blue: Double(tint.b))
     }
 }
 
@@ -435,7 +476,6 @@ private struct FlowChips<Content: View>: View {
     @ViewBuilder var content: () -> Content
 
     var body: some View {
-        // VisionOS panels are narrow — a wrapping LazyVGrid keeps chips tidy.
         LazyVGrid(
             columns: [GridItem(.adaptive(minimum: 96), spacing: 8)],
             alignment: .leading,

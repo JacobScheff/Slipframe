@@ -29,10 +29,19 @@ final class GameModel: ObservableObject {
     private let scoreSubmitterOverride: (any GameCenterSubmitting)?
     private let defaults: UserDefaults
     private let tutorialCompletedKey: String
+    private let showsTrackKey: String
 
     @Published var isPlaying: Bool = false
     @Published var isGameOver: Bool = false
     @Published var immersiveSpaceOpen: Bool = false
+
+    /// Floor track slab is visual-only — play volume is unchanged when this is off.
+    @Published var showsTrack: Bool {
+        didSet { defaults.set(showsTrack, forKey: showsTrackKey) }
+    }
+
+    /// True while the headset is outside the logical play rectangle during a run.
+    @Published var isOffPlayfield: Bool = false
 
     /// True while a guided tutorial run is active (soft hits, no score).
     @Published private(set) var isTutorialRun: Bool = false
@@ -74,7 +83,8 @@ final class GameModel: ObservableObject {
         gameCenter: GameCenterService? = nil,
         scoreSubmitter: (any GameCenterSubmitting)? = nil,
         defaults: UserDefaults? = nil,
-        tutorialCompletedKey: String = "tutorial.completed.v1"
+        tutorialCompletedKey: String = "tutorial.completed.v1",
+        showsTrackKey: String = "settings.showsTrack.v1"
     ) {
         let bests = personalBests ?? PersonalBestStore()
         let center = gameCenter ?? GameCenterService()
@@ -83,6 +93,12 @@ final class GameModel: ObservableObject {
         self.scoreSubmitterOverride = scoreSubmitter
         self.defaults = defaults ?? .standard
         self.tutorialCompletedKey = tutorialCompletedKey
+        self.showsTrackKey = showsTrackKey
+        if self.defaults.object(forKey: showsTrackKey) == nil {
+            self.showsTrack = true
+        } else {
+            self.showsTrack = self.defaults.bool(forKey: showsTrackKey)
+        }
         center.attachPersonalBests(bests)
     }
 
@@ -149,6 +165,7 @@ final class GameModel: ObservableObject {
         isGameOver = false
         isTutorialRun = false
         prefersRoomDimming = false
+        isOffPlayfield = false
         clearTutorialOverlay()
         pendingMenuReveal = revealMenu
         if markCompleted {
@@ -167,6 +184,7 @@ final class GameModel: ObservableObject {
         isPlaying = false
         isGameOver = true
         prefersRoomDimming = false
+        isOffPlayfield = false
         // Keep `isTutorialRun` true so HUD/panels stay in tutorial-skip mode until
         // `finalizeTutorialSkip()` runs after walls/coins dissolve.
     }
@@ -178,6 +196,7 @@ final class GameModel: ObservableObject {
         isGameOver = false
         isPlaying = false
         prefersRoomDimming = false
+        isOffPlayfield = false
         hasCompletedTutorial = true
         pendingMenuReveal = true
         clearTutorialOverlay()
@@ -208,6 +227,7 @@ final class GameModel: ObservableObject {
         isPlaying = false
         isGameOver = true
         prefersRoomDimming = false
+        isOffPlayfield = false
         recordPersonalBestsIfNeeded()
     }
 
@@ -256,6 +276,7 @@ final class GameModel: ObservableObject {
         isPlaying = true
         isTutorialRun = tutorial
         prefersRoomDimming = false
+        isOffPlayfield = false
         lastPersonalBestUpdate = nil
         pendingMenuReveal = false
         clearTutorialOverlay()

@@ -36,6 +36,25 @@ enum PlayModeKind: String, CaseIterable, Identifiable {
             return "Same biomes and walls for everyone today (Eastern Time)."
         }
     }
+
+    /// One-line blurb for the mode cards.
+    var cardBlurb: String {
+        switch self {
+        case .normal: return "Shuffled biomes"
+        case .playlist: return "Your mix"
+        case .solo: return "One biome"
+        case .daily: return "Shared today"
+        }
+    }
+
+    var symbolName: String {
+        switch self {
+        case .normal: return "shuffle"
+        case .playlist: return "square.stack.3d.up.fill"
+        case .solo: return "repeat"
+        case .daily: return "calendar"
+        }
+    }
 }
 
 /// Resolved configuration handed to EnvironmentDirector when a run begins.
