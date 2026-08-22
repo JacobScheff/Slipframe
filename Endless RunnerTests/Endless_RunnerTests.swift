@@ -1517,19 +1517,23 @@ final class Endless_RunnerTests: XCTestCase {
     func testPlayfieldVolumeTreatsTrackInteriorAsInBounds() {
         XCTAssertTrue(PlayfieldVolume.containsHead(SIMD3<Float>(0, 1.5, 0)))
         XCTAssertTrue(PlayfieldVolume.containsHead(SIMD3<Float>(0.7, 1.5, -2)))
-        XCTAssertTrue(PlayfieldVolume.containsHead(SIMD3<Float>(-1.5, 1.6, 0.4)))
-        // Standing on a rail is still in — padding covers the slab edge.
-        XCTAssertTrue(PlayfieldVolume.containsHead(SIMD3<Float>(1.7, 1.5, 0)))
+        // Outer lane + wall reach ~±1.1; still inside the dodge band.
+        XCTAssertTrue(PlayfieldVolume.containsHead(SIMD3<Float>(-1.05, 1.6, 0.2)))
     }
 
     func testPlayfieldVolumeRejectsSteppingOffTheSidesOrBehindThePad() {
-        XCTAssertFalse(PlayfieldVolume.containsHead(SIMD3<Float>(2.4, 1.5, 0)))
-        XCTAssertFalse(PlayfieldVolume.containsHead(SIMD3<Float>(-2.4, 1.5, 0)))
-        XCTAssertFalse(PlayfieldVolume.containsHead(SIMD3<Float>(0, 1.5, 2.0)))
+        // A sidestep off the lanes (well inside the 3.2 m floor slab) counts as leaving.
+        XCTAssertFalse(PlayfieldVolume.containsHead(SIMD3<Float>(1.4, 1.5, 0)))
+        XCTAssertFalse(PlayfieldVolume.containsHead(SIMD3<Float>(-1.4, 1.5, 0)))
+        XCTAssertFalse(PlayfieldVolume.containsHead(SIMD3<Float>(1.7, 1.5, 0)))
+        XCTAssertFalse(PlayfieldVolume.containsHead(SIMD3<Float>(0, 1.5, 0.9)))
         XCTAssertFalse(PlayfieldVolume.containsHead(SIMD3<Float>(0, 1.5, -13)))
     }
 
-    func testStreamFlowSlowsThenSnapsBackFaster() {
+    func testStreamFlowSlowsAndSpeedsUpOverTheSameWindow() {
+        XCTAssertEqual(StreamFlow.speedupSeconds, StreamFlow.slowdownSeconds, accuracy: 0.001)
+        XCTAssertGreaterThan(StreamFlow.slowdownSeconds, 1.5)
+
         var flow = StreamFlow()
         XCTAssertEqual(flow.motionScale, 1, accuracy: 0.001)
 
@@ -1541,8 +1545,6 @@ final class Endless_RunnerTests: XCTestCase {
         flow.update(inBounds: true, deltaTime: StreamFlow.speedupSeconds * 0.5)
         XCTAssertGreaterThan(flow.scale, 0.4)
         XCTAssertLessThan(flow.scale, 0.7)
-        XCTAssertGreaterThan(StreamFlow.speedupSeconds, 0)
-        XCTAssertLessThan(StreamFlow.speedupSeconds, StreamFlow.slowdownSeconds)
 
         flow.update(inBounds: true, deltaTime: StreamFlow.speedupSeconds)
         XCTAssertEqual(flow.scale, 1, accuracy: 0.001)

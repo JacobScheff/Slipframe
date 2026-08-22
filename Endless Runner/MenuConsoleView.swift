@@ -167,7 +167,7 @@ struct MenuConsoleView: View {
             HStack(spacing: 10) {
                 Image(systemName: "figure.walk")
                     .foregroundStyle(gold)
-                Text("Step off the play area during a run and the stream winds down. Step back in and it snaps up to speed.")
+                Text("Step off the play area during a run and the stream winds down. Step back in and it eases back up to speed.")
                     .font(.system(size: 14, weight: .regular, design: .rounded))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
