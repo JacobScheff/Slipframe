@@ -1514,6 +1514,109 @@ final class Endless_RunnerTests: XCTestCase {
         _ = statsWatch
     }
 
+    func testPlayfieldVolumeTreatsTrackInteriorAsInBounds() {
+        XCTAssertTrue(PlayfieldVolume.containsHead(SIMD3<Float>(0, 1.5, 0)))
+        XCTAssertTrue(PlayfieldVolume.containsHead(SIMD3<Float>(0.7, 1.5, -2)))
+        // Outer lane + wall reach ~±1.1; still inside the dodge band.
+        XCTAssertTrue(PlayfieldVolume.containsHead(SIMD3<Float>(-1.05, 1.6, 0.2)))
+    }
+
+    func testPlayfieldVolumeRejectsSteppingOffTheSidesOrBehindThePad() {
+        // A sidestep off the lanes (well inside the 3.2 m floor slab) counts as leaving.
+        XCTAssertFalse(PlayfieldVolume.containsHead(SIMD3<Float>(1.4, 1.5, 0)))
+        XCTAssertFalse(PlayfieldVolume.containsHead(SIMD3<Float>(-1.4, 1.5, 0)))
+        XCTAssertFalse(PlayfieldVolume.containsHead(SIMD3<Float>(1.7, 1.5, 0)))
+        XCTAssertFalse(PlayfieldVolume.containsHead(SIMD3<Float>(0, 1.5, 0.9)))
+        XCTAssertFalse(PlayfieldVolume.containsHead(SIMD3<Float>(0, 1.5, -13)))
+    }
+
+    func testStreamFlowSlowsAndSpeedsUpOverTheSameWindow() {
+        XCTAssertEqual(StreamFlow.speedupSeconds, StreamFlow.slowdownSeconds, accuracy: 0.001)
+        XCTAssertGreaterThan(StreamFlow.slowdownSeconds, 1.5)
+
+        var flow = StreamFlow()
+        XCTAssertEqual(flow.motionScale, 1, accuracy: 0.001)
+
+        flow.update(inBounds: false, deltaTime: StreamFlow.slowdownSeconds)
+        XCTAssertEqual(flow.scale, 0, accuracy: 0.001)
+        XCTAssertEqual(flow.motionScale, 0, accuracy: 0.001)
+        XCTAssertTrue(flow.isStopped)
+
+        flow.update(inBounds: true, deltaTime: StreamFlow.speedupSeconds * 0.5)
+        XCTAssertGreaterThan(flow.scale, 0.4)
+        XCTAssertLessThan(flow.scale, 0.7)
+
+        flow.update(inBounds: true, deltaTime: StreamFlow.speedupSeconds)
+        XCTAssertEqual(flow.scale, 1, accuracy: 0.001)
+        XCTAssertEqual(flow.motionScale, 1, accuracy: 0.001)
+    }
+
+    func testStreamFlowMusicRateAndGainMapToStop() {
+        XCTAssertEqual(StreamFlow.musicRate(for: 1), 1, accuracy: 0.001)
+        XCTAssertEqual(StreamFlow.musicRate(for: 0), 0.5, accuracy: 0.001)
+        XCTAssertEqual(StreamFlow.musicGain(for: 1), 1, accuracy: 0.001)
+        XCTAssertEqual(StreamFlow.musicGain(for: 0), 0, accuracy: 0.001)
+        XCTAssertLessThan(StreamFlow.musicGain(for: 0.1), 1)
+    }
+
+    func testShowsTrackDefaultsOnAndPersists() {
+        let suite = "test.showsTrack.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let first = GameModel(
+            personalBests: makeIsolatedBestStore(),
+            scoreSubmitter: MockGameCenterSubmitter(),
+            defaults: defaults,
+            tutorialCompletedKey: "\(suite).tutorial",
+            showsTrackKey: "\(suite).track"
+        )
+        XCTAssertTrue(first.showsTrack)
+
+        first.showsTrack = false
+        let second = GameModel(
+            personalBests: makeIsolatedBestStore(),
+            scoreSubmitter: MockGameCenterSubmitter(),
+            defaults: defaults,
+            tutorialCompletedKey: "\(suite).tutorial",
+            showsTrackKey: "\(suite).track"
+        )
+        XCTAssertFalse(second.showsTrack)
+    }
+
+    func testStartRunClearsOffPlayfieldFlag() {
+        let model = makeIsolatedGameModel()
+        model.isOffPlayfield = true
+        model.startRun()
+        XCTAssertFalse(model.isOffPlayfield)
+        model.isOffPlayfield = true
+        model.endRun()
+        XCTAssertFalse(model.isOffPlayfield)
+    }
+
+    func testGameMusicPlaybackFlowRecordsScale() {
+        let music = GameMusic.shared
+        music.prepare()
+        music.resetPlaybackFlow()
+        XCTAssertEqual(music.playbackFlow, 1, accuracy: 0.001)
+        music.setPlaybackFlow(0)
+        XCTAssertEqual(music.playbackFlow, 0, accuracy: 0.001)
+        music.resetPlaybackFlow()
+        XCTAssertEqual(music.playbackFlow, 1, accuracy: 0.001)
+        music.stop()
+    }
+
+    func testBiomeAndModeCardsExposeSymbols() {
+        for id in EnvironmentID.allCases {
+            XCTAssertFalse(id.symbolName.isEmpty)
+            XCTAssertFalse(id.twistCaption.isEmpty)
+        }
+        for kind in PlayModeKind.allCases {
+            XCTAssertFalse(kind.symbolName.isEmpty)
+            XCTAssertFalse(kind.cardBlurb.isEmpty)
+        }
+    }
+
     // MARK: - Helpers
 
     private func makeIsolatedBestStore() -> PersonalBestStore {

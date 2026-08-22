@@ -205,17 +205,14 @@ final class GameWorld {
     /// Extra Z gap when consecutive adjacent doubles open on opposite outer lanes (left↔right).
     private static let oppositeOpenLaneSpacingBonus: Float = 0.35
     /// HUD sits above the corridor, further down the track, clear of the play volume.
-    private static let hudPosition = SIMD3<Float>(0, 2.45, -3.2)
+    private static let hudPosition = SIMD3<Float>(0, 2.35, -2.7)
     /// Coaching card sits just under the center HUD band.
     private static let tutorialOverlayHUDDrop: Float = 0.28
     /// World scale for the SwiftUI attachment (attachments are small by default).
-    private static let hudScale: Float = 3.0
-    /// Side panels sit on the track edges, slightly forward of the stand line, facing the player.
-    private static let sidePanelY: Float = 1.55
-    private static let sidePanelZ: Float = -1.15
-    private static let sidePanelScale: Float = 2.15
-    /// Yaw so each panel faces inward across the track (±90° from the forward-facing HUD).
-    private static let sidePanelYawDegrees: Float = 90
+    private static let hudScale: Float = 2.7
+    /// Centered command console (Play / Scores / Settings) at comfortable reach.
+    private static let menuConsolePosition = SIMD3<Float>(0, 1.42, -1.9)
+    private static let menuConsoleScale: Float = 2.05
     /// Pause after a crash before walls start dissolving.
     private static let gameOverClearDelay: Float = 2.2
     /// Duration of the post-game wall sink / squash animation.
@@ -309,8 +306,7 @@ final class GameWorld {
         )
     )
     private let hudAnchor = Entity()
-    private let levelSelectAnchor = Entity()
-    private let leaderboardAnchor = Entity()
+    private let menuConsoleAnchor = Entity()
     private let tutorialOverlayAnchor = Entity()
     private let trackRoot = Entity()
     /// Holds the portal plane + neon rim in playfield space (always visible).
@@ -341,6 +337,8 @@ final class GameWorld {
     private var heldRight: HeldHalf?
 
     private var speed: Float = GameWorld.baseSpeed
+    /// 1 while the player is on the play volume; eases to 0 when they step off.
+    private var streamFlow = StreamFlow()
     /// First obstacle spawns on the opening tick of a run.
     private var distanceUntilSpawn: Float = 0
     /// Open outer lane raw of the last adjacent double wall (−1 / +1), if any.
@@ -453,7 +451,8 @@ final class GameWorld {
         buildPortal()
         buildStaticEnvironment()
         ensureHUDAnchor()
-        ensureSidePanelAnchors()
+        ensureMenuConsoleAnchor()
+        setTrackVisible(gameModel.showsTrack)
         startARSession()
         // Warm audio before the first coin so setActive does not hitch mid-run.
         GameSFX.shared.prepare()
@@ -475,24 +474,13 @@ final class GameWorld {
         hudAnchor.addChild(hudEntity)
     }
 
-    func attachLevelSelect(_ entity: Entity) {
-        ensureSidePanelAnchors()
-        let yaw = GameWorld.sidePanelYawDegrees * .pi / 180
-        entity.orientation = simd_quatf(angle: yaw, axis: SIMD3(0, 1, 0))
-        entity.scale = SIMD3(repeating: GameWorld.sidePanelScale)
-        guard entity.parent !== levelSelectAnchor else { return }
+    func attachMenuConsole(_ entity: Entity) {
+        ensureMenuConsoleAnchor()
+        entity.orientation = simd_quatf(ix: 0, iy: 0, iz: 0, r: 1)
+        entity.scale = SIMD3(repeating: GameWorld.menuConsoleScale)
+        guard entity.parent !== menuConsoleAnchor else { return }
         entity.removeFromParent()
-        levelSelectAnchor.addChild(entity)
-    }
-
-    func attachLeaderboard(_ entity: Entity) {
-        ensureSidePanelAnchors()
-        let yaw = -GameWorld.sidePanelYawDegrees * .pi / 180
-        entity.orientation = simd_quatf(angle: yaw, axis: SIMD3(0, 1, 0))
-        entity.scale = SIMD3(repeating: GameWorld.sidePanelScale)
-        guard entity.parent !== leaderboardAnchor else { return }
-        entity.removeFromParent()
-        leaderboardAnchor.addChild(entity)
+        menuConsoleAnchor.addChild(entity)
     }
 
     func attachTutorialOverlay(_ entity: Entity) {
@@ -504,13 +492,12 @@ final class GameWorld {
         tutorialOverlayAnchor.addChild(entity)
     }
 
-    /// Show / hide Ready-state chrome (side panels + center HUD).
+    /// Show / hide Ready-state chrome (center console + HUD).
     /// When becoming visible after a tutorial, plays a rise-and-scale reveal.
     func setMenuChromeVisible(_ visible: Bool) {
         ensureHUDAnchor()
-        ensureSidePanelAnchors()
-        levelSelectAnchor.isEnabled = visible
-        leaderboardAnchor.isEnabled = visible
+        ensureMenuConsoleAnchor()
+        menuConsoleAnchor.isEnabled = visible
         hudAnchor.isEnabled = true
 
         if visible, gameModel?.pendingMenuReveal == true {
@@ -522,6 +509,10 @@ final class GameWorld {
         } else if menuRevealElapsed == nil {
             applyMenuRevealPose(progress: 1)
         }
+    }
+
+    func setTrackVisible(_ visible: Bool) {
+        trackRoot.isEnabled = visible
     }
 
     func setTutorialOverlayVisible(_ visible: Bool) {
@@ -574,10 +565,7 @@ final class GameWorld {
         for child in hudAnchor.children {
             child.removeFromParent()
         }
-        for child in levelSelectAnchor.children {
-            child.removeFromParent()
-        }
-        for child in leaderboardAnchor.children {
+        for child in menuConsoleAnchor.children {
             child.removeFromParent()
         }
         for child in tutorialOverlayAnchor.children {
@@ -611,22 +599,14 @@ final class GameWorld {
         }
     }
 
-    private func ensureSidePanelAnchors() {
-        // Center just outside the floor slab so the panel body sits on the track edge.
-        let edgeX = GameWorld.trackWidth * 0.5 + 0.3
-        levelSelectAnchor.name = "levelSelect"
-        leaderboardAnchor.name = "leaderboard"
+    private func ensureMenuConsoleAnchor() {
+        menuConsoleAnchor.name = "menuConsole"
         if menuRevealElapsed == nil {
-            levelSelectAnchor.position = SIMD3(-edgeX, GameWorld.sidePanelY, GameWorld.sidePanelZ)
-            levelSelectAnchor.scale = SIMD3(repeating: 1)
-            leaderboardAnchor.position = SIMD3(edgeX, GameWorld.sidePanelY, GameWorld.sidePanelZ)
-            leaderboardAnchor.scale = SIMD3(repeating: 1)
+            menuConsoleAnchor.position = GameWorld.menuConsolePosition
+            menuConsoleAnchor.scale = SIMD3(repeating: 1)
         }
-        if levelSelectAnchor.parent !== root {
-            root.addChild(levelSelectAnchor)
-        }
-        if leaderboardAnchor.parent !== root {
-            root.addChild(leaderboardAnchor)
+        if menuConsoleAnchor.parent !== root {
+            root.addChild(menuConsoleAnchor)
         }
     }
 
@@ -794,6 +774,8 @@ final class GameWorld {
         tutorialPortalPulse = 0
         tutorialSpawningEnabled = true
         lazyLockPose = nil
+        streamFlow.reset()
+        GameMusic.shared.resetPlaybackFlow()
         if mode == .tutorial {
             tutorialDirector.begin()
             let first = tutorialDirector.currentSection
@@ -1408,18 +1390,31 @@ final class GameWorld {
             } else {
                 resetGameOverClear()
             }
+            if streamFlow.scale < 1 {
+                streamFlow.reset()
+                GameMusic.shared.resetPlaybackFlow()
+            }
             return
         }
         // Clamp hitch frames instead of skipping them — a discarded tick freezes walls.
         guard let dt = GameTiming.clampedGameplayDelta(deltaTime) else { return }
 
+        let inBounds = PlayfieldVolume.containsHead(playfieldHeadPosition())
+        if gameModel.isOffPlayfield == inBounds {
+            gameModel.isOffPlayfield = !inBounds
+        }
+        streamFlow.update(inBounds: inBounds, deltaTime: dt)
+        let motion = streamFlow.motionScale
+        GameMusic.shared.setPlaybackFlow(motion)
+        let simDt = dt * motion
+
         if gameModel.isTutorialRun {
-            tickTutorial(gameModel: gameModel, deltaTime: dt)
+            tickTutorial(gameModel: gameModel, deltaTime: simDt)
             // Outro may finish the run mid-frame.
             guard gameModel.isPlaying else { return }
         }
 
-        let frame = environmentDirector.update(deltaTime: dt)
+        let frame = environmentDirector.update(deltaTime: simDt)
         if frame.didEnterEnvironment {
             activeSpawnProfile = frame.profile
             dropHeldHalves()
@@ -1433,12 +1428,12 @@ final class GameWorld {
         applyPalette(frame.displayedPalette, telegraph: telegraph)
 
         if tutorialHitCooldown > 0 {
-            tutorialHitCooldown = max(0, tutorialHitCooldown - dt)
+            tutorialHitCooldown = max(0, tutorialHitCooldown - simDt)
         }
 
         let maxSpeed = GameWorld.maxSpeed * max(1, tutorialSpeedMultiplier)
-        let travel = speed * dt
-        speed = min(maxSpeed, speed + GameWorld.speedRampPerSecond * dt * tutorialSpeedMultiplier)
+        let travel = speed * simDt
+        speed = min(maxSpeed, speed + GameWorld.speedRampPerSecond * simDt * tutorialSpeedMultiplier)
 
         distanceAccumulator += travel
         if distanceAccumulator >= 1 {
@@ -1447,8 +1442,8 @@ final class GameWorld {
             gameModel.addScore(gained)
         }
 
-        advanceEntities(by: travel, deltaTime: dt)
-        updateWind(deltaTime: dt)
+        advanceEntities(by: travel, deltaTime: simDt)
+        updateWind(deltaTime: simDt)
         // Grab before hold-update so a newly closed hand can pick up this frame.
         if activeSpawnProfile.twist == .crystalHalves {
             tryGrabHalves()
@@ -1456,7 +1451,7 @@ final class GameWorld {
         updateHeldHalves(deltaTime: dt)
 
         distanceUntilSpawn -= travel
-        if tutorialSpawningEnabled, distanceUntilSpawn <= 0 {
+        if tutorialSpawningEnabled, motion > StreamFlow.stopThreshold, distanceUntilSpawn <= 0 {
             patternSpawnZOffset = 0
             spawnNextPattern()
             // Preserve spacing to the following beat when this one was pushed deeper.
@@ -1522,8 +1517,7 @@ final class GameWorld {
     private func beginMenuReveal() {
         menuRevealElapsed = 0
         applyMenuRevealPose(progress: 0)
-        levelSelectAnchor.isEnabled = true
-        leaderboardAnchor.isEnabled = true
+        menuConsoleAnchor.isEnabled = true
         hudAnchor.isEnabled = true
     }
 
@@ -1554,20 +1548,12 @@ final class GameWorld {
         // Attachment scale is applied on the child; nudge the anchor for the grow.
         hudAnchor.scale = SIMD3(repeating: scaleFactor)
 
-        let edgeX = GameWorld.trackWidth * 0.5 + 0.3
-        levelSelectAnchor.position = SIMD3(
-            -edgeX,
-            GameWorld.sidePanelY - rise * 1.15,
-            GameWorld.sidePanelZ
+        menuConsoleAnchor.position = SIMD3(
+            GameWorld.menuConsolePosition.x,
+            GameWorld.menuConsolePosition.y - rise * 1.15,
+            GameWorld.menuConsolePosition.z
         )
-        levelSelectAnchor.scale = SIMD3(repeating: scaleFactor)
-
-        leaderboardAnchor.position = SIMD3(
-            edgeX,
-            GameWorld.sidePanelY - rise * 1.15,
-            GameWorld.sidePanelZ
-        )
-        leaderboardAnchor.scale = SIMD3(repeating: scaleFactor)
+        menuConsoleAnchor.scale = SIMD3(repeating: scaleFactor)
     }
 
     private func easeOutBack(_ t: Float) -> Float {

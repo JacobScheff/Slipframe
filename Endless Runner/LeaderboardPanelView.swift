@@ -2,7 +2,7 @@
 //  LeaderboardPanelView.swift
 //  Slipframe
 //
-//  Right-track leaderboard: local personal bests always, plus Game Center
+//  Scores tab: local personal bests always, plus Game Center
 //  All Players / Friends when signed in.
 //
 
@@ -54,10 +54,7 @@ struct LeaderboardPanelView: View {
 
             remoteBlock
         }
-        .padding(.horizontal, 28)
-        .padding(.vertical, 22)
-        .frame(width: 620, alignment: .topLeading)
-        .xenotechPanel(primary: gold, secondary: neon, cornerRadius: 22)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
         .onAppear {
             syncBoardToPlayMode()
             reloadRemote()
@@ -86,18 +83,32 @@ struct LeaderboardPanelView: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("SCORES")
-                .font(.system(size: 13, weight: .bold, design: .rounded))
-                .tracking(2)
-                .foregroundStyle(gold.opacity(0.9))
-            Text("Leaderboard")
-                .font(.system(size: 28, weight: .semibold, design: .rounded))
-                .foregroundStyle(.primary)
+        HStack(alignment: .center, spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(gold.opacity(0.18))
+                    .frame(width: 44, height: 44)
+                Image(systemName: "trophy.fill")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(gold)
+                    .symbolRenderingMode(.hierarchical)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text("SCORES")
+                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .tracking(2)
+                    .foregroundStyle(gold.opacity(0.9))
+                Text("Leaderboard")
+                    .font(.system(size: 24, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.primary)
+            }
+            Spacer(minLength: 8)
             Text(gameCenter.statusMessage)
-                .font(.system(size: 13, weight: .medium, design: .rounded))
+                .font(.system(size: 12, weight: .medium, design: .rounded))
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
+                .multilineTextAlignment(.trailing)
+                .frame(maxWidth: 240, alignment: .trailing)
         }
     }
 
@@ -300,24 +311,7 @@ struct LeaderboardPanelView: View {
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(snapshot.entries.prefix(8)) { entry in
-                        HStack(spacing: 10) {
-                            Text("#\(entry.rank)")
-                                .font(.system(size: 13, weight: .bold, design: .rounded))
-                                .foregroundStyle(.secondary)
-                                .frame(width: 36, alignment: .leading)
-                            Text(entry.displayName)
-                                .font(.system(
-                                    size: 14,
-                                    weight: entry.isLocalPlayer ? .bold : .medium,
-                                    design: .rounded
-                                ))
-                                .foregroundStyle(entry.isLocalPlayer ? accent(for: metric) : .primary)
-                                .lineLimit(1)
-                            Spacer(minLength: 8)
-                            Text("\(entry.value)")
-                                .font(.system(size: 14, weight: .semibold, design: .rounded))
-                                .monospacedDigit()
-                        }
+                        rankRow(entry, accent: accent(for: metric))
                     }
                 }
             }
@@ -325,6 +319,56 @@ struct LeaderboardPanelView: View {
             Text("Pulling \(audience.title.lowercased()) scores…")
                 .font(.system(size: 14, weight: .medium, design: .rounded))
                 .foregroundStyle(.secondary)
+        }
+    }
+
+    private func rankRow(_ entry: RemoteLeaderboardEntry, accent: Color) -> some View {
+        let medal = medalSymbol(for: entry.rank)
+        return HStack(spacing: 10) {
+            ZStack {
+                Circle()
+                    .fill(medal == nil ? Color.white.opacity(0.08) : accent.opacity(0.2))
+                    .frame(width: 28, height: 28)
+                if let medal {
+                    Image(systemName: medal)
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(medalColor(for: entry.rank))
+                } else {
+                    Text("\(entry.rank)")
+                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Text(entry.displayName)
+                .font(.system(
+                    size: 14,
+                    weight: entry.isLocalPlayer ? .bold : .medium,
+                    design: .rounded
+                ))
+                .foregroundStyle(entry.isLocalPlayer ? accent : .primary)
+                .lineLimit(1)
+            Spacer(minLength: 8)
+            Text("\(entry.value)")
+                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+        }
+    }
+
+    private func medalSymbol(for rank: Int) -> String? {
+        switch rank {
+        case 1: return "medal.fill"
+        case 2: return "medal.fill"
+        case 3: return "medal.fill"
+        default: return nil
+        }
+    }
+
+    private func medalColor(for rank: Int) -> Color {
+        switch rank {
+        case 1: return gold
+        case 2: return Color(white: 0.82)
+        case 3: return Color(red: 0.82, green: 0.55, blue: 0.32)
+        default: return .secondary
         }
     }
 

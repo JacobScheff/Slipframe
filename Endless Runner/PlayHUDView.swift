@@ -30,6 +30,10 @@ struct PlayHUDView: View {
                 }
             }
 
+            if gameModel.isPlaying, gameModel.isOffPlayfield {
+                offTrackBanner
+            }
+
             controls
         }
         .padding(.horizontal, 40)
@@ -40,6 +44,7 @@ struct PlayHUDView: View {
         .opacity(centerHUDOpacity)
         .animation(.easeInOut(duration: 0.45), value: gameModel.tutorialOverlayOpacity)
         .animation(.easeInOut(duration: 0.3), value: gameModel.tutorialBannerText)
+        .animation(.easeInOut(duration: 0.25), value: gameModel.isOffPlayfield)
     }
 
     private var centerHUDOpacity: Double {
@@ -49,6 +54,33 @@ struct PlayHUDView: View {
             return gameModel.tutorialBannerOpacity > 0.05 ? 0 : 1
         }
         return 1
+    }
+
+    private var offTrackBanner: some View {
+        HStack(spacing: 12) {
+            LaneGlyph(accent: gold, lit: false)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Return to the track")
+                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                    .foregroundStyle(gold)
+                Text("Obstacles and music wind down until you step back in.")
+                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(gold.opacity(0.12))
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(gold.opacity(0.45), lineWidth: 1)
+        }
+        .transition(.opacity.combined(with: .move(edge: .top)))
+        .accessibilityLabel("Return to the track. Obstacles and music wind down until you step back in.")
     }
 
     @ViewBuilder

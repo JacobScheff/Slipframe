@@ -22,6 +22,8 @@ final class GameMusic {
     /// Last requested cue (biome music key).
     private(set) var currentCue: String?
     private(set) var isPrepared = false
+    /// 1 = full speed/volume, 0 = paused (player left the play volume).
+    private(set) var playbackFlow: Float = 1
 
     private var playersByCue: [String: AVAudioPlayer] = [:]
     private var durationsByCue: [String: Float] = [:]
@@ -29,6 +31,9 @@ final class GameMusic {
     private var outgoingPlayer: AVAudioPlayer?
     private var fadeTask: Task<Void, Never>?
     private var didConfigureSession = false
+    private var activeBaseVolume: Float = 1
+    private var outgoingBaseVolume: Float = 0
+    private var isFlowPaused = false
 
     private init() {}
 
@@ -61,6 +66,7 @@ final class GameMusic {
         guard let next = loadPlayer(for: cue) else {
             activePlayer?.stop()
             activePlayer = nil
+            activeBaseVolume = 0
             return trackDuration
         }
 
@@ -68,11 +74,37 @@ final class GameMusic {
         next.stop()
         next.currentTime = 0
         next.numberOfLoops = loop ? -1 : 0
-        next.volume = volume
+        activeBaseVolume = volume
+        outgoingBaseVolume = 0
+        isFlowPaused = false
         next.prepareToPlay()
-        next.play()
         activePlayer = next
+        applyPlaybackFlow()
+        if playbackFlow > StreamFlow.stopThreshold {
+            next.play()
+        } else {
+            isFlowPaused = true
+        }
         return trackDuration
+    }
+
+    /// Drive playback rate + gain from the off-track flow (1 = normal, 0 = stopped).
+    func setPlaybackFlow(_ scale: Float) {
+        let clamped = max(0, min(1, scale))
+        let wasStopped = playbackFlow <= StreamFlow.stopThreshold
+        let nowStopped = clamped <= StreamFlow.stopThreshold
+        if abs(clamped - playbackFlow) < 0.002, wasStopped == nowStopped {
+            return
+        }
+        playbackFlow = clamped
+        applyPlaybackFlow()
+    }
+
+    /// Restore full-speed playback (new run, teardown, returning to the menu).
+    func resetPlaybackFlow() {
+        playbackFlow = 1
+        isFlowPaused = false
+        applyPlaybackFlow()
     }
 
     /// Immediate stop — used at the tutorial silence cut.
@@ -84,6 +116,10 @@ final class GameMusic {
         activePlayer = nil
         outgoingPlayer = nil
         currentCue = nil
+        activeBaseVolume = 0
+        outgoingBaseVolume = 0
+        isFlowPaused = false
+        playbackFlow = 1
     }
 
     /// Duration of the biome track in seconds (fallback if the file is missing).
@@ -114,18 +150,27 @@ final class GameMusic {
             return trackDuration
         }
 
+        let previous = activePlayer
+        let previousBase = activeBaseVolume
+
         next.stop()
         next.currentTime = 0
         next.numberOfLoops = loop ? -1 : 0
-        next.volume = 0
+        activeBaseVolume = 0
         next.prepareToPlay()
-        next.play()
 
-        let previous = activePlayer
         if previous === next {
             // Same cue restarted (e.g. force re-enter) — just ramp back up.
             activePlayer = next
             outgoingPlayer = nil
+            outgoingBaseVolume = 0
+            isFlowPaused = false
+            applyPlaybackFlow()
+            if playbackFlow > StreamFlow.stopThreshold {
+                next.play()
+            } else {
+                isFlowPaused = true
+            }
             fadeTask?.cancel()
             fadeTask = Task { @MainActor [weak self] in
                 await self?.rampVolume(of: next, to: 1, over: duration)
@@ -135,6 +180,14 @@ final class GameMusic {
 
         activePlayer = next
         outgoingPlayer = previous
+        outgoingBaseVolume = previous == nil ? 0 : previousBase
+        isFlowPaused = false
+        applyPlaybackFlow()
+        if playbackFlow > StreamFlow.stopThreshold {
+            next.play()
+        } else {
+            isFlowPaused = true
+        }
         fadeTask?.cancel()
         fadeTask = Task { @MainActor [weak self] in
             guard let self else { return }
@@ -144,6 +197,7 @@ final class GameMusic {
                 previous.stop()
                 if self.outgoingPlayer === previous {
                     self.outgoingPlayer = nil
+                    self.outgoingBaseVolume = 0
                 }
             }
             await fadeIn
@@ -159,6 +213,10 @@ final class GameMusic {
         activePlayer = nil
         outgoingPlayer = nil
         currentCue = nil
+        activeBaseVolume = 0
+        outgoingBaseVolume = 0
+        isFlowPaused = false
+        playbackFlow = 1
     }
 
     /// Bundle URL for a cue, if a supported file exists under Music/ (or at the bundle root).
@@ -181,6 +239,8 @@ final class GameMusic {
         guard let url = Self.bundleURL(for: cue) else { return nil }
         do {
             let player = try AVAudioPlayer(contentsOf: url)
+            player.enableRate = true
+            player.rate = 1
             player.prepareToPlay()
             playersByCue[cue] = player
             let duration = Float(player.duration)
@@ -199,7 +259,9 @@ final class GameMusic {
     private func fadeOutActive(over duration: Float) {
         guard let active = activePlayer else { return }
         outgoingPlayer = active
+        outgoingBaseVolume = activeBaseVolume
         activePlayer = nil
+        activeBaseVolume = 0
         fadeTask?.cancel()
         fadeTask = Task { @MainActor [weak self] in
             guard let self else { return }
@@ -207,23 +269,68 @@ final class GameMusic {
             active.stop()
             if self.outgoingPlayer === active {
                 self.outgoingPlayer = nil
+                self.outgoingBaseVolume = 0
             }
         }
     }
 
     private func rampVolume(of player: AVAudioPlayer, to target: Float, over duration: Float) async {
-        let start = player.volume
+        let start = baseVolume(for: player)
         let clampedDuration = max(0.05, duration)
         let steps = max(1, Int(clampedDuration / 0.03))
         for step in 1...steps {
             if Task.isCancelled { return }
             let t = Float(step) / Float(steps)
-            player.volume = start + (target - start) * t
+            setBaseVolume(start + (target - start) * t, for: player)
+            applyPlaybackFlow()
             let ns = UInt64((clampedDuration / Float(steps)) * 1_000_000_000)
             try? await Task.sleep(nanoseconds: ns)
         }
         if !Task.isCancelled {
-            player.volume = target
+            setBaseVolume(target, for: player)
+            applyPlaybackFlow()
+        }
+    }
+
+    private func baseVolume(for player: AVAudioPlayer) -> Float {
+        if player === activePlayer { return activeBaseVolume }
+        if player === outgoingPlayer { return outgoingBaseVolume }
+        return player.volume
+    }
+
+    private func setBaseVolume(_ volume: Float, for player: AVAudioPlayer) {
+        if player === activePlayer {
+            activeBaseVolume = volume
+        } else if player === outgoingPlayer {
+            outgoingBaseVolume = volume
+        }
+    }
+
+    private func applyPlaybackFlow() {
+        let rate = StreamFlow.musicRate(for: playbackFlow)
+        let gain = StreamFlow.musicGain(for: playbackFlow)
+        if let active = activePlayer {
+            active.enableRate = true
+            active.rate = rate
+            active.volume = activeBaseVolume * gain
+        }
+        if let outgoing = outgoingPlayer {
+            outgoing.enableRate = true
+            outgoing.rate = rate
+            outgoing.volume = outgoingBaseVolume * gain
+        }
+
+        let audible = playbackFlow > StreamFlow.stopThreshold
+        if audible {
+            if isFlowPaused {
+                activePlayer?.play()
+                outgoingPlayer?.play()
+                isFlowPaused = false
+            }
+        } else if !isFlowPaused {
+            activePlayer?.pause()
+            outgoingPlayer?.pause()
+            isFlowPaused = true
         }
     }
 

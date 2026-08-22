@@ -22,7 +22,7 @@ struct PersonalBestUpdate: Equatable {
     var anyImproved: Bool { scoreImproved || coinsImproved }
 }
 
-/// Browseable boards shown in the right-track leaderboard panel.
+/// Browseable boards shown in the Scores tab of the command console.
 enum LeaderboardBoard: Hashable, Identifiable {
     case normal
     case loop(EnvironmentID)

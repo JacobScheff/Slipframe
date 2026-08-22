@@ -10,8 +10,7 @@ import RealityKit
 
 private enum ImmersiveAttachmentID: String {
     case playHUD
-    case levelSelect
-    case leaderboard
+    case menuConsole
     case tutorialOverlay
 }
 
@@ -25,9 +24,9 @@ struct ImmersiveView: View {
     @State private var isGameCenterAuthWindowOpen = false
     @State private var didOfferAutoTutorial = false
 
-    /// Side panels show between runs; hide while a run is active.
+    /// Console shows between runs; hide while a run is active.
     /// Also stay hidden while a skipped tutorial dissolves the field.
-    private var showSidePanels: Bool {
+    private var showMenuConsole: Bool {
         guard !gameModel.isPlaying else { return false }
         if gameModel.isTutorialRun, gameModel.isGameOver { return false }
         return true
@@ -46,27 +45,22 @@ struct ImmersiveView: View {
         } update: { _, attachments in
             gameWorld.syncRun(with: gameModel)
             attachPanels(from: attachments)
-            gameWorld.setMenuChromeVisible(showSidePanels)
+            gameWorld.setMenuChromeVisible(showMenuConsole)
             gameWorld.setTutorialOverlayVisible(showTutorialOverlay)
+            gameWorld.setTrackVisible(gameModel.showsTrack)
         } attachments: {
             Attachment(id: ImmersiveAttachmentID.playHUD.rawValue) {
                 PlayHUDView()
                     .environmentObject(gameModel)
                     .environmentObject(gameModel.stats)
             }
-            Attachment(id: ImmersiveAttachmentID.levelSelect.rawValue) {
-                LevelSelectView()
-                    .environmentObject(gameModel)
-                    .opacity(showSidePanels ? 1 : 0)
-                    .allowsHitTesting(showSidePanels)
-            }
-            Attachment(id: ImmersiveAttachmentID.leaderboard.rawValue) {
-                LeaderboardPanelView()
+            Attachment(id: ImmersiveAttachmentID.menuConsole.rawValue) {
+                MenuConsoleView()
                     .environmentObject(gameModel)
                     .environmentObject(gameModel.personalBests)
                     .environmentObject(gameModel.gameCenter)
-                    .opacity(showSidePanels ? 1 : 0)
-                    .allowsHitTesting(showSidePanels)
+                    .opacity(showMenuConsole ? 1 : 0)
+                    .allowsHitTesting(showMenuConsole)
             }
             Attachment(id: ImmersiveAttachmentID.tutorialOverlay.rawValue) {
                 TutorialOverlayView()
@@ -115,7 +109,7 @@ struct ImmersiveView: View {
         didOfferAutoTutorial = true
         guard !gameModel.hasCompletedTutorial else { return }
         Task { @MainActor in
-            // Let the playfield snap to a real floor plane (and side panels
+            // Let the playfield snap to a real floor plane (and the console
             // mount) before diving in. First launch often has no floor yet.
             let timeoutNanoseconds: UInt64 = 4_000_000_000
             let pollNanoseconds: UInt64 = 100_000_000
@@ -149,11 +143,8 @@ struct ImmersiveView: View {
         if let hud = attachments.entity(for: ImmersiveAttachmentID.playHUD.rawValue) {
             gameWorld.attachHUD(hud)
         }
-        if let level = attachments.entity(for: ImmersiveAttachmentID.levelSelect.rawValue) {
-            gameWorld.attachLevelSelect(level)
-        }
-        if let board = attachments.entity(for: ImmersiveAttachmentID.leaderboard.rawValue) {
-            gameWorld.attachLeaderboard(board)
+        if let console = attachments.entity(for: ImmersiveAttachmentID.menuConsole.rawValue) {
+            gameWorld.attachMenuConsole(console)
         }
         if let overlay = attachments.entity(for: ImmersiveAttachmentID.tutorialOverlay.rawValue) {
             gameWorld.attachTutorialOverlay(overlay)

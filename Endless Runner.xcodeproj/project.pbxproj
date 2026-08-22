@@ -48,6 +48,8 @@
 		B01A10512C72000100A00051 /* SlipframeLinks.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A10502C72000100A00050 /* SlipframeLinks.swift */; };
 		B01A10532C72000100A00053 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = B01A10522C72000100A00052 /* PrivacyInfo.xcprivacy */; };
 		B01A10552C72000100A00055 /* DailyScoreShare.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A10542C72000100A00054 /* DailyScoreShare.swift */; };
+		B01A10612C72000100A00061 /* MenuConsoleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A10602C72000100A00060 /* MenuConsoleView.swift */; };
+		B01A10632C72000100A00063 /* PlayfieldFlow.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01A10622C72000100A00062 /* PlayfieldFlow.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -106,6 +108,8 @@
 		B01A10502C72000100A00050 /* SlipframeLinks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlipframeLinks.swift; sourceTree = "<group>"; };
 		B01A10522C72000100A00052 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		B01A10542C72000100A00054 /* DailyScoreShare.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyScoreShare.swift; sourceTree = "<group>"; };
+		B01A10602C72000100A00060 /* MenuConsoleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuConsoleView.swift; sourceTree = "<group>"; };
+		B01A10622C72000100A00062 /* PlayfieldFlow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayfieldFlow.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -178,6 +182,8 @@
 				B01A10542C72000100A00054 /* DailyScoreShare.swift */,
 				B01A10282C72000100A00028 /* LevelSelectView.swift */,
 				B01A102A2C72000100A0002A /* LeaderboardPanelView.swift */,
+				B01A10602C72000100A00060 /* MenuConsoleView.swift */,
+				B01A10622C72000100A00062 /* PlayfieldFlow.swift */,
 				B01A102C2C72000100A0002C /* PersonalBestStore.swift */,
 				B01A102E2C72000100A0002E /* GameCenterService.swift */,
 				B01A10332C72000100A00033 /* GameCenterAuthWindow.swift */,
@@ -365,6 +371,8 @@
 				B01A10092C72000100A0000A /* GameSFX.swift in Sources */,
 				B01A10512C72000100A00051 /* SlipframeLinks.swift in Sources */,
 				B01A10552C72000100A00055 /* DailyScoreShare.swift in Sources */,
+				B01A10612C72000100A00061 /* MenuConsoleView.swift in Sources */,
+				B01A10632C72000100A00063 /* PlayfieldFlow.swift in Sources */,
 				3A9B45292C503B710080BBBE /* Endless_RunnerApp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

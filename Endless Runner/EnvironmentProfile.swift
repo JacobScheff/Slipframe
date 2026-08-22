@@ -33,6 +33,29 @@ enum EnvironmentID: String, CaseIterable, Identifiable, Codable {
     /// Filename stem for the biome track in `Music/`
     /// (e.g. `emberRun.m4a`). See Music/README.md.
     var musicCue: String { rawValue }
+
+    var symbolName: String {
+        switch self {
+        case .emberRun: return "flame.fill"
+        case .summitStep: return "mountain.2.fill"
+        case .ghostGlass: return "sparkle"
+        case .lowCrawl: return "arrow.down.to.line"
+        case .stormPass: return "wind"
+        case .crystalCave: return "diamond.fill"
+        }
+    }
+
+    /// Short verb printed on biome tiles so the twist is readable at a glance.
+    var twistCaption: String {
+        switch self {
+        case .emberRun: return "Clear path"
+        case .summitStep: return "Hop hurdles"
+        case .ghostGlass: return "See-through"
+        case .lowCrawl: return "Duck low"
+        case .stormPass: return "Wind shove"
+        case .crystalCave: return "Combine"
+        }
+    }
 }
 
 enum EnvironmentTwist: Equatable {
