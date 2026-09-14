@@ -150,7 +150,8 @@ enum RiftModifier: String, CaseIterable, Equatable, Codable {
         case .tokenSurge: return "diamond.fill"
         case .aegis: return "shield.fill"
         case .overdrive: return "bolt.fill"
-        case .magnet: return "magnet.fill"
+        // UI draws this one itself; keep a safe fallback for any generic caller.
+        case .magnet: return "circle.hexagongrid.fill"
         case .closeCall: return "scope"
         case .bonusBank: return "lock.fill"
         }

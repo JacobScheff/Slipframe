@@ -1069,26 +1069,27 @@ enum GameVisualBuilders {
                 glyph.addChild(ModelEntity(mesh: mesh, materials: [material]))
             }
         case .magnet:
-            // Chunky U silhouette with bright poles.
+            // Chunky, high-contrast U silhouette built entirely from RealityKit
+            // geometry; it does not depend on the UI/SF Symbols magnet asset.
             for sign: Float in [-1, 1] {
                 let arm = ModelEntity(
-                    mesh: MeshResource.generateBox(width: 0.045, height: 0.2, depth: 0.025),
+                    mesh: MeshResource.generateBox(width: 0.06, height: 0.23, depth: 0.04),
                     materials: [material]
                 )
-                arm.position = SIMD3(sign * 0.1, 0.025, 0)
+                arm.position = SIMD3(sign * 0.11, 0.025, 0)
                 glyph.addChild(arm)
                 let pole = ModelEntity(
-                    mesh: MeshResource.generateBox(width: 0.08, height: 0.045, depth: 0.03),
+                    mesh: MeshResource.generateBox(width: 0.1, height: 0.055, depth: 0.05),
                     materials: [material]
                 )
-                pole.position = SIMD3(sign * 0.1, 0.145, 0.005)
+                pole.position = SIMD3(sign * 0.11, 0.16, 0.01)
                 glyph.addChild(pole)
             }
             let bridge = ModelEntity(
-                mesh: MeshResource.generateBox(width: 0.245, height: 0.055, depth: 0.025),
+                mesh: MeshResource.generateBox(width: 0.28, height: 0.07, depth: 0.04),
                 materials: [material]
             )
-            bridge.position.y = -0.09
+            bridge.position.y = -0.105
             glyph.addChild(bridge)
         case .closeCall:
             let core = ModelEntity(

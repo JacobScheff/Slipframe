@@ -241,9 +241,7 @@ struct LevelSelectView: View {
 
     private func modifierKey(_ modifier: RiftModifier) -> some View {
         HStack(spacing: 8) {
-            Image(systemName: modifier.symbolName)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(gold)
+            RiftModifierIcon(modifier: modifier, accent: gold, size: 14)
                 .frame(width: 20)
             VStack(alignment: .leading, spacing: 1) {
                 Text(modifier.displayName)

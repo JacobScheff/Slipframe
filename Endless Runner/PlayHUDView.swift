@@ -56,9 +56,7 @@ struct PlayHUDView: View {
                 if let modifier = stats.modifier {
                     Divider().frame(height: 38).opacity(0.3)
                     HStack(spacing: 7) {
-                        Image(systemName: modifier.symbolName)
-                            .font(.system(size: 17, weight: .semibold))
-                            .foregroundStyle(gold)
+                        RiftModifierIcon(modifier: modifier, accent: gold, size: 17)
                         Text(activeModifierEffect(for: modifier))
                             .font(.system(size: 10, weight: .bold, design: .rounded))
                             .tracking(0.7)

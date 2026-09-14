@@ -113,6 +113,64 @@ extension View {
 
 // MARK: - Shared HUD graphics
 
+/// Modifier icon that avoids optional SF Symbols for gameplay-critical marks.
+/// `magnet.fill` is absent on some visionOS symbol sets, so Magnet is drawn here.
+struct RiftModifierIcon: View {
+    var modifier: RiftModifier
+    var accent: Color
+    var size: CGFloat = 18
+
+    @ViewBuilder
+    var body: some View {
+        if modifier == .magnet {
+            MagnetGlyphShape()
+                .stroke(
+                    accent,
+                    style: StrokeStyle(
+                        lineWidth: max(2, size * 0.17),
+                        lineCap: .square,
+                        lineJoin: .round
+                    )
+                )
+                .frame(width: size, height: size)
+                .shadow(color: accent.opacity(0.45), radius: 3)
+                .accessibilityHidden(true)
+        } else {
+            Image(systemName: modifier.symbolName)
+                .font(.system(size: size, weight: .semibold))
+                .foregroundStyle(accent)
+                .accessibilityHidden(true)
+        }
+    }
+}
+
+/// Open-top horseshoe magnet with outward-facing pole caps.
+private struct MagnetGlyphShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let left = rect.minX + rect.width * 0.22
+        let right = rect.maxX - rect.width * 0.22
+        let top = rect.minY + rect.height * 0.12
+        let bend = rect.minY + rect.height * 0.62
+
+        path.move(to: CGPoint(x: left, y: top))
+        path.addLine(to: CGPoint(x: left, y: bend))
+        path.addCurve(
+            to: CGPoint(x: right, y: bend),
+            control1: CGPoint(x: left, y: rect.minY + rect.height * 0.94),
+            control2: CGPoint(x: right, y: rect.minY + rect.height * 0.94)
+        )
+        path.addLine(to: CGPoint(x: right, y: top))
+
+        let cap = rect.width * 0.17
+        path.move(to: CGPoint(x: left - cap, y: top))
+        path.addLine(to: CGPoint(x: left + cap, y: top))
+        path.move(to: CGPoint(x: right - cap, y: top))
+        path.addLine(to: CGPoint(x: right + cap, y: top))
+        return path
+    }
+}
+
 /// Three vertical neon lanes — used as a track glyph in settings / off-track coaching.
 struct LaneGlyph: View {
     var accent: Color
