@@ -911,7 +911,7 @@ final class GameWorld {
         portalRoot.scale = SIMD3(repeating: sourcePulse)
 
         if junction.selectedIndex == nil {
-            let t = min(1, junction.elapsed / choiceDuration)
+            let t: Float = min(1, junction.elapsed / choiceDuration)
             // Linear travel is deliberate: the gates always drift toward the player
             // and never appear to park before a separate teleport animation.
             let approachZ = portalZ + 0.08 + (head.z - 0.18 - portalZ) * t
@@ -934,22 +934,22 @@ final class GameWorld {
                 let gate = junction.gates[index]
                 gate.position.z = approachZ
                 let highlighted = index == hovered
-                let breathe = 1 + 0.018 * sin(elapsedTime * 2.1 + Float(index))
+                let breathe: Float = 1 + 0.018 * sin(elapsedTime * 2.1 + Float(index))
                 let emphasis: Float = highlighted && t > 0.35 ? 1.1 : 1
                 let targetScale = SIMD3<Float>(repeating: breathe * emphasis)
                 gate.scale += (targetScale - gate.scale) * min(1, deltaTime * 8)
 
                 if let nodes = gate.children.first(where: { $0.name == "junctionRimNodes" }) {
-                    let shimmer = 1 + 0.035 * sin(elapsedTime * 2.3 + Float(index))
-                    nodes.scale = SIMD3(repeating: shimmer)
+                    let shimmer: Float = 1 + 0.035 * sin(elapsedTime * 2.3 + Float(index))
+                    nodes.scale = SIMD3<Float>(repeating: shimmer)
                     nodes.orientation = simd_quatf(
                         angle: 0.025 * sin(elapsedTime * 0.9 + Float(index)),
                         axis: SIMD3(0, 0, 1)
                     )
                 }
                 if let innerRim = gate.children.first(where: { $0.name == "junctionInnerRim" }) {
-                    let glow = highlighted ? 1.025 : 1
-                    innerRim.scale = SIMD3(repeating: glow)
+                    let glow: Float = highlighted ? 1.025 : 1
+                    innerRim.scale = SIMD3<Float>(repeating: glow)
                 }
 
                 if let signature = gate.children.first(where: { $0.name == "junctionBiomeSignature" }) {
@@ -959,12 +959,12 @@ final class GameWorld {
                     )
                 }
                 if let markers = gate.children.first(where: { $0.name == "junctionDifficultyMarkers" }) {
-                    let pulse = 1 + 0.055 * sin(elapsedTime * 3 + Float(index))
-                    markers.scale = SIMD3(repeating: pulse)
+                    let pulse: Float = 1 + 0.055 * sin(elapsedTime * 3 + Float(index))
+                    markers.scale = SIMD3<Float>(repeating: pulse)
                 }
                 if let glyph = gate.children.first(where: { $0.name == "junctionModifierGlyph" }) {
-                    let pulse = 1 + 0.045 * sin(elapsedTime * 2.7 + Float(index))
-                    glyph.scale = SIMD3(repeating: pulse)
+                    let pulse: Float = 1 + 0.045 * sin(elapsedTime * 2.7 + Float(index))
+                    glyph.scale = SIMD3<Float>(repeating: pulse)
                 }
             }
 
@@ -980,7 +980,7 @@ final class GameWorld {
 
         guard let selected = junction.selectedIndex else { return }
         let crossingElapsed = junction.elapsed - choiceDuration
-        let t = min(1, crossingElapsed / RiftJunctionRules.crossingSeconds)
+        let t: Float = min(1, crossingElapsed / RiftJunctionRules.crossingSeconds)
         let option = junction.options[selected]
 
         // The selected aperture is already directly in front of the player here.
@@ -1000,12 +1000,12 @@ final class GameWorld {
             gate.position.z = head.z - 0.18 + t * 1.1
             if index == selected {
                 gate.position.x += (head.x - gate.position.x) * min(1, deltaTime * 7)
-                let crossingPulse = 1.1 + 0.07 * sin(t * .pi)
-                gate.scale = SIMD3(repeating: crossingPulse)
+                let crossingPulse: Float = 1.1 + 0.07 * sin(t * Float.pi)
+                gate.scale = SIMD3<Float>(repeating: crossingPulse)
             } else {
                 let direction: Float = index < selected ? -1 : 1
                 gate.position.x += direction * deltaTime * 1.5
-                gate.scale = SIMD3(repeating: 0.96)
+                gate.scale = SIMD3<Float>(repeating: 0.96)
             }
         }
 
