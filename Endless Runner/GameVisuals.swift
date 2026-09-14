@@ -911,7 +911,9 @@ enum GameVisualBuilders {
             seed: seed &+ 0xB10
         )
         addDifficultyMarkers(option.risk, to: root)
-        addModifierGlyph(option.modifier, to: root, color: rimColor, seed: seed &+ 0xC41)
+        if let modifier = option.modifier {
+            addModifierGlyph(modifier, to: root, color: rimColor, seed: seed &+ 0xC41)
+        }
         return root
     }
 
@@ -1051,14 +1053,27 @@ enum GameVisualBuilders {
                 glyph.addChild(node)
             }
         case .aegis:
-            let points = [
-                SIMD2<Float>(-0.13, 0.09), SIMD2<Float>(0, 0.15),
-                SIMD2<Float>(0.13, 0.09), SIMD2<Float>(0.1, -0.08),
-                SIMD2<Float>(0, -0.17), SIMD2<Float>(-0.1, -0.08)
-            ]
-            if let mesh = try? ProceduralGeometry.filledPolygon(points: points) {
-                glyph.addChild(ModelEntity(mesh: mesh, materials: [material]))
-            }
+            // Guaranteed primitive geometry: broad crown, solid body, and a
+            // rotated lower plate form an unmistakable shield at portal distance.
+            let body = ModelEntity(
+                mesh: MeshResource.generateBox(width: 0.24, height: 0.18, depth: 0.045),
+                materials: [material]
+            )
+            body.position.y = 0.035
+            glyph.addChild(body)
+            let point = ModelEntity(
+                mesh: MeshResource.generateBox(width: 0.15, height: 0.15, depth: 0.045),
+                materials: [material]
+            )
+            point.position.y = -0.09
+            point.orientation = simd_quatf(angle: .pi / 4, axis: SIMD3(0, 0, 1))
+            glyph.addChild(point)
+            let crown = ModelEntity(
+                mesh: MeshResource.generateBox(width: 0.28, height: 0.045, depth: 0.055),
+                materials: [material]
+            )
+            crown.position.y = 0.14
+            glyph.addChild(crown)
         case .overdrive:
             let points = [
                 SIMD2<Float>(0.02, 0.18), SIMD2<Float>(-0.13, 0.01),

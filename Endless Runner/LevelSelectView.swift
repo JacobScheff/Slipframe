@@ -235,6 +235,7 @@ struct LevelSelectView: View {
                 ForEach(RiftModifier.allCases, id: \.rawValue) { modifier in
                     modifierKey(modifier)
                 }
+                noModifierKey
             }
         }
     }
@@ -262,6 +263,31 @@ struct LevelSelectView: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(modifier.displayName), \(modifier.effectDescription)")
+    }
+
+    private var noModifierKey: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "minus.circle")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 20)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("No Modifier")
+                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                Text("No effect icon")
+                    .font(.system(size: 9, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 9)
+        .padding(.vertical, 7)
+        .background {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color.white.opacity(0.05))
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("No modifier, no effect icon")
     }
 
     private func biomePip(_ id: EnvironmentID) -> some View {

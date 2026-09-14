@@ -755,7 +755,9 @@ final class Endless_RunnerTests: XCTestCase {
         XCTAssertEqual(Set(options.map(\.environment)).count, 3)
         XCTAssertFalse(options.map(\.environment).contains(.emberRun))
         XCTAssertTrue(options.allSatisfy { RiftRisk.allCases.contains($0.risk) })
-        XCTAssertTrue(options.allSatisfy { RiftModifier.allCases.contains($0.modifier) })
+        XCTAssertTrue(options.allSatisfy { option in
+            option.modifier.map { RiftModifier.allCases.contains($0) } ?? true
+        })
 
         var sawRepeatedDifficulty = false
         var sawRepeatedModifier = false
@@ -763,10 +765,31 @@ final class Endless_RunnerTests: XCTestCase {
             var sampleRNG = SeededGenerator(seed: UInt64(seed))
             let sample = RiftJunctionRules.makeOptions(excluding: .emberRun, rng: &sampleRNG)
             sawRepeatedDifficulty = sawRepeatedDifficulty || Set(sample.map(\.risk)).count < 3
-            sawRepeatedModifier = sawRepeatedModifier || Set(sample.map(\.modifier.rawValue)).count < 3
+            sawRepeatedModifier = sawRepeatedModifier
+                || Set(sample.map { $0.modifier?.rawValue ?? "none" }).count < 3
         }
         XCTAssertTrue(sawRepeatedDifficulty)
         XCTAssertTrue(sawRepeatedModifier)
+    }
+
+    func testPortalModifiersAndNoModifierAreUniformlyRandom() {
+        var rng = SeededGenerator(seed: 0xA11_0F_7)
+        let keys = ["none"] + RiftModifier.allCases.map(\.rawValue)
+        var counts = Dictionary(uniqueKeysWithValues: keys.map { ($0, 0) })
+        let junctions = 7_000
+
+        for _ in 0..<junctions {
+            let options = RiftJunctionRules.makeOptions(excluding: .emberRun, rng: &rng)
+            for option in options {
+                counts[option.modifier?.rawValue ?? "none", default: 0] += 1
+            }
+        }
+
+        let expected = Double(junctions * 3) / Double(keys.count)
+        for key in keys {
+            let actual = Double(counts[key, default: 0])
+            XCTAssertEqual(actual, expected, accuracy: expected * 0.08, key)
+        }
     }
 
     func testJunctionLaneSelectionUsesNearestBodyLane() {

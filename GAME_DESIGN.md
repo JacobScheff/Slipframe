@@ -137,6 +137,9 @@ motion. Other modes keep their existing automatic biome rules.
 
 **Portal modifiers**
 
+Each portal independently has an equal chance of rolling any modifier or no modifier.
+No modifier is shown by the absence of a lower portal glyph.
+
 - **Token Surge:** three-token depth chains and doubled token value; increases Crystal
   Cave half frequency.
 - **Aegis:** one shield charge for the chosen biome; the first collision breaks it,

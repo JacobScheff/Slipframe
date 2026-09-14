@@ -165,7 +165,7 @@ enum RiftModifier: String, CaseIterable, Equatable, Codable {
 struct RiftPortalOption: Equatable {
     var environment: EnvironmentID
     var risk: RiftRisk
-    var modifier: RiftModifier
+    var modifier: RiftModifier?
 }
 
 enum RiftJunctionRules {
@@ -182,11 +182,13 @@ enum RiftJunctionRules {
     ) -> [RiftPortalOption] {
         var environments = EnvironmentID.allCases.filter { $0 != current }
         environments.shuffle(using: &rng)
+        // Seven equiprobable results: the six modifiers plus no modifier.
+        let modifierPool: [RiftModifier?] = [nil] + RiftModifier.allCases.map { Optional($0) }
         return (0..<3).map { index in
             RiftPortalOption(
                 environment: environments[index],
                 risk: RiftRisk.allCases.randomElement(using: &rng) ?? .charged,
-                modifier: RiftModifier.allCases.randomElement(using: &rng) ?? .tokenSurge
+                modifier: modifierPool.randomElement(using: &rng) ?? nil
             )
         }
     }
