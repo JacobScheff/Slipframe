@@ -893,6 +893,17 @@ enum GameVisualBuilders {
             root.addChild(aperture)
         }
 
+        // Enabled only during the committed crossing. At headset distance this
+        // briefly fills the view with the portal void while the destination swaps.
+        let crossingVeil = ModelEntity(
+            mesh: MeshResource.generatePlane(width: 2.7, height: 2.15),
+            materials: [UnlitMaterial(color: UIColor.black.withAlphaComponent(0.985))]
+        )
+        crossingVeil.name = "junctionCrossingVeil"
+        crossingVeil.position.z = 0.09
+        crossingVeil.isEnabled = false
+        root.addChild(crossingVeil)
+
         addBiomeSignature(
             option.environment,
             to: root,

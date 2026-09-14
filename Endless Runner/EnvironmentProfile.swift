@@ -126,6 +126,9 @@ struct RiftPortalOption: Equatable {
 
 enum RiftJunctionRules {
     static let choiceSeconds: Float = 10
+    /// Lock just before the gate visually reaches the player so the destination
+    /// can swap behind the dark aperture without revealing the old palette.
+    static let commitLeadSeconds: Float = 0.25
     static let crossingSeconds: Float = 1.2
 
     /// Three distinct destinations. Risk and modifier are rolled independently per portal.

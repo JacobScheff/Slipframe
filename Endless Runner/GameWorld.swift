@@ -903,6 +903,7 @@ final class GameWorld {
         guard let junction else { return }
         junction.elapsed += max(0, deltaTime)
         let choiceDuration = RiftJunctionRules.choiceSeconds
+        let commitTime = choiceDuration - RiftJunctionRules.commitLeadSeconds
 
         // Keep the source rift alive while its three destinations travel outward.
         // A small synchronized pulse reads as a temporary branching state without
@@ -968,7 +969,7 @@ final class GameWorld {
                 }
             }
 
-            if junction.elapsed >= choiceDuration {
+            if junction.elapsed >= commitTime {
                 junction.selectedIndex = hovered
                 GameSFX.shared.playJunctionCommit(
                     risk: junction.options[hovered].risk,
@@ -979,7 +980,7 @@ final class GameWorld {
         }
 
         guard let selected = junction.selectedIndex else { return }
-        let crossingElapsed = junction.elapsed - choiceDuration
+        let crossingElapsed = junction.elapsed - commitTime
         let t: Float = min(1, crossingElapsed / RiftJunctionRules.crossingSeconds)
         let option = junction.options[selected]
 
@@ -987,6 +988,7 @@ final class GameWorld {
         // Swap the distant rift while it is occluded, then hold the destination
         // palette behind the crossing so its reveal feels instantaneous.
         if !junction.didSwapDestinationVisuals {
+            environmentDirector.revealNormalDestinationPalette(option.environment)
             buildPortalRim()
             buildPortalInterior()
             junction.didSwapDestinationVisuals = true
@@ -997,11 +999,12 @@ final class GameWorld {
             let gate = junction.gates[index]
             // Continue the same forward velocity after commitment. Passing the
             // aperture is the transition; there is no scale-up or camera engulf.
-            gate.position.z = head.z - 0.18 + t * 1.1
+            gate.position.z = head.z - 0.28 + t * 0.48
             if index == selected {
                 gate.position.x += (head.x - gate.position.x) * min(1, deltaTime * 7)
                 let crossingPulse: Float = 1.1 + 0.07 * sin(t * Float.pi)
                 gate.scale = SIMD3<Float>(repeating: crossingPulse)
+                gate.children.first(where: { $0.name == "junctionCrossingVeil" })?.isEnabled = true
             } else {
                 let direction: Float = index < selected ? -1 : 1
                 gate.position.x += direction * deltaTime * 1.5

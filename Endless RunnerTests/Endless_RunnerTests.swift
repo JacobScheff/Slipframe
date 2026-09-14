@@ -723,6 +723,12 @@ final class Endless_RunnerTests: XCTestCase {
         XCTAssertFalse(waitingFrame.didEnterEnvironment)
         XCTAssertTrue(director.isAwaitingNormalChoice)
         XCTAssertEqual(director.currentID, .emberRun)
+        director.revealNormalDestinationPalette(.crystalCave)
+        XCTAssertEqual(director.currentID, .emberRun)
+        XCTAssertEqual(
+            director.displayedPalette,
+            EnvironmentCatalog.profile(for: .crystalCave).palette
+        )
         director.chooseNormalEnvironment(.crystalCave)
         XCTAssertFalse(director.isAwaitingNormalChoice)
         XCTAssertEqual(director.currentID, .crystalCave)

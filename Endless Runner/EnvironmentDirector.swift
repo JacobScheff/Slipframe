@@ -148,6 +148,17 @@ final class EnvironmentDirector {
         }
     }
 
+    /// Reveals the destination colors while the committed portal obscures the view.
+    func revealNormalDestinationPalette(_ id: EnvironmentID) {
+        guard case .normal = playMode, isAwaitingNormalChoice else { return }
+        let palette = EnvironmentCatalog.profile(for: id).palette
+        displayedPalette = palette
+        targetPalette = palette
+        blendFrom = palette
+        blendElapsed = EnvironmentCatalog.ambienceLerpSeconds
+        telegraphRemaining = 0
+    }
+
     /// Completes a Normal-mode physical junction. Other modes retain automatic selection.
     func chooseNormalEnvironment(_ id: EnvironmentID) {
         guard case .normal = playMode, isAwaitingNormalChoice else { return }
