@@ -173,11 +173,14 @@ final class EnvironmentDirector {
                 enter(forced, telegraph: true, announceMusic: true)
                 didEnter = true
             }
-        } else if case .normal = playMode,
-                  !isAwaitingNormalChoice,
-                  elapsedInEnvironment >= max(0, currentSwitchInterval - Self.normalDrainLeadSeconds) {
-            isAwaitingNormalChoice = true
-            requestsJunction = true
+        } else if case .normal = playMode {
+            // Once queued, Normal must remain here until the physical choice calls
+            // `chooseNormalEnvironment`. Never fall through to automatic rotation.
+            if !isAwaitingNormalChoice,
+               elapsedInEnvironment >= max(0, currentSwitchInterval - Self.normalDrainLeadSeconds) {
+                isAwaitingNormalChoice = true
+                requestsJunction = true
+            }
         } else if elapsedInEnvironment >= currentSwitchInterval {
             if let next = pickNextEnvironment(), next != currentID {
                 previous = currentID

@@ -76,7 +76,8 @@ Never put a required coin *inside* a wall’s kill volume. Coins always sit in a
 
 - **Hit:** Brief red flash / haptic pulse / wall shatter + freeze-frame, then restart or life lost.
 - **Coin:** Snap to hand → dissolve; score float-up.
-- **Intensity:** Subtle wind/whoosh follows Flow and portal risk; world speed stays constant.
+- **Intensity:** Subtle wind/whoosh follows the score-bonus meter and portal difficulty;
+  world speed stays constant.
 - **UI:** Score + lives as a small world-anchored panel or follow-head HUD — don’t clutter the first view.
 
 ---
@@ -139,13 +140,13 @@ motion. Other modes keep their existing automatic biome rules.
 - **Token Surge:** three-token depth chains and doubled token value; increases Crystal
   Cave half frequency.
 - **Aegis:** one shield charge for the chosen biome; the first collision breaks it,
-  halves Flow, and allows the run to continue. A rotating floor-level particle orbit
+  halves the current score bonus and allows the run to continue. A rotating floor-level particle orbit
   keeps the shield visible without placing an overlay in front of the player's eyes.
-- **Overdrive:** +25% distance reward and larger Flow awards.
+- **Overdrive:** +25% distance reward and faster score-bonus gains.
 
-**Flow:** token catches and near-miss dodges build Flow. Flow slowly drains during active
-play, raises distance scoring up to 2×, and is partially lost when Aegis breaks. Junction
-recovery does not drain Flow.
+**Score Bonus:** token catches and near-miss dodges fill a 0–100% bonus meter. It slowly
+drains during active play, adds up to +100% to distance scoring, and is partially lost
+when Aegis breaks. Junction recovery does not drain the bonus.
 
 **Authored phrases:** Normal-mode standard walls are emitted in short mirrored
 choreographies rather than independent random rows. Stable phrases preserve two broad
@@ -153,7 +154,7 @@ routes, Charged phrases link a readable weave, and Unstable phrases create a pro
 left-center-right reversal. Reward placement follows the intended safe route. Storm Pass
 keeps its wind-aware generator, while Crystal Cave keeps its hand-management generator.
 
-**Run report:** Game over shows a movement grade, peak Flow, close slips, and rifts
+**Run report:** Game over shows a movement grade, best score bonus, close slips, and rifts
 crossed alongside score and tokens. Grades reward expressive mastery rather than survival
 time alone.
 

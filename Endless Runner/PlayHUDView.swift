@@ -62,7 +62,7 @@ struct PlayHUDView: View {
             }
 
             HStack(spacing: 10) {
-                Text("FLOW")
+                Text("SCORE BONUS")
                     .font(.system(size: 10, weight: .bold, design: .rounded))
                     .tracking(1.1)
                     .foregroundStyle(neon)
@@ -81,19 +81,19 @@ struct PlayHUDView: View {
                     }
                 }
                 .frame(height: 7)
-                Text("\(stats.flow)")
+                Text("+\(stats.flow)%")
                     .font(.system(size: 12, weight: .bold, design: .monospaced))
                     .foregroundStyle(.secondary)
-                    .frame(width: 28, alignment: .trailing)
+                    .frame(width: 48, alignment: .trailing)
             }
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Flow \(stats.flow) percent")
+            .accessibilityLabel("Score bonus \(stats.flow) percent")
 
             if gameModel.isGameOver {
                 Divider().opacity(0.3)
                 HStack(spacing: 20) {
                     resultMetric(label: "GRADE", value: performanceGrade, accent: gradeColor)
-                    resultMetric(label: "PEAK FLOW", value: "\(stats.highestFlow)", accent: neon)
+                    resultMetric(label: "BEST BONUS", value: "+\(stats.highestFlow)%", accent: neon)
                     resultMetric(label: "CLOSE SLIPS", value: "\(stats.nearMisses)", accent: gold)
                     resultMetric(label: "RIFTS", value: "\(stats.portalsCrossed)", accent: neon)
                 }

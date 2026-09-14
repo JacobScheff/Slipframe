@@ -713,7 +713,11 @@ final class Endless_RunnerTests: XCTestCase {
         XCTAssertEqual(frame.currentID, .emberRun)
 
         // Pending choices do not retrigger every frame.
-        XCTAssertFalse(director.update(deltaTime: 1).requestsJunction)
+        let waitingFrame = director.update(deltaTime: 1)
+        XCTAssertFalse(waitingFrame.requestsJunction)
+        XCTAssertFalse(waitingFrame.didEnterEnvironment)
+        XCTAssertTrue(director.isAwaitingNormalChoice)
+        XCTAssertEqual(director.currentID, .emberRun)
         director.chooseNormalEnvironment(.crystalCave)
         XCTAssertFalse(director.isAwaitingNormalChoice)
         XCTAssertEqual(director.currentID, .crystalCave)
