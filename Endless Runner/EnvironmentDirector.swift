@@ -16,6 +16,8 @@ struct EnvironmentFrame {
     var telegraphStrength: Float
     var didEnterEnvironment: Bool
     var previousID: EnvironmentID?
+    /// Normal mode has reached a biome boundary and needs a physical portal choice.
+    var requestsJunction: Bool
 }
 
 @MainActor
@@ -34,6 +36,7 @@ final class EnvironmentDirector {
     private var jumpGatesSpawnedThisVisit = 0
     private var playMode: PlayMode = .normal
     private var dailyRNG: SeededGenerator?
+    private(set) var isAwaitingNormalChoice = false
 
     init() {
         let starter = EnvironmentCatalog.profile(for: .emberRun)
@@ -67,6 +70,7 @@ final class EnvironmentDirector {
     func beginRun(mode: PlayMode) {
         playMode = mode
         dailyRNG = nil
+        isAwaitingNormalChoice = false
 
         let start: EnvironmentID
         switch mode {
@@ -138,11 +142,21 @@ final class EnvironmentDirector {
         }
     }
 
+    /// Completes a Normal-mode physical junction. Other modes retain automatic selection.
+    func chooseNormalEnvironment(_ id: EnvironmentID) {
+        guard case .normal = playMode, isAwaitingNormalChoice else { return }
+        isAwaitingNormalChoice = false
+        enter(id, telegraph: true, announceMusic: true)
+    }
+
     func update(deltaTime: Float) -> EnvironmentFrame {
         var didEnter = false
         var previous: EnvironmentID?
+        var requestsJunction = false
 
-        elapsedInEnvironment += deltaTime
+        if !isAwaitingNormalChoice {
+            elapsedInEnvironment += deltaTime
+        }
         if telegraphRemaining > 0 {
             telegraphRemaining = max(0, telegraphRemaining - deltaTime)
         }
@@ -155,6 +169,9 @@ final class EnvironmentDirector {
                 enter(forced, telegraph: true, announceMusic: true)
                 didEnter = true
             }
+        } else if case .normal = playMode, elapsedInEnvironment >= currentSwitchInterval {
+            isAwaitingNormalChoice = true
+            requestsJunction = true
         } else if elapsedInEnvironment >= currentSwitchInterval {
             if let next = pickNextEnvironment(), next != currentID {
                 previous = currentID
@@ -184,7 +201,8 @@ final class EnvironmentDirector {
             displayedPalette: displayedPalette,
             telegraphStrength: telegraph,
             didEnterEnvironment: didEnter,
-            previousID: previous
+            previousID: previous,
+            requestsJunction: requestsJunction
         )
     }
 

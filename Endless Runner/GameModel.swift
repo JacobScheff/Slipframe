@@ -14,6 +14,14 @@ import SwiftUI
 final class RunStats: ObservableObject {
     @Published var score: Int = 0
     @Published var coinsCollected: Int = 0
+    @Published var flow: Int = 0
+    @Published var shieldCharges: Int = 0
+    @Published var risk: RiftRisk = .stable
+    @Published var modifier: RiftModifier? = nil
+    @Published var highestFlow: Int = 0
+    @Published var nearMisses: Int = 0
+    @Published var portalsCrossed: Int = 0
+    @Published var shieldsBroken: Int = 0
 }
 
 @MainActor
@@ -30,10 +38,14 @@ final class GameModel: ObservableObject {
     private let defaults: UserDefaults
     private let tutorialCompletedKey: String
     private let showsTrackKey: String
+    /// Carries fractional risk/Flow rewards so per-meter score ticks stay mathematically fair.
+    private var scoreRemainder: Float = 0
 
     @Published var isPlaying: Bool = false
     @Published var isGameOver: Bool = false
     @Published var immersiveSpaceOpen: Bool = false
+    /// True during Normal mode's wordless three-rift recovery/choice event.
+    @Published var isChoosingPortal: Bool = false
 
     /// Floor track slab is visual-only — play volume is unchanged when this is off.
     @Published var showsTrack: Bool {
@@ -183,6 +195,7 @@ final class GameModel: ObservableObject {
         clearTutorialOverlay()
         isPlaying = false
         isGameOver = true
+        isChoosingPortal = false
         prefersRoomDimming = false
         isOffPlayfield = false
         // Keep `isTutorialRun` true so HUD/panels stay in tutorial-skip mode until
@@ -208,13 +221,59 @@ final class GameModel: ObservableObject {
 
     func addScore(_ points: Int) {
         guard isPlaying, !isTutorialRun else { return }
-        stats.score += points
+        let flowMultiplier = 1 + Float(stats.flow) / 100
+        let modifierMultiplier: Float = stats.modifier == .overdrive ? 1.25 : 1
+        let reward = Float(points) * stats.risk.scoreMultiplier * flowMultiplier * modifierMultiplier
+        let accumulated = reward + scoreRemainder
+        let wholePoints = Int(accumulated.rounded(.down))
+        scoreRemainder = accumulated - Float(wholePoints)
+        stats.score += wholePoints
     }
 
-    /// Coins are a separate counter — score is distance-only.
+    /// Tokens remain a separate leaderboard counter while also feeding Flow.
     func collectCoin(count: Int = 1) {
         guard isPlaying, !isTutorialRun else { return }
-        stats.coinsCollected += count
+        let tokenValue = stats.modifier == .tokenSurge ? 2 : 1
+        stats.coinsCollected += count * tokenValue
+        addFlow((stats.modifier == .overdrive ? 8 : 5) * count)
+    }
+
+    func configureStage(risk: RiftRisk, modifier: RiftModifier?) {
+        stats.risk = risk
+        stats.modifier = modifier
+        stats.shieldCharges = modifier == .aegis ? 1 : 0
+    }
+
+    func addFlow(_ amount: Int) {
+        guard isPlaying, !isTutorialRun else { return }
+        stats.flow = min(100, stats.flow + max(0, amount))
+        stats.highestFlow = max(stats.highestFlow, stats.flow)
+    }
+
+    func decayFlow(_ amount: Int = 1) {
+        guard isPlaying, !isTutorialRun else { return }
+        stats.flow = max(0, stats.flow - max(0, amount))
+    }
+
+    func registerNearMiss() {
+        guard isPlaying, !isTutorialRun else { return }
+        stats.nearMisses += 1
+        addFlow(stats.modifier == .overdrive ? 20 : 14)
+        addScore(3)
+    }
+
+    /// Returns true when an Aegis charge absorbed the collision.
+    func absorbHitIfPossible() -> Bool {
+        guard stats.shieldCharges > 0 else { return false }
+        stats.shieldCharges -= 1
+        stats.shieldsBroken += 1
+        stats.flow = max(0, stats.flow / 2)
+        return true
+    }
+
+    func recordPortalCrossing() {
+        guard isPlaying, !isTutorialRun else { return }
+        stats.portalsCrossed += 1
     }
 
     func endRun() {
@@ -226,6 +285,7 @@ final class GameModel: ObservableObject {
         }
         isPlaying = false
         isGameOver = true
+        isChoosingPortal = false
         prefersRoomDimming = false
         isOffPlayfield = false
         recordPersonalBestsIfNeeded()
@@ -272,6 +332,16 @@ final class GameModel: ObservableObject {
         }
         stats.score = 0
         stats.coinsCollected = 0
+        stats.flow = 0
+        stats.shieldCharges = 0
+        stats.risk = .stable
+        stats.modifier = nil
+        stats.highestFlow = 0
+        stats.nearMisses = 0
+        stats.portalsCrossed = 0
+        stats.shieldsBroken = 0
+        scoreRemainder = 0
+        isChoosingPortal = false
         isGameOver = false
         isPlaying = true
         isTutorialRun = tutorial

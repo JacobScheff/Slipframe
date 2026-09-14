@@ -17,6 +17,10 @@ final class GameSFX {
     private var nextCoinPlayer = 0
     private var hitPlayer: AVAudioPlayer?
     private var windPlayer: AVAudioPlayer?
+    private var junctionOpenPlayer: AVAudioPlayer?
+    private var junctionCommitPlayers: [RiftRisk: AVAudioPlayer] = [:]
+    private var shieldBreakPlayer: AVAudioPlayer?
+    private var nearMissPlayer: AVAudioPlayer?
     private var didConfigureSession = false
 
     private init() {
@@ -42,6 +46,24 @@ final class GameSFX {
             volume: 0.45,
             noiseAmount: 0.65
         )
+        junctionOpenPlayer = Self.makePlayer(
+            frequencies: [110, 164.8, 246.9], duration: 0.8, volume: 0.5, noiseAmount: 0.08
+        )
+        junctionCommitPlayers[.stable] = Self.makePlayer(
+            frequencies: [261.6, 392], duration: 0.5, volume: 0.5, noiseAmount: 0
+        )
+        junctionCommitPlayers[.charged] = Self.makePlayer(
+            frequencies: [261.6, 392, 523.3], duration: 0.55, volume: 0.58, noiseAmount: 0.04
+        )
+        junctionCommitPlayers[.unstable] = Self.makePlayer(
+            frequencies: [130.8, 261.6, 554.4], duration: 0.65, volume: 0.66, noiseAmount: 0.16
+        )
+        shieldBreakPlayer = Self.makePlayer(
+            frequencies: [880, 440, 220], duration: 0.42, volume: 0.62, noiseAmount: 0.18
+        )
+        nearMissPlayer = Self.makePlayer(
+            frequencies: [740, 990], duration: 0.14, volume: 0.38, noiseAmount: 0.1
+        )
     }
 
     /// Call when the immersive world attaches so the first collect is hitch-free.
@@ -52,6 +74,10 @@ final class GameSFX {
         }
         hitPlayer?.prepareToPlay()
         windPlayer?.prepareToPlay()
+        junctionOpenPlayer?.prepareToPlay()
+        junctionCommitPlayers.values.forEach { $0.prepareToPlay() }
+        shieldBreakPlayer?.prepareToPlay()
+        nearMissPlayer?.prepareToPlay()
     }
 
     func playCoinCollect() {
@@ -81,6 +107,31 @@ final class GameSFX {
     func playWindWhoosh() {
         prepareSessionIfNeeded()
         guard let player = windPlayer else { return }
+        player.currentTime = 0
+        player.play()
+    }
+
+    func playJunctionOpen() {
+        play(junctionOpenPlayer)
+    }
+
+    func playJunctionCommit(risk: RiftRisk, laneIndex: Int) {
+        let player = junctionCommitPlayers[risk]
+        player?.pan = max(-0.75, min(0.75, Float(laneIndex - 1) * 0.7))
+        play(player)
+    }
+
+    func playShieldBreak() {
+        play(shieldBreakPlayer)
+    }
+
+    func playNearMiss() {
+        play(nearMissPlayer)
+    }
+
+    private func play(_ player: AVAudioPlayer?) {
+        prepareSessionIfNeeded()
+        guard let player else { return }
         player.currentTime = 0
         player.play()
     }

@@ -67,6 +67,95 @@ enum EnvironmentTwist: Equatable {
     case crystalHalves
 }
 
+/// Player-chosen challenge contract for one Normal-mode biome visit.
+/// Risk changes pattern density / complexity and rewards, never stream speed.
+enum RiftRisk: String, CaseIterable, Equatable, Hashable, Codable {
+    case stable
+    case charged
+    case unstable
+
+    var scoreMultiplier: Float {
+        switch self {
+        case .stable: return 1
+        case .charged: return 1.5
+        case .unstable: return 2
+        }
+    }
+
+    var spawnGapScale: Float {
+        switch self {
+        case .stable: return 1.18
+        case .charged: return 1
+        case .unstable: return 0.86
+        }
+    }
+
+    var collectibleChanceBonus: Float {
+        switch self {
+        case .stable: return 0.05
+        case .charged: return 0.12
+        case .unstable: return 0.2
+        }
+    }
+
+    /// A wordless, redundant visual code: one calm ring through three broken rings.
+    var ringCount: Int {
+        switch self {
+        case .stable: return 1
+        case .charged: return 2
+        case .unstable: return 3
+        }
+    }
+}
+
+/// Small initial modifier set. Each is fully functional and has its own portal glyph.
+enum RiftModifier: String, CaseIterable, Equatable, Codable {
+    /// Extra collectible chains and doubled token value.
+    case tokenSurge
+    /// Grants one collision-absorbing shield on biome entry.
+    case aegis
+    /// Raises distance rewards and Flow gains for the visit.
+    case overdrive
+}
+
+struct RiftPortalOption: Equatable {
+    var environment: EnvironmentID
+    var risk: RiftRisk
+    var modifier: RiftModifier
+}
+
+enum RiftJunctionRules {
+    static let choiceSeconds: Float = 10
+    static let crossingSeconds: Float = 1.2
+
+    /// Three distinct destinations with one of each risk tier. Lanes are shuffled.
+    static func makeOptions<RNG: RandomNumberGenerator>(
+        excluding current: EnvironmentID,
+        rng: inout RNG
+    ) -> [RiftPortalOption] {
+        var environments = EnvironmentID.allCases.filter { $0 != current }
+        environments.shuffle(using: &rng)
+        var risks = RiftRisk.allCases
+        risks.shuffle(using: &rng)
+        var modifiers = RiftModifier.allCases
+        modifiers.shuffle(using: &rng)
+        return (0..<3).map { index in
+            RiftPortalOption(
+                environment: environments[index],
+                risk: risks[index],
+                modifier: modifiers[index]
+            )
+        }
+    }
+
+    static func nearestOptionIndex(headX: Float, laneSpacing: Float) -> Int {
+        let centers = [-laneSpacing, 0, laneSpacing]
+        return centers.enumerated().min {
+            abs(headX - $0.element) < abs(headX - $1.element)
+        }?.offset ?? 1
+    }
+}
+
 /// Linear sRGB colors used to tint procedural meshes (and later, custom assets).
 struct TintColor: Equatable {
     var r: Float
@@ -193,7 +282,7 @@ enum EnvironmentCatalog {
             )
 
         case .ghostGlass:
-            // All walls are white + transparent — no fog / haze volumes.
+            // Mix readable glass with rarer spectral panes — no fog / haze volumes.
             return EnvironmentProfile(
                 id: .ghostGlass,
                 twist: .ghostWalls,
@@ -207,14 +296,14 @@ enum EnvironmentCatalog {
                     ambienceBrightness: 1.0,
                     fogDensity: 0.0,
                     fogColor: TintColor(r: 0.7, g: 0.8, b: 0.9, a: 0.0),
-                    wallTint: TintColor(r: 0.95, g: 0.97, b: 1.0, a: 0.002),
+                    wallTint: TintColor(r: 0.95, g: 0.97, b: 1.0, a: 0.24),
                     wallEmissive: TintColor(r: 0.85, g: 0.92, b: 1.0, a: 1),
-                    wallOpacity: 0.002,
-                    wallEmissiveIntensity: 0.0,
+                    wallOpacity: 0.24,
+                    wallEmissiveIntensity: 0.28,
                     coinTint: TintColor(r: 0.85, g: 0.95, b: 1.0, a: 1)
                 ),
-                ghostWallChance: 1.0,
-                ghostWallOpacity: 0.002,
+                ghostWallChance: 0.45,
+                ghostWallOpacity: 0.075,
                 lowCrawlTeachCount: 0,
                 duckHazardChance: 0,
                 summitStepTeachCount: 0,

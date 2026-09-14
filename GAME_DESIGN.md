@@ -43,7 +43,7 @@ Think **3 lanes** (left / center / right), not a free 2D plane — easier to rea
 | Miss coin | Nothing — optional, not punishing |
 | Coin collect | +10 score, soft chime + particle pop |
 | Survive | Score ticks up with distance |
-| Speed | Starts calm; ramps every ~20–30s |
+| Speed | Constant for the full run; difficulty changes pattern complexity |
 | Patterns | Wall → gap → coin stretch → double walls → speed bump |
 
 **Win condition:** None — high score / personal best.
@@ -76,7 +76,7 @@ Never put a required coin *inside* a wall’s kill volume. Coins always sit in a
 
 - **Hit:** Brief red flash / haptic pulse / wall shatter + freeze-frame, then restart or life lost.
 - **Coin:** Snap to hand → dissolve; score float-up.
-- **Speed:** Subtle wind/whoosh that rises with difficulty.
+- **Intensity:** Subtle wind/whoosh follows Flow and portal risk; world speed stays constant.
 - **UI:** Score + lives as a small world-anchored panel or follow-head HUD — don’t clutter the first view.
 
 ---
@@ -107,6 +107,51 @@ Skip for v1: enemies, power-ups, multiplayer, fancy menus.
 ## Post-Base Implementation
 
 Features to build **after** the MVP loop is solid (scroll, walls, coins, score, restart). Do not block the base game on these.
+
+### Normal-mode rift junctions
+
+Normal mode no longer picks the next biome automatically. At each music boundary the
+active obstacle stream finishes, then the main rift divides into three wordless portal
+choices for a ten-second recovery window. The player may rest in the center until the
+final commitment and chooses by placing their head/body in a lane as the gates arrive.
+
+- Three distinct biomes; never offer the biome that just finished.
+- One Stable, one Charged, and one Unstable contract, shuffled across lanes.
+- Biome is communicated by the animated world inside the aperture.
+- Risk is communicated independently: one calm ring, two energized rings, or three
+  torn/counter-rotating rings.
+- Each portal also carries one geometric modifier glyph: Token Surge, Aegis, or Overdrive.
+- No portal text, countdown, numbers, or floating menu cards.
+- On commitment the chosen gate centers on the player and expands through them; the
+  other two peel harmlessly around the player.
+- Portal gates never collide. The horizon and camera never move.
+
+Normal-mode risk changes pattern composition, recovery spacing, collectible density,
+and score rewards. It never changes stream velocity or requires a wider/deeper physical
+motion. Other modes keep their existing automatic biome rules.
+
+**Initial modifiers**
+
+- **Token Surge:** three-token depth chains and doubled token value; increases Crystal
+  Cave half frequency.
+- **Aegis:** one shield charge for the chosen biome; the first collision breaks it,
+  halves Flow, and allows the run to continue. A rotating floor-level particle orbit
+  keeps the shield visible without placing an overlay in front of the player's eyes.
+- **Overdrive:** +25% distance reward and larger Flow awards.
+
+**Flow:** token catches and near-miss dodges build Flow. Flow slowly drains during active
+play, raises distance scoring up to 2×, and is partially lost when Aegis breaks. Junction
+recovery does not drain Flow.
+
+**Authored phrases:** Normal-mode standard walls are emitted in short mirrored
+choreographies rather than independent random rows. Stable phrases preserve two broad
+routes, Charged phrases link a readable weave, and Unstable phrases create a protected
+left-center-right reversal. Reward placement follows the intended safe route. Storm Pass
+keeps its wind-aware generator, while Crystal Cave keeps its hand-management generator.
+
+**Run report:** Game over shows a movement grade, peak Flow, close slips, and rifts
+crossed alongside score and tokens. Grades reward expressive mastery rather than survival
+time alone.
 
 ### Near-miss reward
 

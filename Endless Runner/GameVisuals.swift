@@ -823,6 +823,199 @@ enum GameVisualBuilders {
         return root
     }
 
+    /// Wordless destination gate used by Normal-mode junctions. Biome identity lives
+    /// inside the aperture; risk is encoded by one, two, or three animated rim echoes.
+    static func makeJunctionPortal(option: RiftPortalOption, seed: UInt64) -> Entity {
+        let root = Entity()
+        root.name = "junctionPortal"
+        let profile = EnvironmentCatalog.profile(for: option.environment)
+        let rimColor = EnvironmentMaterials.uiColor(profile.palette.portalRim)
+        let hotColor = EnvironmentMaterials.uiColor(profile.palette.portalAccent)
+        let voidColor = EnvironmentMaterials.uiColor(profile.palette.portalVoid)
+
+        let jitter: Float
+        switch option.risk {
+        case .stable: jitter = 0.055
+        case .charged: jitter = 0.11
+        case .unstable: jitter = 0.19
+        }
+
+        // Painter-style concentric silhouettes create a true readable aperture without text.
+        for ringIndex in stride(from: option.risk.ringCount, through: 1, by: -1) {
+            let expansion = Float(ringIndex - 1) * 0.12
+            let outline = riftOutline(
+                width: 0.96 + expansion,
+                height: 2.08 + expansion * 1.5,
+                jitter: jitter,
+                sides: 30,
+                seed: seed &+ UInt64(ringIndex) * 0x101
+            )
+            guard let mesh = try? ProceduralGeometry.filledPolygon(points: outline) else { continue }
+            let alpha = max(0.18, 0.58 - CGFloat(ringIndex - 1) * 0.15)
+            let layer = ModelEntity(
+                mesh: mesh,
+                materials: [UnlitMaterial(color: rimColor.withAlphaComponent(alpha))]
+            )
+            layer.name = "junctionRiskRing"
+            layer.position.z = Float(-ringIndex) * 0.012
+            root.addChild(layer)
+        }
+
+        let apertureOutline = riftOutline(
+            width: 0.78,
+            height: 1.82,
+            jitter: jitter * 0.7,
+            sides: 30,
+            seed: seed &+ 0xA93
+        )
+        if let mesh = try? ProceduralGeometry.filledPolygon(points: apertureOutline) {
+            let aperture = ModelEntity(
+                mesh: mesh,
+                materials: [UnlitMaterial(color: voidColor.withAlphaComponent(0.97))]
+            )
+            aperture.name = "junctionAperture"
+            aperture.position.z = 0.015
+            root.addChild(aperture)
+        }
+
+        addBiomeSignature(
+            option.environment,
+            to: root,
+            color: hotColor,
+            seed: seed &+ 0xB10
+        )
+        addModifierGlyph(option.modifier, to: root, color: rimColor, seed: seed &+ 0xC41)
+        return root
+    }
+
+    private static func addBiomeSignature(
+        _ id: EnvironmentID,
+        to root: Entity,
+        color: UIColor,
+        seed: UInt64
+    ) {
+        let material = UnlitMaterial(color: color.withAlphaComponent(0.9))
+        switch id {
+        case .emberRun:
+            for index in 0..<5 {
+                let flame = ModelEntity(
+                    mesh: (try? ProceduralGeometry.bipyramid(
+                        sides: 4, radius: 0.055, topHeight: 0.24, bottomHeight: 0.05,
+                        jitter: 0.16, seed: seed &+ UInt64(index)
+                    )) ?? MeshResource.generateSphere(radius: 0.06),
+                    materials: [material]
+                )
+                flame.position = SIMD3(Float(index - 2) * 0.13, -0.66 + Float(index % 2) * 0.1, 0.04)
+                root.addChild(flame)
+            }
+        case .summitStep:
+            for index in 0..<3 {
+                let peak = ModelEntity(
+                    mesh: (try? ProceduralGeometry.bipyramid(
+                        sides: 3, radius: 0.16 - Float(index) * 0.025,
+                        topHeight: 0.42 + Float(index) * 0.08, bottomHeight: 0.02,
+                        jitter: 0.08, seed: seed &+ UInt64(index)
+                    )) ?? MeshResource.generateSphere(radius: 0.12),
+                    materials: [material]
+                )
+                peak.position = SIMD3(Float(index - 1) * 0.2, -0.38, 0.04)
+                root.addChild(peak)
+            }
+        case .ghostGlass:
+            for index in 0..<5 {
+                let pane = ModelEntity(
+                    mesh: MeshResource.generateBox(width: 0.12, height: 0.46, depth: 0.012),
+                    materials: [UnlitMaterial(color: color.withAlphaComponent(0.48))]
+                )
+                pane.position = SIMD3(Float(index - 2) * 0.135, Float(index % 3 - 1) * 0.22, 0.04)
+                pane.orientation = simd_quatf(angle: Float(index - 2) * 0.11, axis: SIMD3(0, 0, 1))
+                root.addChild(pane)
+            }
+        case .lowCrawl:
+            for index in 0..<6 {
+                let rib = ModelEntity(
+                    mesh: MeshResource.generateBox(width: 0.045, height: 0.58, depth: 0.035),
+                    materials: [material]
+                )
+                rib.position = SIMD3(Float(index) * 0.13 - 0.325, 0.53 - Float(index % 2) * 0.1, 0.04)
+                root.addChild(rib)
+            }
+        case .stormPass:
+            for index in 0..<5 {
+                let streak = ModelEntity(
+                    mesh: MeshResource.generateBox(width: 0.5, height: 0.025, depth: 0.025),
+                    materials: [material]
+                )
+                streak.position = SIMD3(Float(index % 2) * 0.12 - 0.06, Float(index - 2) * 0.2, 0.04)
+                streak.orientation = simd_quatf(angle: -0.3, axis: SIMD3(0, 0, 1))
+                root.addChild(streak)
+            }
+        case .crystalCave:
+            for index in 0..<5 {
+                let crystal = ModelEntity(
+                    mesh: (try? ProceduralGeometry.bipyramid(
+                        sides: 6, radius: 0.065, topHeight: 0.18, bottomHeight: 0.12,
+                        jitter: 0.05, seed: seed &+ UInt64(index)
+                    )) ?? MeshResource.generateSphere(radius: 0.065),
+                    materials: [material]
+                )
+                let angle = Float(index) / 5 * .pi * 2
+                crystal.position = SIMD3(cos(angle) * 0.25, sin(angle) * 0.42, 0.04)
+                root.addChild(crystal)
+            }
+        }
+    }
+
+    /// Small, consistent lower-aperture symbol. It is intentionally geometric and unlabeled.
+    private static func addModifierGlyph(
+        _ modifier: RiftModifier,
+        to root: Entity,
+        color: UIColor,
+        seed: UInt64
+    ) {
+        let glyph = Entity()
+        glyph.name = "junctionModifierGlyph"
+        glyph.position = SIMD3(0, -0.77, 0.065)
+        let material = UnlitMaterial(color: color.withAlphaComponent(0.95))
+        switch modifier {
+        case .tokenSurge:
+            for sign: Float in [-1, 0, 1] {
+                let node = ModelEntity(
+                    mesh: (try? ProceduralGeometry.bipyramid(
+                        sides: 4, radius: 0.035, topHeight: 0.055, bottomHeight: 0.055,
+                        seed: seed &+ UInt64((sign + 1) * 10)
+                    )) ?? MeshResource.generateSphere(radius: 0.035),
+                    materials: [material]
+                )
+                node.position.x = sign * 0.1
+                glyph.addChild(node)
+            }
+        case .aegis:
+            let core = ModelEntity(mesh: MeshResource.generateSphere(radius: 0.065), materials: [material])
+            glyph.addChild(core)
+            for sign: Float in [-1, 1] {
+                let guardPlate = ModelEntity(
+                    mesh: MeshResource.generateBox(width: 0.035, height: 0.15, depth: 0.025),
+                    materials: [material]
+                )
+                guardPlate.position.x = sign * 0.09
+                guardPlate.orientation = simd_quatf(angle: -sign * 0.22, axis: SIMD3(0, 0, 1))
+                glyph.addChild(guardPlate)
+            }
+        case .overdrive:
+            for index in 0..<2 {
+                let slash = ModelEntity(
+                    mesh: MeshResource.generateBox(width: 0.18, height: 0.025, depth: 0.025),
+                    materials: [material]
+                )
+                slash.position = SIMD3(Float(index) * 0.04 - 0.02, Float(index) * 0.07 - 0.035, 0)
+                slash.orientation = simd_quatf(angle: 0.65, axis: SIMD3(0, 0, 1))
+                glyph.addChild(slash)
+            }
+        }
+        root.addChild(glyph)
+    }
+
     /// Stand zone: soft pad, crisp line, forward chevrons, center tick.
     static func makeStartMarker() -> Entity {
         let marker = Entity()

@@ -27,7 +27,7 @@ enum PlayModeKind: String, CaseIterable, Identifiable {
     var subtitle: String {
         switch self {
         case .normal:
-            return "Random biomes, always opens on Ember Run."
+            return "Choose your next biome through three physical rift portals."
         case .playlist:
             return "Your biomes, shuffled each switch. Pick a start or leave it random."
         case .solo:
@@ -40,7 +40,7 @@ enum PlayModeKind: String, CaseIterable, Identifiable {
     /// One-line blurb for the mode cards.
     var cardBlurb: String {
         switch self {
-        case .normal: return "Shuffled biomes"
+        case .normal: return "Branching rifts"
         case .playlist: return "Your mix"
         case .solo: return "One biome"
         case .daily: return "Shared today"

@@ -17,17 +17,14 @@ struct PlayHUDView: View {
     private let hazard = Color(red: 1.0, green: 0.35, blue: 0.32)
 
     var body: some View {
-        VStack(spacing: 18) {
+        VStack(spacing: 14) {
             if gameModel.isTutorialRun {
                 Text("TUTORIAL")
                     .font(.system(size: 15, weight: .bold, design: .rounded))
                     .tracking(3)
                     .foregroundStyle(neon.opacity(0.85))
             } else {
-                HStack(spacing: 28) {
-                    metricChip(title: "Score", value: "\(stats.score)", accent: neon)
-                    metricChip(title: "Tokens", value: "\(stats.coinsCollected)", accent: gold)
-                }
+                runReadout
             }
 
             if gameModel.isPlaying, gameModel.isOffPlayfield {
@@ -36,18 +33,177 @@ struct PlayHUDView: View {
 
             controls
         }
-        .padding(.horizontal, 40)
-        .padding(.vertical, 28)
-        .frame(minWidth: 420)
-        .xenotechPanel(primary: neon, secondary: gold, cornerRadius: 26)
+        .padding(.horizontal, 28)
+        .padding(.vertical, 18)
+        .frame(minWidth: 430)
+        .xenotechPanel(primary: neon, secondary: gold, cornerRadius: 20)
         // Dissolve center HUD during overdrive / outro — coaching overlay owns the moment.
         .opacity(centerHUDOpacity)
         .animation(.easeInOut(duration: 0.45), value: gameModel.tutorialOverlayOpacity)
         .animation(.easeInOut(duration: 0.3), value: gameModel.tutorialBannerText)
         .animation(.easeInOut(duration: 0.25), value: gameModel.isOffPlayfield)
+        .animation(.easeInOut(duration: 0.35), value: gameModel.isChoosingPortal)
+    }
+
+    private var runReadout: some View {
+        VStack(spacing: 10) {
+            HStack(alignment: .center, spacing: 22) {
+                compactMetric(title: "SCORE", value: "\(stats.score)", accent: neon)
+                Divider().frame(height: 38).opacity(0.3)
+                compactMetric(title: "TOKENS", value: "\(stats.coinsCollected)", accent: gold)
+                Divider().frame(height: 38).opacity(0.3)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 7) {
+                        Image(systemName: riskSymbol)
+                            .foregroundStyle(riskColor)
+                        Text(riskName)
+                            .font(.system(size: 13, weight: .bold, design: .rounded))
+                            .tracking(1)
+                    }
+                    HStack(spacing: 7) {
+                        Image(systemName: modifierSymbol)
+                            .foregroundStyle(gold)
+                        Text(modifierName)
+                            .font(.system(size: 12, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .frame(minWidth: 104, alignment: .leading)
+
+                if stats.shieldCharges > 0 {
+                    Image(systemName: "shield.lefthalf.filled")
+                        .font(.system(size: 25, weight: .semibold))
+                        .foregroundStyle(neon)
+                        .accessibilityLabel("Aegis shield ready")
+                }
+            }
+
+            HStack(spacing: 10) {
+                Image(systemName: "waveform.path.ecg")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(neon)
+                GeometryReader { proxy in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(Color.white.opacity(0.09))
+                        Capsule()
+                            .fill(
+                                LinearGradient(
+                                    colors: [neon, stats.flow >= 80 ? gold : neon.opacity(0.72)],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            .frame(width: proxy.size.width * CGFloat(stats.flow) / 100)
+                    }
+                }
+                .frame(height: 7)
+                Text("\(stats.flow)")
+                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 28, alignment: .trailing)
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Flow \(stats.flow) percent")
+
+            if gameModel.isGameOver {
+                Divider().opacity(0.3)
+                HStack(spacing: 20) {
+                    resultMetric(label: "GRADE", value: performanceGrade, accent: gradeColor)
+                    resultMetric(label: "PEAK FLOW", value: "\(stats.highestFlow)", accent: neon)
+                    resultMetric(label: "CLOSE SLIPS", value: "\(stats.nearMisses)", accent: gold)
+                    resultMetric(label: "RIFTS", value: "\(stats.portalsCrossed)", accent: neon)
+                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+    }
+
+    private func resultMetric(label: String, value: String, accent: Color) -> some View {
+        VStack(spacing: 2) {
+            Text(value)
+                .font(.system(size: label == "GRADE" ? 25 : 18, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(accent)
+            Text(label)
+                .font(.system(size: 9, weight: .bold, design: .rounded))
+                .tracking(0.9)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var performanceGrade: String {
+        let mastery = stats.highestFlow + stats.nearMisses * 4 + stats.portalsCrossed * 10
+        switch mastery {
+        case 150...: return "S"
+        case 100...: return "A"
+        case 65...: return "B"
+        case 30...: return "C"
+        default: return "D"
+        }
+    }
+
+    private var gradeColor: Color {
+        performanceGrade == "S" || performanceGrade == "A" ? gold : neon
+    }
+
+    private func compactMetric(title: String, value: String, accent: Color) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(title)
+                .font(.system(size: 10, weight: .bold, design: .rounded))
+                .tracking(1.2)
+                .foregroundStyle(accent.opacity(0.85))
+            Text(value)
+                .font(.system(size: 30, weight: .bold, design: .rounded))
+                .monospacedDigit()
+        }
+    }
+
+    private var riskName: String {
+        switch stats.risk {
+        case .stable: return "STABLE"
+        case .charged: return "CHARGED"
+        case .unstable: return "UNSTABLE"
+        }
+    }
+
+    private var riskSymbol: String {
+        switch stats.risk {
+        case .stable: return "circle"
+        case .charged: return "circle.hexagongrid.fill"
+        case .unstable: return "aqi.high"
+        }
+    }
+
+    private var riskColor: Color {
+        switch stats.risk {
+        case .stable: return neon
+        case .charged: return gold
+        case .unstable: return hazard
+        }
+    }
+
+    private var modifierName: String {
+        switch stats.modifier {
+        case .tokenSurge: return "TOKEN SURGE"
+        case .aegis: return "AEGIS"
+        case .overdrive: return "OVERDRIVE"
+        case nil: return "BASELINE"
+        }
+    }
+
+    private var modifierSymbol: String {
+        switch stats.modifier {
+        case .tokenSurge: return "diamond.fill"
+        case .aegis: return "shield.fill"
+        case .overdrive: return "bolt.fill"
+        case nil: return "circle.dotted"
+        }
     }
 
     private var centerHUDOpacity: Double {
+        if gameModel.isChoosingPortal { return 0 }
         // Keep Skip reachable for the whole tutorial (including auto-start / overdrive).
         // Only yield the center stage during the success banner.
         if gameModel.isTutorialRun {

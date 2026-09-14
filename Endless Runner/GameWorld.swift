@@ -156,6 +156,29 @@ final class GameWorld {
         var timeSinceGrab: Float = 0
     }
 
+    private final class JunctionState {
+        let root: Entity
+        let gates: [Entity]
+        let guide: ModelEntity
+        let options: [RiftPortalOption]
+        var elapsed: Float = 0
+        var selectedIndex: Int?
+
+        init(root: Entity, gates: [Entity], guide: ModelEntity, options: [RiftPortalOption]) {
+            self.root = root
+            self.gates = gates
+            self.guide = guide
+            self.options = options
+        }
+    }
+
+    /// One authored beat inside a short obstacle phrase. Phrases preserve rhythm
+    /// across several spawns while still allowing seeded/random mirroring.
+    private struct PhraseBeat {
+        var blocking: Set<Lane>
+        var reward: Lane?
+    }
+
     // Layout
     private static let laneSpacing: Float = 0.75
     private static let wallHeight: Float = 1.8
@@ -186,9 +209,8 @@ final class GameWorld {
     /// Crystal halves require a close hand touch (fingertips + grip only; never wrist/arm).
     /// Kept tight so distant hands do not grab or trigger the open-hand drop window.
     private static let crystalCollectDistance: Float = 0.16
-    private static let baseSpeed: Float = 3.0
-    private static let maxSpeed: Float = 7.0
-    private static let speedRampPerSecond: Float = 0.055 / 3
+    /// Constant for every stage and risk tier. Challenge comes from composition, not velocity.
+    private static let runSpeed: Float = 3.0
     /// Continuous obstacle stream with a bit of breathing room between beats.
     private static let spawnGapMin: Float = 2.2
     private static let spawnGapMax: Float = 2.9
@@ -244,6 +266,8 @@ final class GameWorld {
     private static let portalCornerRadius: Float = 0.85
     /// Neon halo that peeks out around the portal mesh.
     private static let portalRimThickness: Float = 0.11
+    /// Choice gates fan wider than gameplay lanes so all three worlds remain distinct.
+    private static let junctionFanSpacing: Float = 1.02
     /// Prefer snapping the portal onto a real wall in this band.
     private static let portalMinDistance: Float = 3.5
     private static let portalMaxDistance: Float = 10.0
@@ -314,6 +338,7 @@ final class GameWorld {
     private let portalEntity = Entity()
     private let portalWorld = Entity()
     private let visualFX = VisualFXController()
+    private var aegisAura: Entity?
 
     private weak var gameModel: GameModel?
     private let environmentDirector = EnvironmentDirector()
@@ -336,7 +361,7 @@ final class GameWorld {
     private var heldLeft: HeldHalf?
     private var heldRight: HeldHalf?
 
-    private var speed: Float = GameWorld.baseSpeed
+    private var speed: Float = GameWorld.runSpeed
     /// 1 while the player is on the play volume; eases to 0 when they step off.
     private var streamFlow = StreamFlow()
     /// First obstacle spawns on the opening tick of a run.
@@ -345,7 +370,12 @@ final class GameWorld {
     private var lastAdjacentDoubleOpenLaneRaw: Int?
     /// Extra depth for this beat when a left↔right open-lane flip needs more room.
     private var patternSpawnZOffset: Float = 0
+    private var phraseQueue: [PhraseBeat] = []
+    private var pendingPhraseReward: Lane?
     private var distanceAccumulator: Float = 0
+    private var flowDecayAccumulator: Float = 0
+    private var junctionQueued = false
+    private var junction: JunctionState?
     /// Portal plane depth along playfield −Z.
     private var portalZ: Float = GameWorld.defaultPortalZ
     /// Where obstacles / coins appear (just in front of the portal).
@@ -554,7 +584,10 @@ final class GameWorld {
         activeSpawnZ = GameWorld.defaultPortalZ + GameWorld.spawnInFrontOfPortal
         lastBuiltPortalZ = .greatestFiniteMagnitude
         visualFX.clear()
+        aegisAura?.removeFromParent()
+        aegisAura = nil
         resetGameOverClear()
+        clearJunction()
         clearDynamicContent()
         dropHeldHalves()
         gameplayRNG = nil
@@ -752,7 +785,10 @@ final class GameWorld {
             placePlayfield()
         }
         visualFX.clear()
+        aegisAura?.removeFromParent()
+        aegisAura = nil
         resetGameOverClear()
+        clearJunction()
         clearDynamicContent()
         dropHeldHalves()
         let mode = gameModel?.resolvedPlayMode ?? .normal
@@ -802,12 +838,165 @@ final class GameWorld {
             distanceUntilSpawn = 0
             GameMusic.shared.prepare()
         }
-        speed = GameWorld.baseSpeed * tutorialSpeedMultiplier
+        speed = GameWorld.runSpeed * tutorialSpeedMultiplier
         distanceAccumulator = 0
+        flowDecayAccumulator = 0
+        junctionQueued = false
         lastAdjacentDoubleOpenLaneRaw = nil
         patternSpawnZOffset = 0
+        phraseQueue.removeAll()
+        pendingPhraseReward = nil
         visualFX.prepare()
         GameSFX.shared.prepare()
+    }
+
+    // MARK: - Normal-mode physical junctions
+
+    private func beginJunction() {
+        guard junction == nil, junctionQueued else { return }
+        junctionQueued = false
+        dropHeldHalves()
+        resetWind()
+
+        let options: [RiftPortalOption]
+        var rng = SystemRandomNumberGenerator()
+        options = RiftJunctionRules.makeOptions(
+            excluding: environmentDirector.currentID,
+            rng: &rng
+        )
+
+        let junctionRoot = Entity()
+        junctionRoot.name = "riftJunction"
+        let guideDepth = max(1, -portalZ)
+        let guide = ModelEntity(
+            mesh: MeshResource.generateBox(width: 0.075, height: 0.014, depth: guideDepth),
+            materials: [GameMaterials.laneCore()]
+        )
+        guide.name = "junctionSelectionGuide"
+        guide.position = SIMD3(0, 0.045, portalZ * 0.5)
+        junctionRoot.addChild(guide)
+        var gates: [Entity] = []
+        for index in options.indices {
+            let gate = GameVisualBuilders.makeJunctionPortal(
+                option: options[index],
+                seed: nextVisualSeed()
+            )
+            gate.position = SIMD3(
+                Float(index - 1) * GameWorld.junctionFanSpacing,
+                GameWorld.portalHeight * 0.5,
+                portalZ + 0.08
+            )
+            junctionRoot.addChild(gate)
+            gates.append(gate)
+        }
+        root.addChild(junctionRoot)
+        portalRoot.isEnabled = false
+        junction = JunctionState(root: junctionRoot, gates: gates, guide: guide, options: options)
+        gameModel?.isChoosingPortal = true
+        GameSFX.shared.playJunctionOpen()
+    }
+
+    private func updateJunction(deltaTime: Float, head: SIMD3<Float>, gameModel: GameModel) {
+        guard let junction else { return }
+        junction.elapsed += max(0, deltaTime)
+        let choiceDuration = RiftJunctionRules.choiceSeconds
+        // The biome track exhales during the break, then returns at the crossing.
+        let calmMotion: Float = junction.selectedIndex == nil ? 0.32 : 0.72
+        GameMusic.shared.setPlaybackFlow(calmMotion)
+
+        if junction.selectedIndex == nil {
+            let t = min(1, junction.elapsed / choiceDuration)
+            // Slow, readable travel for most of the break; ease toward the player at the end.
+            let eased = t * t * (3 - 2 * t)
+            let approachZ = portalZ + (head.z - 0.28 - portalZ) * eased
+            let hovered = RiftJunctionRules.nearestOptionIndex(
+                headX: head.x,
+                laneSpacing: GameWorld.laneSpacing
+            )
+            let guideX = Float(hovered - 1) * GameWorld.laneSpacing
+            junction.guide.position.x += (guideX - junction.guide.position.x) * min(1, deltaTime * 9)
+            let guideTint = EnvironmentCatalog.profile(
+                for: junction.options[hovered].environment
+            ).palette.laneStripe
+            junction.guide.model?.materials = [
+                GameMaterials.laneCore(tint: EnvironmentMaterials.uiColor(guideTint))
+            ]
+            let guidePulse: Float = 1 + 0.18 * sin(elapsedTime * 4)
+            junction.guide.scale = SIMD3(guidePulse, 1, 1)
+
+            for index in junction.gates.indices {
+                let gate = junction.gates[index]
+                gate.position.z = approachZ
+                let highlighted = index == hovered
+                let breathe = 1 + 0.025 * sin(elapsedTime * (1.8 + Float(junction.options[index].risk.ringCount)))
+                let emphasis: Float = highlighted && t > 0.35 ? 1.1 : 1
+                gate.scale = SIMD3(repeating: breathe * emphasis)
+
+                // Risk echoes counter-rotate; biome aperture and symbol remain stable/readable.
+                var ringIndex: Float = 0
+                for child in gate.children where child.name == "junctionRiskRing" {
+                    ringIndex += 1
+                    let direction: Float = Int(ringIndex).isMultiple(of: 2) ? -1 : 1
+                    child.orientation = simd_quatf(
+                        angle: elapsedTime * 0.16 * ringIndex * direction,
+                        axis: SIMD3(0, 0, 1)
+                    )
+                }
+                if let glyph = gate.children.first(where: { $0.name == "junctionModifierGlyph" }) {
+                    let pulse = 1 + 0.08 * sin(elapsedTime * 3.2 + Float(index))
+                    glyph.scale = SIMD3(repeating: pulse)
+                }
+            }
+
+            if junction.elapsed >= choiceDuration {
+                junction.selectedIndex = hovered
+                GameSFX.shared.playJunctionCommit(
+                    risk: junction.options[hovered].risk,
+                    laneIndex: hovered
+                )
+            }
+            return
+        }
+
+        guard let selected = junction.selectedIndex else { return }
+        let crossingElapsed = junction.elapsed - choiceDuration
+        let t = min(1, crossingElapsed / RiftJunctionRules.crossingSeconds)
+        let smooth = t * t * (3 - 2 * t)
+        for index in junction.gates.indices {
+            let gate = junction.gates[index]
+            if index == selected {
+                gate.position.x += (head.x - gate.position.x) * min(1, deltaTime * 8)
+                gate.position.z = head.z - 0.28 + smooth * 1.15
+                let scale = 1.1 + smooth * 4.2
+                gate.scale = SIMD3(repeating: scale)
+            } else {
+                let direction: Float = index < selected ? -1 : 1
+                gate.position.x += direction * deltaTime * 2.8
+                gate.position.z += deltaTime * 1.2
+                gate.scale *= max(0.15, 1 - deltaTime * 2.4)
+            }
+        }
+
+        guard t >= 1 else { return }
+        let option = junction.options[selected]
+        junction.root.removeFromParent()
+        self.junction = nil
+        portalRoot.isEnabled = true
+        gameModel.isChoosingPortal = false
+        environmentDirector.chooseNormalEnvironment(option.environment)
+        activeSpawnProfile = environmentDirector.currentProfile
+        gameModel.configureStage(risk: option.risk, modifier: option.modifier)
+        gameModel.recordPortalCrossing()
+        phraseQueue.removeAll()
+        pendingPhraseReward = nil
+        if activeSpawnProfile.twist == .windShove {
+            timeUntilWind = nextFloat(in: 1.2...2.5)
+        }
+        buildPortalRim()
+        buildPortalInterior()
+        applyPalette(environmentDirector.displayedPalette, telegraph: 1)
+        distanceUntilSpawn = 2.2
+        GameMusic.shared.resetPlaybackFlow()
     }
 
     /// Re-snap the track to the current headset pose (use after the user recenters their origin).
@@ -1076,6 +1265,14 @@ final class GameWorld {
         patternSpawnZOffset = 0
         gustEntity?.removeFromParent()
         gustEntity = nil
+    }
+
+    private func clearJunction() {
+        junction?.root.removeFromParent()
+        junction = nil
+        junctionQueued = false
+        portalRoot.isEnabled = true
+        gameModel?.isChoosingPortal = false
     }
 
     private func resetGameOverClear() {
@@ -1362,6 +1559,7 @@ final class GameWorld {
         upgradePlayfieldIfNeeded()
 
         guard let gameModel else { return }
+        syncAegisAura(gameModel: gameModel)
 
         // Calibrate standing height on the menu / after a run — freeze during play
         // so a jump cannot raise the baseline mid-hurdle.
@@ -1415,6 +1613,11 @@ final class GameWorld {
         }
 
         let frame = environmentDirector.update(deltaTime: simDt)
+        if frame.requestsJunction {
+            // Finish the currently readable beat before presenting the restful choice.
+            junctionQueued = true
+            distanceUntilSpawn = .greatestFiniteMagnitude
+        }
         if frame.didEnterEnvironment {
             activeSpawnProfile = frame.profile
             dropHeldHalves()
@@ -1427,19 +1630,30 @@ final class GameWorld {
         let telegraph = max(frame.telegraphStrength, tutorialPortalPulse)
         applyPalette(frame.displayedPalette, telegraph: telegraph)
 
+        if junction != nil {
+            updateJunction(deltaTime: dt, head: playfieldHeadPosition(), gameModel: gameModel)
+            return
+        }
+
         if tutorialHitCooldown > 0 {
             tutorialHitCooldown = max(0, tutorialHitCooldown - simDt)
         }
 
-        let maxSpeed = GameWorld.maxSpeed * max(1, tutorialSpeedMultiplier)
+        // Never ramp with elapsed time or chosen risk. Tutorial may temporarily slow it.
         let travel = speed * simDt
-        speed = min(maxSpeed, speed + GameWorld.speedRampPerSecond * simDt * tutorialSpeedMultiplier)
+        speed = GameWorld.runSpeed * tutorialSpeedMultiplier
 
         distanceAccumulator += travel
         if distanceAccumulator >= 1 {
             let gained = Int(distanceAccumulator)
             distanceAccumulator -= Float(gained)
             gameModel.addScore(gained)
+        }
+
+        flowDecayAccumulator += simDt
+        if flowDecayAccumulator >= 0.75 {
+            gameModel.decayFlow()
+            flowDecayAccumulator -= 0.75
         }
 
         advanceEntities(by: travel, deltaTime: simDt)
@@ -1451,7 +1665,7 @@ final class GameWorld {
         updateHeldHalves(deltaTime: dt)
 
         distanceUntilSpawn -= travel
-        if tutorialSpawningEnabled, motion > StreamFlow.stopThreshold, distanceUntilSpawn <= 0 {
+        if !junctionQueued, tutorialSpawningEnabled, motion > StreamFlow.stopThreshold, distanceUntilSpawn <= 0 {
             patternSpawnZOffset = 0
             spawnNextPattern()
             // Preserve spacing to the following beat when this one was pushed deeper.
@@ -1460,6 +1674,9 @@ final class GameWorld {
 
         resolveCollisions(gameModel: gameModel)
         pruneEntities()
+        if junctionQueued, walls.isEmpty, coins.isEmpty, halves.isEmpty {
+            beginJunction()
+        }
     }
 
     private func tickTutorial(gameModel: GameModel, deltaTime: Float) {
@@ -1469,7 +1686,7 @@ final class GameWorld {
 
         if frame.didEnterSection {
             tutorialSpeedMultiplier = max(0.01, frame.section.speedMultiplier)
-            speed = GameWorld.baseSpeed * tutorialSpeedMultiplier
+            speed = GameWorld.runSpeed * tutorialSpeedMultiplier
             if let environment = frame.section.environment {
                 environmentDirector.forceEnvironment(environment, telegraph: true)
                 activeSpawnProfile = environmentDirector.currentProfile
@@ -1651,15 +1868,35 @@ final class GameWorld {
     }
 
     private func spawnGap(for profile: EnvironmentProfile) -> Float {
+        let base: Float
         switch profile.twist {
         case .lowCrawl:
-            return nextFloat(in: GameWorld.lowCrawlSpawnGapMin...GameWorld.lowCrawlSpawnGapMax)
+            base = nextFloat(in: GameWorld.lowCrawlSpawnGapMin...GameWorld.lowCrawlSpawnGapMax)
         case .summitStep:
-            return nextFloat(in: GameWorld.summitStepSpawnGapMin...GameWorld.summitStepSpawnGapMax)
+            base = nextFloat(in: GameWorld.summitStepSpawnGapMin...GameWorld.summitStepSpawnGapMax)
         case .baseline:
-            return nextFloat(in: GameWorld.emberSpawnGapMin...GameWorld.emberSpawnGapMax)
+            base = nextFloat(in: GameWorld.emberSpawnGapMin...GameWorld.emberSpawnGapMax)
         default:
-            return nextFloat(in: GameWorld.spawnGapMin...GameWorld.spawnGapMax)
+            base = nextFloat(in: GameWorld.spawnGapMin...GameWorld.spawnGapMax)
+        }
+        if case .normal? = gameModel?.resolvedPlayMode {
+            return base * (gameModel?.stats.risk.spawnGapScale ?? 1)
+        }
+        return base
+    }
+
+    private var collectibleChance: Float {
+        guard case .normal? = gameModel?.resolvedPlayMode else { return 0.7 }
+        let modifierBonus: Float = gameModel?.stats.modifier == .tokenSurge ? 0.16 : 0
+        return min(0.98, 0.7 + (gameModel?.stats.risk.collectibleChanceBonus ?? 0) + modifierBonus)
+    }
+
+    private func biomeHazardChance(_ base: Float) -> Float {
+        guard case .normal? = gameModel?.resolvedPlayMode else { return base }
+        switch gameModel?.stats.risk ?? .stable {
+        case .stable: return max(0.28, base - 0.22)
+        case .charged: return base
+        case .unstable: return min(0.88, base + 0.2)
         }
     }
 
@@ -2150,8 +2387,8 @@ final class GameWorld {
         spawnWall(blocking: blocking, kind: .standard, profile: activeSpawnProfile)
 
         let safeLanes = Lane.allCases.filter { !blocking.contains($0) }
-        if let coinLane = nextElement(safeLanes), nextUnitFloat() < 0.7 {
-            spawnCoin(in: coinLane)
+        if let coinLane = rewardLane(from: safeLanes), nextUnitFloat() < collectibleChance {
+            spawnReward(in: coinLane)
         }
     }
 
@@ -2178,19 +2415,19 @@ final class GameWorld {
         spawnWall(blocking: blocking, kind: .standard, profile: profile)
 
         let safeLanes = Lane.allCases.filter { !blocking.contains($0) }
-        if let coinLane = nextElement(safeLanes), nextUnitFloat() < 0.7 {
-            spawnCoin(in: coinLane)
+        if let coinLane = nextElement(safeLanes), nextUnitFloat() < collectibleChance {
+            spawnReward(in: coinLane)
         }
     }
 
     private func spawnGhostGlassPattern(profile: EnvironmentProfile) {
         let blocking = randomWallLanes()
-        // Every Ghost Glass wall is the white transparent ghost variant.
-        spawnWall(blocking: blocking, kind: .ghost, profile: profile)
+        let kind: WallKind = nextUnitFloat() < profile.ghostWallChance ? .ghost : .standard
+        spawnWall(blocking: blocking, kind: kind, profile: profile)
 
         let safeLanes = Lane.allCases.filter { !blocking.contains($0) }
-        if let coinLane = nextElement(safeLanes), nextUnitFloat() < 0.7 {
-            spawnCoin(in: coinLane)
+        if let coinLane = rewardLane(from: safeLanes), nextUnitFloat() < collectibleChance {
+            spawnReward(in: coinLane)
         }
     }
 
@@ -2199,13 +2436,13 @@ final class GameWorld {
             spawnDuckWall()
             environmentDirector.noteDuckGateSpawned()
             // Coin under the hanging ceiling — lowered so ducking still rewards grabs.
-            if nextUnitFloat() < 0.7, let lane = nextElement(Lane.allCases) {
-                spawnCoin(in: lane, underCeiling: true)
+            if nextUnitFloat() < collectibleChance, let lane = nextElement(Lane.allCases) {
+                spawnReward(in: lane, underCeiling: true)
             }
             return
         }
 
-        if nextUnitFloat() < profile.duckHazardChance {
+        if nextUnitFloat() < biomeHazardChance(profile.duckHazardChance) {
             // Occasional duck + simple single side wall, otherwise duck alone.
             var blocked: Set<Lane> = []
             if nextUnitFloat() < 0.35 {
@@ -2215,8 +2452,8 @@ final class GameWorld {
             }
             spawnDuckWall()
             let coinLanes = Lane.allCases.filter { !blocked.contains($0) }
-            if nextUnitFloat() < 0.7, let lane = nextElement(coinLanes) {
-                spawnCoin(in: lane, underCeiling: true)
+            if nextUnitFloat() < collectibleChance, let lane = nextElement(coinLanes) {
+                spawnReward(in: lane, underCeiling: true)
             }
         } else {
             // No ceiling on this beat — normal standing coin height.
@@ -2228,13 +2465,13 @@ final class GameWorld {
         if environmentDirector.isTeachingSummitStep {
             spawnJumpWall()
             environmentDirector.noteJumpGateSpawned()
-            if nextUnitFloat() < 0.7, let lane = nextElement(Lane.allCases) {
-                spawnCoin(in: lane)
+            if nextUnitFloat() < collectibleChance, let lane = nextElement(Lane.allCases) {
+                spawnReward(in: lane)
             }
             return
         }
 
-        if nextUnitFloat() < profile.jumpHazardChance {
+        if nextUnitFloat() < biomeHazardChance(profile.jumpHazardChance) {
             // Occasional jump + simple single side wall, otherwise jump alone.
             var blocked: Set<Lane> = []
             if nextUnitFloat() < 0.35 {
@@ -2244,8 +2481,8 @@ final class GameWorld {
             }
             spawnJumpWall()
             let coinLanes = Lane.allCases.filter { !blocked.contains($0) }
-            if nextUnitFloat() < 0.7, let lane = nextElement(coinLanes) {
-                spawnCoin(in: lane)
+            if nextUnitFloat() < collectibleChance, let lane = nextElement(coinLanes) {
+                spawnReward(in: lane)
             }
         } else {
             spawnStandardPattern()
@@ -2263,13 +2500,22 @@ final class GameWorld {
         spawnWall(blocking: blocking, kind: .standard, profile: activeSpawnProfile)
 
         let safeLanes = Lane.allCases.filter { !blocking.contains($0) }
+        let surgeBonus: Float = gameModel?.stats.modifier == .tokenSurge ? 0.28 : 0
         if let lane = nextElement(safeLanes),
-           nextUnitFloat() < GameWorld.crystalHalfSpawnChance {
+           nextUnitFloat() < min(0.95, GameWorld.crystalHalfSpawnChance + surgeBonus) {
             spawnHalfCrystal(in: lane)
         }
     }
 
     private func randomWallLanes() -> Set<Lane> {
+        if case .normal? = gameModel?.resolvedPlayMode {
+            if phraseQueue.isEmpty { refillPhraseQueue() }
+            if !phraseQueue.isEmpty {
+                let beat = phraseQueue.removeFirst()
+                pendingPhraseReward = beat.reward
+                return beat.blocking
+            }
+        }
         let patterns: [Set<Lane>] = [
             [.left], [.center], [.right],
             [.left], [.center], [.right],
@@ -2278,6 +2524,97 @@ final class GameWorld {
             [.left, .right], [.left, .center], [.center, .right]
         ]
         return nextElement(patterns) ?? [.center]
+    }
+
+    /// A low peripheral floor orbit makes Aegis feel embodied without covering vision.
+    private func syncAegisAura(gameModel: GameModel) {
+        guard gameModel.isPlaying, gameModel.stats.shieldCharges > 0 else {
+            aegisAura?.removeFromParent()
+            aegisAura = nil
+            return
+        }
+
+        if aegisAura == nil {
+            let aura = Entity()
+            aura.name = "aegisFloorAura"
+            let material = UnlitMaterial(color: GamePalette.neonCyanHot.withAlphaComponent(0.86))
+            for index in 0..<12 {
+                let angle = Float(index) / 12 * .pi * 2
+                let node = ModelEntity(
+                    mesh: MeshResource.generateSphere(radius: index.isMultiple(of: 3) ? 0.026 : 0.014),
+                    materials: [material]
+                )
+                node.position = SIMD3(cos(angle) * 0.43, 0.055, sin(angle) * 0.43)
+                aura.addChild(node)
+            }
+            root.addChild(aura)
+            aegisAura = aura
+        }
+
+        let head = playfieldHeadPosition()
+        aegisAura?.position = SIMD3(head.x, 0, head.z)
+        aegisAura?.orientation = simd_quatf(
+            angle: elapsedTime * 0.72,
+            axis: SIMD3(0, 1, 0)
+        )
+    }
+
+    /// Short readable choreographies rather than independent random rows.
+    /// Stable phrases leave two routes; Charged links a weave; Unstable asks for
+    /// a three-step reversal, with existing opposite-lane spacing protecting it.
+    private func refillPhraseQueue() {
+        let mirrored = nextBool()
+        func lane(_ lane: Lane) -> Lane {
+            guard mirrored else { return lane }
+            switch lane {
+            case .left: return .right
+            case .right: return .left
+            case .center: return .center
+            }
+        }
+        func mapped(_ lanes: Set<Lane>) -> Set<Lane> {
+            Set(lanes.map { lane($0) })
+        }
+
+        switch gameModel?.stats.risk ?? .stable {
+        case .stable:
+            let first: [PhraseBeat] = [
+                PhraseBeat(blocking: [.left], reward: .center),
+                PhraseBeat(blocking: [.right], reward: .center),
+                PhraseBeat(blocking: [.center], reward: .left)
+            ]
+            phraseQueue = first.map {
+                PhraseBeat(blocking: mapped($0.blocking), reward: $0.reward.map { lane($0) })
+            }
+        case .charged:
+            let weave: [PhraseBeat] = [
+                PhraseBeat(blocking: [.center, .right], reward: .left),
+                PhraseBeat(blocking: [.left, .right], reward: .center),
+                PhraseBeat(blocking: [.left], reward: .right),
+                PhraseBeat(blocking: [.center], reward: .left)
+            ]
+            phraseQueue = weave.map {
+                PhraseBeat(blocking: mapped($0.blocking), reward: $0.reward.map { lane($0) })
+            }
+        case .unstable:
+            let reversal: [PhraseBeat] = [
+                PhraseBeat(blocking: [.left, .center], reward: .right),
+                PhraseBeat(blocking: [.left, .right], reward: .center),
+                PhraseBeat(blocking: [.center, .right], reward: .left),
+                PhraseBeat(blocking: [.left], reward: .right)
+            ]
+            phraseQueue = reversal.map {
+                PhraseBeat(blocking: mapped($0.blocking), reward: $0.reward.map { lane($0) })
+            }
+        }
+    }
+
+    private func rewardLane(from safeLanes: [Lane]) -> Lane? {
+        defer { pendingPhraseReward = nil }
+        if let preferred = pendingPhraseReward, safeLanes.contains(preferred) {
+            return preferred
+        }
+        return nextElement(safeLanes)
     }
 
     /// Lane raw patterns for Storm (-1 left, 0 center, +1 right).
@@ -2421,7 +2758,19 @@ final class GameWorld {
         }
     }
 
-    private func spawnCoin(in lane: Lane, underCeiling: Bool = false) {
+    private func spawnReward(in lane: Lane, underCeiling: Bool = false) {
+        spawnCoin(in: lane, underCeiling: underCeiling)
+        guard gameModel?.stats.modifier == .tokenSurge else { return }
+        // A short depth chain creates a readable sweep without demanding a wider reach.
+        spawnCoin(in: lane, underCeiling: underCeiling, streamOffset: -0.46)
+        spawnCoin(in: lane, underCeiling: underCeiling, streamOffset: -0.92)
+    }
+
+    private func spawnCoin(
+        in lane: Lane,
+        underCeiling: Bool = false,
+        streamOffset: Float = 0
+    ) {
         // Spawn-time biome tint only (no live retint on switch) — Ember keeps polished gold.
         let coinColors = GameCoinTint.colors(for: activeSpawnProfile)
         let coin = GameVisualBuilders.makeCoin(
@@ -2433,7 +2782,7 @@ final class GameWorld {
         // Mild outward offset — still a reach, but easier to snag mid-dodge.
         let outward: Float = lane == .center ? 0 : (lane.x > 0 ? GameWorld.coinOutwardOffset : -GameWorld.coinOutwardOffset)
         let baseY = underCeiling ? GameWorld.lowCrawlCoinHeight : GameWorld.coinHeight
-        let streamZ = patternStreamSpawnZ
+        let streamZ = patternStreamSpawnZ + streamOffset
         attachPickupToPortalStream(
             coin,
             playfieldX: lane.x + outward + windCurrentX,
@@ -2790,13 +3139,18 @@ final class GameWorld {
                 visualFX.spawnHitFlash(near: SIMD3(head.x, head.y, wall.playfieldZ))
                 // Quick squash so the hit reads before game-over UI.
                 wall.entity.scale = SIMD3(1.08, 0.92, 1.15)
-                GameSFX.shared.playWallHit()
                 dropHeldHalves()
                 if gameModel.isTutorialRun {
                     // Soft fail — flash + SFX, keep the calibration run going.
+                    GameSFX.shared.playWallHit()
                     tutorialHitCooldown = 0.45
                     return
                 }
+                if gameModel.absorbHitIfPossible() {
+                    GameSFX.shared.playShieldBreak()
+                    return
+                }
+                GameSFX.shared.playWallHit()
                 gameModel.endRun()
                 return
             }
@@ -2808,6 +3162,16 @@ final class GameWorld {
                 contactZ: head.z,
                 halfDepth: handHalfDepth
             ) {
+                if wall.kind == .standard || wall.kind == .ghost {
+                    let edgeDistance = wall.worldSlabXs()
+                        .map { abs(abs(head.x - $0) - halfWidth) }
+                        .min() ?? .greatestFiniteMagnitude
+                    if edgeDistance > 0.001, edgeDistance <= 0.2,
+                       head.y >= GameWorld.headHitMinY, head.y <= GameWorld.headHitMaxY {
+                        gameModel.registerNearMiss()
+                        GameSFX.shared.playNearMiss()
+                    }
+                }
                 wall.hasResolvedHit = true
             }
         }

@@ -702,6 +702,68 @@ final class Endless_RunnerTests: XCTestCase {
         XCTAssertEqual(director.currentProfile.twist, .baseline)
     }
 
+    func testNormalModeRequestsJunctionInsteadOfRandomlySwitching() {
+        let director = EnvironmentDirector()
+        director.beginRun(mode: .normal)
+
+        let frame = director.update(deltaTime: director.currentSwitchInterval + 1)
+        XCTAssertTrue(frame.requestsJunction)
+        XCTAssertTrue(director.isAwaitingNormalChoice)
+        XCTAssertFalse(frame.didEnterEnvironment)
+        XCTAssertEqual(frame.currentID, .emberRun)
+
+        // Pending choices do not retrigger every frame.
+        XCTAssertFalse(director.update(deltaTime: 1).requestsJunction)
+        director.chooseNormalEnvironment(.crystalCave)
+        XCTAssertFalse(director.isAwaitingNormalChoice)
+        XCTAssertEqual(director.currentID, .crystalCave)
+    }
+
+    func testJunctionOffersDistinctBiomesAndEveryRiskTier() {
+        var rng = SeededGenerator(seed: 0x51_1F_AA)
+        let options = RiftJunctionRules.makeOptions(excluding: .emberRun, rng: &rng)
+
+        XCTAssertEqual(options.count, 3)
+        XCTAssertEqual(Set(options.map(\.environment)).count, 3)
+        XCTAssertFalse(options.map(\.environment).contains(.emberRun))
+        XCTAssertEqual(Set(options.map(\.risk)), Set(RiftRisk.allCases))
+        XCTAssertEqual(Set(options.map(\.modifier.rawValue)).count, 3)
+    }
+
+    func testJunctionLaneSelectionUsesNearestBodyLane() {
+        XCTAssertEqual(RiftJunctionRules.nearestOptionIndex(headX: -0.8, laneSpacing: 0.75), 0)
+        XCTAssertEqual(RiftJunctionRules.nearestOptionIndex(headX: 0, laneSpacing: 0.75), 1)
+        XCTAssertEqual(RiftJunctionRules.nearestOptionIndex(headX: 0.82, laneSpacing: 0.75), 2)
+    }
+
+    func testStageModifiersApplyCompleteRewardsAndShieldRules() {
+        let model = GameModel()
+        model.startRun()
+        model.configureStage(risk: .unstable, modifier: .tokenSurge)
+        model.collectCoin()
+        XCTAssertEqual(model.coinsCollected, 2)
+        XCTAssertGreaterThan(model.stats.flow, 0)
+        XCTAssertEqual(model.stats.highestFlow, model.stats.flow)
+        model.recordPortalCrossing()
+        XCTAssertEqual(model.stats.portalsCrossed, 1)
+
+        model.configureStage(risk: .charged, modifier: .aegis)
+        XCTAssertEqual(model.stats.shieldCharges, 1)
+        XCTAssertTrue(model.absorbHitIfPossible())
+        XCTAssertEqual(model.stats.shieldCharges, 0)
+        XCTAssertEqual(model.stats.shieldsBroken, 1)
+        XCTAssertFalse(model.absorbHitIfPossible())
+    }
+
+    func testFractionalRiskRewardsCarryAcrossDistanceTicks() {
+        let model = GameModel()
+        model.startRun()
+        model.configureStage(risk: .charged, modifier: nil)
+        model.addScore(1)
+        model.addScore(1)
+        XCTAssertEqual(model.score, 3)
+    }
+
     func testEnvironmentDirectorSoloModeLocksBiome() {
         let director = EnvironmentDirector()
         director.beginRun(mode: .solo(.summitStep))
@@ -974,12 +1036,14 @@ final class Endless_RunnerTests: XCTestCase {
         }
     }
 
-    func testGhostGlassUsesWhiteTransparentWalls() {
+    func testGhostGlassMixesReadableAndSpectralWalls() {
         let ghost = EnvironmentCatalog.profile(for: .ghostGlass)
         XCTAssertEqual(ghost.twist, .ghostWalls)
-        XCTAssertEqual(ghost.ghostWallChance, 1.0, accuracy: 0.001)
-        XCTAssertLessThan(ghost.ghostWallOpacity, 0.01)
-        XCTAssertEqual(ghost.palette.wallEmissiveIntensity, 0, accuracy: 0.0001)
+        XCTAssertGreaterThan(ghost.ghostWallChance, 0)
+        XCTAssertLessThan(ghost.ghostWallChance, 1)
+        XCTAssertGreaterThan(ghost.ghostWallOpacity, 0.04)
+        XCTAssertLessThan(ghost.ghostWallOpacity, ghost.palette.wallOpacity)
+        XCTAssertGreaterThan(ghost.palette.wallEmissiveIntensity, 0)
         // White-ish tint (high RGB, low chroma).
         XCTAssertGreaterThan(ghost.palette.wallTint.r, 0.9)
         XCTAssertGreaterThan(ghost.palette.wallTint.g, 0.9)
