@@ -98,8 +98,8 @@ enum RiftRisk: String, CaseIterable, Equatable, Hashable, Codable {
         }
     }
 
-    /// A wordless, redundant visual code: one calm ring through three broken rings.
-    var ringCount: Int {
+    /// Wordless difficulty code: more warning diamonds means denser patterns.
+    var difficultyMarkerCount: Int {
         switch self {
         case .stable: return 1
         case .charged: return 2
@@ -128,22 +128,18 @@ enum RiftJunctionRules {
     static let choiceSeconds: Float = 10
     static let crossingSeconds: Float = 1.2
 
-    /// Three distinct destinations with one of each risk tier. Lanes are shuffled.
+    /// Three distinct destinations. Risk and modifier are rolled independently per portal.
     static func makeOptions<RNG: RandomNumberGenerator>(
         excluding current: EnvironmentID,
         rng: inout RNG
     ) -> [RiftPortalOption] {
         var environments = EnvironmentID.allCases.filter { $0 != current }
         environments.shuffle(using: &rng)
-        var risks = RiftRisk.allCases
-        risks.shuffle(using: &rng)
-        var modifiers = RiftModifier.allCases
-        modifiers.shuffle(using: &rng)
         return (0..<3).map { index in
             RiftPortalOption(
                 environment: environments[index],
-                risk: risks[index],
-                modifier: modifiers[index]
+                risk: RiftRisk.allCases.randomElement(using: &rng) ?? .charged,
+                modifier: RiftModifier.allCases.randomElement(using: &rng) ?? .tokenSurge
             )
         }
     }

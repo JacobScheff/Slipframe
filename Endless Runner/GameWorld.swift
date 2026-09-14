@@ -857,6 +857,9 @@ final class GameWorld {
         junctionQueued = false
         dropHeldHalves()
         resetWind()
+        // The recovery window is intentionally silent. The next biome track starts
+        // only after the player has physically passed through the chosen gate.
+        GameMusic.shared.stop()
 
         let options: [RiftPortalOption]
         var rng = SystemRandomNumberGenerator()
@@ -890,7 +893,6 @@ final class GameWorld {
             gates.append(gate)
         }
         root.addChild(junctionRoot)
-        portalRoot.isEnabled = false
         junction = JunctionState(root: junctionRoot, gates: gates, guide: guide, options: options)
         gameModel?.isChoosingPortal = true
         GameSFX.shared.playJunctionOpen()
@@ -900,15 +902,18 @@ final class GameWorld {
         guard let junction else { return }
         junction.elapsed += max(0, deltaTime)
         let choiceDuration = RiftJunctionRules.choiceSeconds
-        // The biome track exhales during the break, then returns at the crossing.
-        let calmMotion: Float = junction.selectedIndex == nil ? 0.32 : 0.72
-        GameMusic.shared.setPlaybackFlow(calmMotion)
+
+        // Keep the source rift alive while its three destinations travel outward.
+        // A small synchronized pulse reads as a temporary branching state without
+        // replacing or hiding the landmark at the end of the track.
+        let sourcePulse: Float = 1.0 + 0.035 * sin(junction.elapsed * 2.4)
+        portalRoot.scale = SIMD3(repeating: sourcePulse)
 
         if junction.selectedIndex == nil {
             let t = min(1, junction.elapsed / choiceDuration)
-            // Slow, readable travel for most of the break; ease toward the player at the end.
-            let eased = t * t * (3 - 2 * t)
-            let approachZ = portalZ + (head.z - 0.28 - portalZ) * eased
+            // Linear travel is deliberate: the gates always drift toward the player
+            // and never appear to park before a separate teleport animation.
+            let approachZ = portalZ + 0.08 + (head.z - 0.18 - portalZ) * t
             let hovered = RiftJunctionRules.nearestOptionIndex(
                 headX: head.x,
                 laneSpacing: GameWorld.laneSpacing
@@ -928,22 +933,22 @@ final class GameWorld {
                 let gate = junction.gates[index]
                 gate.position.z = approachZ
                 let highlighted = index == hovered
-                let breathe = 1 + 0.025 * sin(elapsedTime * (1.8 + Float(junction.options[index].risk.ringCount)))
+                let breathe = 1 + 0.018 * sin(elapsedTime * 2.1 + Float(index))
                 let emphasis: Float = highlighted && t > 0.35 ? 1.1 : 1
                 gate.scale = SIMD3(repeating: breathe * emphasis)
 
-                // Risk echoes counter-rotate; biome aperture and symbol remain stable/readable.
-                var ringIndex: Float = 0
-                for child in gate.children where child.name == "junctionRiskRing" {
-                    ringIndex += 1
-                    let direction: Float = Int(ringIndex).isMultiple(of: 2) ? -1 : 1
-                    child.orientation = simd_quatf(
-                        angle: elapsedTime * 0.16 * ringIndex * direction,
+                if let signature = gate.children.first(where: { $0.name == "junctionBiomeSignature" }) {
+                    signature.orientation = simd_quatf(
+                        angle: 0.035 * sin(elapsedTime * 1.4 + Float(index)),
                         axis: SIMD3(0, 0, 1)
                     )
                 }
+                if let markers = gate.children.first(where: { $0.name == "junctionDifficultyMarkers" }) {
+                    let pulse = 1 + 0.055 * sin(elapsedTime * 3 + Float(index))
+                    markers.scale = SIMD3(repeating: pulse)
+                }
                 if let glyph = gate.children.first(where: { $0.name == "junctionModifierGlyph" }) {
-                    let pulse = 1 + 0.08 * sin(elapsedTime * 3.2 + Float(index))
+                    let pulse = 1 + 0.045 * sin(elapsedTime * 2.7 + Float(index))
                     glyph.scale = SIMD3(repeating: pulse)
                 }
             }
@@ -961,19 +966,18 @@ final class GameWorld {
         guard let selected = junction.selectedIndex else { return }
         let crossingElapsed = junction.elapsed - choiceDuration
         let t = min(1, crossingElapsed / RiftJunctionRules.crossingSeconds)
-        let smooth = t * t * (3 - 2 * t)
         for index in junction.gates.indices {
             let gate = junction.gates[index]
+            // Continue the same forward velocity after commitment. Passing the
+            // aperture is the transition; there is no scale-up or camera engulf.
+            gate.position.z = head.z - 0.18 + t * 1.1
             if index == selected {
-                gate.position.x += (head.x - gate.position.x) * min(1, deltaTime * 8)
-                gate.position.z = head.z - 0.28 + smooth * 1.15
-                let scale = 1.1 + smooth * 4.2
-                gate.scale = SIMD3(repeating: scale)
+                gate.position.x += (head.x - gate.position.x) * min(1, deltaTime * 7)
+                gate.scale = SIMD3(repeating: 1.1)
             } else {
                 let direction: Float = index < selected ? -1 : 1
-                gate.position.x += direction * deltaTime * 2.8
-                gate.position.z += deltaTime * 1.2
-                gate.scale *= max(0.15, 1 - deltaTime * 2.4)
+                gate.position.x += direction * deltaTime * 1.5
+                gate.scale = SIMD3(repeating: 0.96)
             }
         }
 
@@ -981,7 +985,7 @@ final class GameWorld {
         let option = junction.options[selected]
         junction.root.removeFromParent()
         self.junction = nil
-        portalRoot.isEnabled = true
+        portalRoot.scale = SIMD3(repeating: 1)
         gameModel.isChoosingPortal = false
         environmentDirector.chooseNormalEnvironment(option.environment)
         activeSpawnProfile = environmentDirector.currentProfile
@@ -1272,6 +1276,7 @@ final class GameWorld {
         junction = nil
         junctionQueued = false
         portalRoot.isEnabled = true
+        portalRoot.scale = SIMD3(repeating: 1)
         gameModel?.isChoosingPortal = false
     }
 
@@ -1674,7 +1679,10 @@ final class GameWorld {
 
         resolveCollisions(gameModel: gameModel)
         pruneEntities()
-        if junctionQueued, walls.isEmpty, coins.isEmpty, halves.isEmpty {
+        if junctionQueued, environmentDirector.hasReachedNormalMusicEnd {
+            // Spawning stopped one full travel time ago. Clear anything already
+            // behind the player on the exact audio boundary and enter recovery.
+            clearDynamicContent()
             beginJunction()
         }
     }

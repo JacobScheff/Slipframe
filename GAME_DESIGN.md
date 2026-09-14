@@ -85,7 +85,8 @@ Never put a required coin *inside* a wall’s kill volume. Coins always sit in a
 
 1. **Warm-up:** Only center/side single walls, coins near body.
 2. **Mix:** Alternating left/right walls; coins opposite the safe lane.
-3. **Pressure:** Faster scroll, tighter gaps, occasional double-threat (wall + far coin).
+3. **Pressure:** Denser authored patterns, tighter recovery gaps, occasional double-threat
+   (wall + far coin) while stream speed remains constant.
 4. **Breathing room:** Every N obstacles, a short empty stretch so players recover.
 
 ---
@@ -111,19 +112,22 @@ Features to build **after** the MVP loop is solid (scroll, walls, coins, score, 
 ### Normal-mode rift junctions
 
 Normal mode no longer picks the next biome automatically. At each music boundary the
-active obstacle stream finishes, then the main rift divides into three wordless portal
+active obstacle stream finishes exactly with the music, then the still-visible main rift
+branches into three wordless portal
 choices for a ten-second recovery window. The player may rest in the center until the
 final commitment and chooses by placing their head/body in a lane as the gates arrive.
 
 - Three distinct biomes; never offer the biome that just finished.
-- One Stable, one Charged, and one Unstable contract, shuffled across lanes.
+- Every portal independently rolls a biome, difficulty, and modifier; duplicate
+  difficulties or modifiers are allowed.
 - Biome is communicated by the animated world inside the aperture.
-- Risk is communicated independently: one calm ring, two energized rings, or three
-  torn/counter-rotating rings.
+- Difficulty is communicated by one, two, or three bright warning diamonds.
 - Each portal also carries one geometric modifier glyph: Token Surge, Aegis, or Overdrive.
 - No portal text, countdown, numbers, or floating menu cards.
-- On commitment the chosen gate centers on the player and expands through them; the
-  other two peel harmlessly around the player.
+- All three gates continuously approach for the full ten seconds. On commitment the
+  chosen gate passes through the player's lane at the same speed while the other two
+  peel harmlessly around them; there is no second selection or giant scale-up.
+- The recovery window is silent. The next biome track begins only after the crossing.
 - Portal gates never collide. The horizon and camera never move.
 
 Normal-mode risk changes pattern composition, recovery spacing, collectible density,
@@ -168,7 +172,9 @@ time alone.
 
 ### Environmental beats
 
-About every **45 seconds**, the run switches to a different environment. The next environment is **chosen at random** (avoid immediately repeating the same one when possible).
+Biome timing follows each music track. Normal mode uses the physical three-portal choice
+described above; playlist and daily modes keep automatic selection, and solo mode stays
+in its chosen biome.
 
 Each environment has:
 

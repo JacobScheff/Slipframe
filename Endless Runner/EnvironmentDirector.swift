@@ -22,6 +22,8 @@ struct EnvironmentFrame {
 
 @MainActor
 final class EnvironmentDirector {
+    /// Last possible spawn has enough time to cross the player as the current song ends.
+    nonisolated static let normalDrainLeadSeconds: Float = 4.35
     private(set) var currentID: EnvironmentID = .emberRun
     private(set) var displayedPalette: EnvironmentPalette
     private(set) var targetPalette: EnvironmentPalette
@@ -37,6 +39,10 @@ final class EnvironmentDirector {
     private var playMode: PlayMode = .normal
     private var dailyRNG: SeededGenerator?
     private(set) var isAwaitingNormalChoice = false
+
+    var hasReachedNormalMusicEnd: Bool {
+        isAwaitingNormalChoice && elapsedInEnvironment >= currentSwitchInterval
+    }
 
     init() {
         let starter = EnvironmentCatalog.profile(for: .emberRun)
@@ -154,9 +160,7 @@ final class EnvironmentDirector {
         var previous: EnvironmentID?
         var requestsJunction = false
 
-        if !isAwaitingNormalChoice {
-            elapsedInEnvironment += deltaTime
-        }
+        elapsedInEnvironment += deltaTime
         if telegraphRemaining > 0 {
             telegraphRemaining = max(0, telegraphRemaining - deltaTime)
         }
@@ -169,7 +173,9 @@ final class EnvironmentDirector {
                 enter(forced, telegraph: true, announceMusic: true)
                 didEnter = true
             }
-        } else if case .normal = playMode, elapsedInEnvironment >= currentSwitchInterval {
+        } else if case .normal = playMode,
+                  !isAwaitingNormalChoice,
+                  elapsedInEnvironment >= max(0, currentSwitchInterval - Self.normalDrainLeadSeconds) {
             isAwaitingNormalChoice = true
             requestsJunction = true
         } else if elapsedInEnvironment >= currentSwitchInterval {
@@ -268,10 +274,15 @@ final class EnvironmentDirector {
         telegraphRemaining = telegraph ? EnvironmentCatalog.telegraphSeconds : 0
         if announceMusic {
             let trackDuration = playMusic(for: id)
-            currentSwitchInterval = Self.switchInterval(
-                forTrackDuration: trackDuration,
-                crossfade: EnvironmentCatalog.ambienceLerpSeconds
-            )
+            if case .normal = playMode {
+                // Normal inserts a silent physical junction; do not begin a crossfade early.
+                currentSwitchInterval = trackDuration
+            } else {
+                currentSwitchInterval = Self.switchInterval(
+                    forTrackDuration: trackDuration,
+                    crossfade: EnvironmentCatalog.ambienceLerpSeconds
+                )
+            }
         } else {
             currentSwitchInterval = EnvironmentCatalog.fallbackSwitchInterval
         }

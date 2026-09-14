@@ -719,15 +719,39 @@ final class Endless_RunnerTests: XCTestCase {
         XCTAssertEqual(director.currentID, .crystalCave)
     }
 
-    func testJunctionOffersDistinctBiomesAndEveryRiskTier() {
+    func testNormalModeDrainsBeforeMusicBoundaryAndWaitsToPresentChoice() {
+        let director = EnvironmentDirector()
+        director.beginRun(mode: .normal)
+        let drainStart = director.currentSwitchInterval - EnvironmentDirector.normalDrainLeadSeconds
+
+        XCTAssertFalse(director.update(deltaTime: drainStart - 0.01).requestsJunction)
+        XCTAssertTrue(director.update(deltaTime: 0.02).requestsJunction)
+        XCTAssertFalse(director.hasReachedNormalMusicEnd)
+
+        _ = director.update(deltaTime: EnvironmentDirector.normalDrainLeadSeconds)
+        XCTAssertTrue(director.hasReachedNormalMusicEnd)
+    }
+
+    func testJunctionOffersDistinctBiomesWithIndependentContracts() {
         var rng = SeededGenerator(seed: 0x51_1F_AA)
         let options = RiftJunctionRules.makeOptions(excluding: .emberRun, rng: &rng)
 
         XCTAssertEqual(options.count, 3)
         XCTAssertEqual(Set(options.map(\.environment)).count, 3)
         XCTAssertFalse(options.map(\.environment).contains(.emberRun))
-        XCTAssertEqual(Set(options.map(\.risk)), Set(RiftRisk.allCases))
-        XCTAssertEqual(Set(options.map(\.modifier.rawValue)).count, 3)
+        XCTAssertTrue(options.allSatisfy { RiftRisk.allCases.contains($0.risk) })
+        XCTAssertTrue(options.allSatisfy { RiftModifier.allCases.contains($0.modifier) })
+
+        var sawRepeatedDifficulty = false
+        var sawRepeatedModifier = false
+        for seed in 1...32 {
+            var sampleRNG = SeededGenerator(seed: UInt64(seed))
+            let sample = RiftJunctionRules.makeOptions(excluding: .emberRun, rng: &sampleRNG)
+            sawRepeatedDifficulty = sawRepeatedDifficulty || Set(sample.map(\.risk)).count < 3
+            sawRepeatedModifier = sawRepeatedModifier || Set(sample.map(\.modifier.rawValue)).count < 3
+        }
+        XCTAssertTrue(sawRepeatedDifficulty)
+        XCTAssertTrue(sawRepeatedModifier)
     }
 
     func testJunctionLaneSelectionUsesNearestBodyLane() {
@@ -1289,10 +1313,7 @@ final class Endless_RunnerTests: XCTestCase {
     func testEnvironmentDirectorUsesMusicDurationForSwitchInterval() {
         let director = EnvironmentDirector()
         director.beginRun(mode: .normal)
-        let expected = EnvironmentDirector.switchInterval(
-            forTrackDuration: GameMusic.fallbackTrackDuration,
-            crossfade: EnvironmentCatalog.ambienceLerpSeconds
-        )
+        let expected = GameMusic.fallbackTrackDuration
         XCTAssertEqual(director.currentSwitchInterval, expected, accuracy: 0.001)
     }
 

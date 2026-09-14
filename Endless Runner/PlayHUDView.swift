@@ -51,27 +51,9 @@ struct PlayHUDView: View {
                 compactMetric(title: "SCORE", value: "\(stats.score)", accent: neon)
                 Divider().frame(height: 38).opacity(0.3)
                 compactMetric(title: "TOKENS", value: "\(stats.coinsCollected)", accent: gold)
-                Divider().frame(height: 38).opacity(0.3)
-
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 7) {
-                        Image(systemName: riskSymbol)
-                            .foregroundStyle(riskColor)
-                        Text(riskName)
-                            .font(.system(size: 13, weight: .bold, design: .rounded))
-                            .tracking(1)
-                    }
-                    HStack(spacing: 7) {
-                        Image(systemName: modifierSymbol)
-                            .foregroundStyle(gold)
-                        Text(modifierName)
-                            .font(.system(size: 12, weight: .semibold, design: .rounded))
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .frame(minWidth: 104, alignment: .leading)
 
                 if stats.shieldCharges > 0 {
+                    Divider().frame(height: 38).opacity(0.3)
                     Image(systemName: "shield.lefthalf.filled")
                         .font(.system(size: 25, weight: .semibold))
                         .foregroundStyle(neon)
@@ -80,8 +62,9 @@ struct PlayHUDView: View {
             }
 
             HStack(spacing: 10) {
-                Image(systemName: "waveform.path.ecg")
-                    .font(.system(size: 12, weight: .bold))
+                Text("FLOW")
+                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                    .tracking(1.1)
                     .foregroundStyle(neon)
                 GeometryReader { proxy in
                     ZStack(alignment: .leading) {
@@ -157,48 +140,6 @@ struct PlayHUDView: View {
             Text(value)
                 .font(.system(size: 30, weight: .bold, design: .rounded))
                 .monospacedDigit()
-        }
-    }
-
-    private var riskName: String {
-        switch stats.risk {
-        case .stable: return "STABLE"
-        case .charged: return "CHARGED"
-        case .unstable: return "UNSTABLE"
-        }
-    }
-
-    private var riskSymbol: String {
-        switch stats.risk {
-        case .stable: return "circle"
-        case .charged: return "circle.hexagongrid.fill"
-        case .unstable: return "aqi.high"
-        }
-    }
-
-    private var riskColor: Color {
-        switch stats.risk {
-        case .stable: return neon
-        case .charged: return gold
-        case .unstable: return hazard
-        }
-    }
-
-    private var modifierName: String {
-        switch stats.modifier {
-        case .tokenSurge: return "TOKEN SURGE"
-        case .aegis: return "AEGIS"
-        case .overdrive: return "OVERDRIVE"
-        case nil: return "BASELINE"
-        }
-    }
-
-    private var modifierSymbol: String {
-        switch stats.modifier {
-        case .tokenSurge: return "diamond.fill"
-        case .aegis: return "shield.fill"
-        case .overdrive: return "bolt.fill"
-        case nil: return "circle.dotted"
         }
     }
 
