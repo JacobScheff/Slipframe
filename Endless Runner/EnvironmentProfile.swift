@@ -108,7 +108,7 @@ enum RiftRisk: String, CaseIterable, Equatable, Hashable, Codable {
     }
 }
 
-/// Small initial modifier set. Each is fully functional and has its own portal glyph.
+/// Portal modifier set. Each is functional and has its own wordless glyph.
 enum RiftModifier: String, CaseIterable, Equatable, Codable {
     /// Extra collectible chains and doubled token value.
     case tokenSurge
@@ -116,6 +116,49 @@ enum RiftModifier: String, CaseIterable, Equatable, Codable {
     case aegis
     /// Raises distance rewards and Flow gains for the visit.
     case overdrive
+    /// Extends token and Crystal Cave hand-pickup reach.
+    case magnet
+    /// Widens the near-miss band and doubles its rewards.
+    case closeCall
+    /// Makes the score-bonus meter drain at half speed.
+    case bonusBank
+
+    var displayName: String {
+        switch self {
+        case .tokenSurge: return "Token Surge"
+        case .aegis: return "Aegis"
+        case .overdrive: return "Overdrive"
+        case .magnet: return "Magnet"
+        case .closeCall: return "Close Call"
+        case .bonusBank: return "Bonus Bank"
+        }
+    }
+
+    var effectDescription: String {
+        switch self {
+        case .tokenSurge: return "2× tokens"
+        case .aegis: return "Blocks one hit"
+        case .overdrive: return "+25% score"
+        case .magnet: return "Longer pickup reach"
+        case .closeCall: return "Bigger close-slip rewards"
+        case .bonusBank: return "Bonus drains 2× slower"
+        }
+    }
+
+    var symbolName: String {
+        switch self {
+        case .tokenSurge: return "diamond.fill"
+        case .aegis: return "shield.fill"
+        case .overdrive: return "bolt.fill"
+        case .magnet: return "magnet.fill"
+        case .closeCall: return "scope"
+        case .bonusBank: return "lock.fill"
+        }
+    }
+
+    var pickupRadiusBonus: Float { self == .magnet ? 0.16 : 0 }
+    var nearMissRange: Float { self == .closeCall ? 0.32 : 0.2 }
+    var scoreBonusDecayInterval: Float { self == .bonusBank ? 1.5 : 0.75 }
 }
 
 struct RiftPortalOption: Equatable {

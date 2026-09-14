@@ -794,6 +794,21 @@ final class Endless_RunnerTests: XCTestCase {
         XCTAssertFalse(model.absorbHitIfPossible())
     }
 
+    func testExpandedPortalModifiersHaveCompleteGameplayValues() {
+        XCTAssertEqual(RiftModifier.allCases.count, 6)
+        XCTAssertEqual(RiftModifier.magnet.pickupRadiusBonus, 0.16, accuracy: 0.001)
+        XCTAssertEqual(RiftModifier.closeCall.nearMissRange, 0.32, accuracy: 0.001)
+        XCTAssertEqual(RiftModifier.bonusBank.scoreBonusDecayInterval, 1.5, accuracy: 0.001)
+
+        let model = GameModel()
+        model.startRun()
+        model.configureStage(risk: .stable, modifier: .closeCall)
+        model.registerNearMiss()
+        XCTAssertEqual(model.stats.nearMisses, 1)
+        XCTAssertEqual(model.stats.flow, 28)
+        XCTAssertEqual(model.score, 7)
+    }
+
     func testFractionalRiskRewardsCarryAcrossDistanceTicks() {
         let model = GameModel()
         model.startRun()

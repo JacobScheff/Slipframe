@@ -1068,6 +1068,64 @@ enum GameVisualBuilders {
             if let mesh = try? ProceduralGeometry.filledPolygon(points: points) {
                 glyph.addChild(ModelEntity(mesh: mesh, materials: [material]))
             }
+        case .magnet:
+            // Chunky U silhouette with bright poles.
+            for sign: Float in [-1, 1] {
+                let arm = ModelEntity(
+                    mesh: MeshResource.generateBox(width: 0.045, height: 0.2, depth: 0.025),
+                    materials: [material]
+                )
+                arm.position = SIMD3(sign * 0.1, 0.025, 0)
+                glyph.addChild(arm)
+                let pole = ModelEntity(
+                    mesh: MeshResource.generateBox(width: 0.08, height: 0.045, depth: 0.03),
+                    materials: [material]
+                )
+                pole.position = SIMD3(sign * 0.1, 0.145, 0.005)
+                glyph.addChild(pole)
+            }
+            let bridge = ModelEntity(
+                mesh: MeshResource.generateBox(width: 0.245, height: 0.055, depth: 0.025),
+                materials: [material]
+            )
+            bridge.position.y = -0.09
+            glyph.addChild(bridge)
+        case .closeCall:
+            let core = ModelEntity(
+                mesh: MeshResource.generateSphere(radius: 0.035),
+                materials: [material]
+            )
+            glyph.addChild(core)
+            for angle: Float in [0, .pi / 2, .pi, .pi * 1.5] {
+                let tick = ModelEntity(
+                    mesh: MeshResource.generateBox(width: 0.09, height: 0.025, depth: 0.025),
+                    materials: [material]
+                )
+                tick.position = SIMD3(cos(angle) * 0.13, sin(angle) * 0.13, 0)
+                tick.orientation = simd_quatf(angle: angle, axis: SIMD3(0, 0, 1))
+                glyph.addChild(tick)
+            }
+        case .bonusBank:
+            let body = ModelEntity(
+                mesh: MeshResource.generateBox(width: 0.22, height: 0.15, depth: 0.03),
+                materials: [material]
+            )
+            body.position.y = -0.055
+            glyph.addChild(body)
+            for sign: Float in [-1, 1] {
+                let shackle = ModelEntity(
+                    mesh: MeshResource.generateBox(width: 0.035, height: 0.11, depth: 0.025),
+                    materials: [material]
+                )
+                shackle.position = SIMD3(sign * 0.065, 0.075, 0)
+                glyph.addChild(shackle)
+            }
+            let crown = ModelEntity(
+                mesh: MeshResource.generateBox(width: 0.16, height: 0.035, depth: 0.025),
+                materials: [material]
+            )
+            crown.position.y = 0.13
+            glyph.addChild(crown)
         }
         root.addChild(glyph)
     }

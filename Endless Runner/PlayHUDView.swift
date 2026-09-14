@@ -53,12 +53,20 @@ struct PlayHUDView: View {
                 Divider().frame(height: 38).opacity(0.3)
                 compactMetric(title: "TOKENS", value: "\(stats.coinsCollected)", accent: gold)
 
-                if stats.shieldCharges > 0 {
+                if let modifier = stats.modifier {
                     Divider().frame(height: 38).opacity(0.3)
-                    Image(systemName: "shield.lefthalf.filled")
-                        .font(.system(size: 25, weight: .semibold))
-                        .foregroundStyle(neon)
-                        .accessibilityLabel("Aegis shield ready")
+                    HStack(spacing: 7) {
+                        Image(systemName: modifier.symbolName)
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(gold)
+                        Text(activeModifierEffect(for: modifier))
+                            .font(.system(size: 10, weight: .bold, design: .rounded))
+                            .tracking(0.7)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.75)
+                    }
+                    .frame(maxWidth: 150, alignment: .leading)
                 }
             }
 
@@ -142,6 +150,13 @@ struct PlayHUDView: View {
                 .font(.system(size: 30, weight: .bold, design: .rounded))
                 .monospacedDigit()
         }
+    }
+
+    private func activeModifierEffect(for modifier: RiftModifier) -> String {
+        if modifier == .aegis, stats.shieldCharges == 0 {
+            return "SHIELD SPENT"
+        }
+        return modifier.effectDescription.uppercased()
     }
 
     private var centerHUDOpacity: Double {

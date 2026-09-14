@@ -225,7 +225,45 @@ struct LevelSelectView: View {
                 }
             }
             .frame(maxWidth: .infinity)
+
+            Text("PORTAL MODIFIERS")
+                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .tracking(1.1)
+                .foregroundStyle(.secondary)
+
+            LazyVGrid(columns: biomeColumns, spacing: 8) {
+                ForEach(RiftModifier.allCases, id: \.rawValue) { modifier in
+                    modifierKey(modifier)
+                }
+            }
         }
+    }
+
+    private func modifierKey(_ modifier: RiftModifier) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: modifier.symbolName)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(gold)
+                .frame(width: 20)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(modifier.displayName)
+                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                Text(modifier.effectDescription)
+                    .font(.system(size: 9, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 9)
+        .padding(.vertical, 7)
+        .background {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color.white.opacity(0.05))
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(modifier.displayName), \(modifier.effectDescription)")
     }
 
     private func biomePip(_ id: EnvironmentID) -> some View {

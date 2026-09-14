@@ -57,7 +57,7 @@ gameplay fairness.
 | Crystal halves | `ProceduralGeometry.crystalHalf` | Faceted half-gem (spawn, held, and merge burst all share this mesh). |
 | Track | `GameVisualBuilders.makeTrack` | Etched-plating floor, neon lane guides, segmented alien conduit rails (`makeConduitRail`). |
 | Start pad | `GameVisualBuilders.makeStartMarker` | Jagged calibration sigil instead of a rounded rect. |
-| Rift junction gates | `GameVisualBuilders.makeJunctionPortal` | Three clean, wordless destination apertures. Biome identity is drawn inside; difficulty uses 1–3 warning diamonds; modifier uses a familiar coin/shield/bolt glyph. |
+| Rift junction gates | `GameVisualBuilders.makeJunctionPortal` | Three clean, wordless destination apertures. Biome identity is drawn inside; difficulty uses 1–3 warning diamonds; modifiers use coin, shield, bolt, magnet, target, and lock glyphs. |
 
 ---
 

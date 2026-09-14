@@ -260,8 +260,16 @@ final class GameModel: ObservableObject {
     func registerNearMiss() {
         guard isPlaying, !isTutorialRun else { return }
         stats.nearMisses += 1
-        addFlow(stats.modifier == .overdrive ? 20 : 14)
-        addScore(3)
+        let bonusGain: Int
+        if stats.modifier == .closeCall {
+            bonusGain = 28
+        } else if stats.modifier == .overdrive {
+            bonusGain = 20
+        } else {
+            bonusGain = 14
+        }
+        addFlow(bonusGain)
+        addScore(stats.modifier == .closeCall ? 6 : 3)
     }
 
     /// Returns true when an Aegis charge absorbed the collision.

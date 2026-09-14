@@ -1687,9 +1687,10 @@ final class GameWorld {
         }
 
         flowDecayAccumulator += simDt
-        if flowDecayAccumulator >= 0.75 {
+        let scoreBonusDecayInterval = gameModel.stats.modifier?.scoreBonusDecayInterval ?? 0.75
+        if flowDecayAccumulator >= scoreBonusDecayInterval {
             gameModel.decayFlow()
-            flowDecayAccumulator -= 0.75
+            flowDecayAccumulator -= scoreBonusDecayInterval
         }
 
         advanceEntities(by: travel, deltaTime: simDt)
@@ -3005,7 +3006,8 @@ final class GameWorld {
     private func nearestHalfIndex(toAnyOf points: [SIMD3<Float>]) -> Int? {
         guard !points.isEmpty else { return nil }
         var bestIndex: Int?
-        var bestDistance = GameWorld.crystalCollectDistance
+        let pickupBonus = gameModel?.stats.modifier?.pickupRadiusBonus ?? 0
+        var bestDistance = GameWorld.crystalCollectDistance + pickupBonus
         for (index, half) in halves.enumerated() {
             guard !half.collected else { continue }
             let halfPos = half.entity.position(relativeTo: root)
@@ -3205,7 +3207,8 @@ final class GameWorld {
                     let edgeDistance = wall.worldSlabXs()
                         .map { abs(abs(head.x - $0) - halfWidth) }
                         .min() ?? .greatestFiniteMagnitude
-                    if edgeDistance > 0.001, edgeDistance <= 0.2,
+                    let nearMissRange = gameModel.stats.modifier?.nearMissRange ?? 0.2
+                    if edgeDistance > 0.001, edgeDistance <= nearMissRange,
                        head.y >= GameWorld.headHitMinY, head.y <= GameWorld.headHitMaxY {
                         gameModel.registerNearMiss()
                         GameSFX.shared.playNearMiss()
@@ -3226,7 +3229,8 @@ final class GameWorld {
             guard !coins[index].collected else { continue }
             let coinPos = coins[index].entity.position(relativeTo: root)
             for hand in hands {
-                if distance(hand, coinPos) <= GameWorld.collectDistance {
+                let pickupBonus = gameModel.stats.modifier?.pickupRadiusBonus ?? 0
+                if distance(hand, coinPos) <= GameWorld.collectDistance + pickupBonus {
                     coins[index].collected = true
                     visualFX.spawnCoinBurst(at: coinPos)
                     // Hide now; removeFromParent happens in prune. HUD/SFX after this tick.

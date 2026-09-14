@@ -135,7 +135,7 @@ Normal-mode risk changes pattern composition, recovery spacing, collectible dens
 and score rewards. It never changes stream velocity or requires a wider/deeper physical
 motion. Other modes keep their existing automatic biome rules.
 
-**Initial modifiers**
+**Portal modifiers**
 
 - **Token Surge:** three-token depth chains and doubled token value; increases Crystal
   Cave half frequency.
@@ -143,6 +143,10 @@ motion. Other modes keep their existing automatic biome rules.
   halves the current score bonus and allows the run to continue. A rotating floor-level particle orbit
   keeps the shield visible without placing an overlay in front of the player's eyes.
 - **Overdrive:** +25% distance reward and faster score-bonus gains.
+- **Magnet:** extends hand pickup reach for tokens and Crystal Cave halves.
+- **Close Call:** widens the close-slip detection band and doubles both its immediate
+  score and score-bonus gain.
+- **Bonus Bank:** makes the score-bonus meter drain at half speed.
 
 **Score Bonus:** token catches and near-miss dodges fill a 0–100% bonus meter. It slowly
 drains during active play, adds up to +100% to distance scoring, and is partially lost
