@@ -830,6 +830,19 @@ final class Endless_RunnerTests: XCTestCase {
         XCTAssertFalse(frame.didEnterEnvironment)
     }
 
+    func testAutomaticModesWaitForCompleteTrackBeforeChangingBiome() {
+        let director = EnvironmentDirector()
+        director.beginRun(mode: .playlist(environments: [.emberRun, .stormPass], start: .emberRun))
+
+        let beforeEnd = director.update(deltaTime: director.currentSwitchInterval - 0.01)
+        XCTAssertFalse(beforeEnd.didEnterEnvironment)
+        XCTAssertEqual(director.currentID, .emberRun)
+
+        let atEnd = director.update(deltaTime: 0.02)
+        XCTAssertTrue(atEnd.didEnterEnvironment)
+        XCTAssertEqual(director.currentID, .stormPass)
+    }
+
     func testDailyChallengeDayKeyUsesEasternTime() {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(identifier: "UTC")!
@@ -991,9 +1004,9 @@ final class Endless_RunnerTests: XCTestCase {
         XCTAssertEqual(model.resolvedPlayMode, .daily)
     }
 
-    func testSwitchIntervalFollowsTrackDurationMinusCrossfade() {
+    func testSwitchIntervalUsesFullTrackDuration() {
         let interval = EnvironmentDirector.switchInterval(forTrackDuration: 47, crossfade: 1.25)
-        XCTAssertEqual(interval, 45.75, accuracy: 0.001)
+        XCTAssertEqual(interval, 47, accuracy: 0.001)
     }
 
     func testSwitchIntervalClampsShortAndLongTracks() {

@@ -236,13 +236,12 @@ final class EnvironmentDirector {
         return randomNext(excluding: current, from: pool, rng: &rng)
     }
 
-    /// Biome dwell time for a cue: full track length, minus the crossfade so the
-    /// next biome starts as the current song is fading out.
-    nonisolated static func switchInterval(forTrackDuration trackDuration: Float, crossfade: Float) -> Float {
-        let usable = trackDuration - crossfade
+    /// Biome dwell time follows the complete cue. Crossfade duration affects only
+    /// the audio transition after the boundary, never when gameplay leaves the biome.
+    nonisolated static func switchInterval(forTrackDuration trackDuration: Float, crossfade _: Float) -> Float {
         return min(
             EnvironmentCatalog.maxSwitchInterval,
-            max(EnvironmentCatalog.minSwitchInterval, usable)
+            max(EnvironmentCatalog.minSwitchInterval, trackDuration)
         )
     }
 
@@ -277,15 +276,10 @@ final class EnvironmentDirector {
         telegraphRemaining = telegraph ? EnvironmentCatalog.telegraphSeconds : 0
         if announceMusic {
             let trackDuration = playMusic(for: id)
-            if case .normal = playMode {
-                // Normal inserts a silent physical junction; do not begin a crossfade early.
-                currentSwitchInterval = trackDuration
-            } else {
-                currentSwitchInterval = Self.switchInterval(
-                    forTrackDuration: trackDuration,
-                    crossfade: EnvironmentCatalog.ambienceLerpSeconds
-                )
-            }
+            currentSwitchInterval = Self.switchInterval(
+                forTrackDuration: trackDuration,
+                crossfade: EnvironmentCatalog.ambienceLerpSeconds
+            )
         } else {
             currentSwitchInterval = EnvironmentCatalog.fallbackSwitchInterval
         }
