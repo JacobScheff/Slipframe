@@ -62,8 +62,13 @@ final class Endless_RunnerTests: XCTestCase {
 
         XCTAssertFalse(model.isPlaying)
         XCTAssertTrue(model.isGameOver)
+        XCTAssertFalse(model.isGameOverMenuVisible)
         XCTAssertEqual(model.score, 5)
         XCTAssertEqual(model.coinsCollected, 1)
+
+        model.revealGameOverMenu()
+        XCTAssertTrue(model.isGameOverMenuVisible)
+        XCTAssertTrue(model.pendingMenuReveal)
     }
 
     func testPersonalBestStoreRecordsIndependentScoreAndCoinBests() {

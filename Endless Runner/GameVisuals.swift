@@ -849,6 +849,22 @@ enum GameVisualBuilders {
             halo.position.z = -0.025
             root.addChild(halo)
         }
+        let innerOutline = riftOutline(
+            width: 0.87, height: 1.96, jitter: 0.055, sides: 30,
+            seed: seed &+ 0x719
+        )
+        if let mesh = try? ProceduralGeometry.filledPolygon(points: innerOutline) {
+            let innerRim = ModelEntity(
+                mesh: mesh,
+                materials: [UnlitMaterial(color: hotColor.withAlphaComponent(0.82))]
+            )
+            innerRim.name = "junctionInnerRim"
+            innerRim.position.z = 0.002
+            root.addChild(innerRim)
+        }
+
+        let rimNodes = Entity()
+        rimNodes.name = "junctionRimNodes"
         for index in 0..<18 {
             let angle = Float(index) / 18 * .pi * 2
             let node = ModelEntity(
@@ -856,12 +872,13 @@ enum GameVisualBuilders {
                 materials: [UnlitMaterial(color: rimColor.withAlphaComponent(0.92))]
             )
             node.position = SIMD3(cos(angle) * 0.45, sin(angle) * 0.96, 0.012)
-            root.addChild(node)
+            rimNodes.addChild(node)
         }
+        root.addChild(rimNodes)
 
         let apertureOutline = riftOutline(
-            width: 0.78,
-            height: 1.82,
+            width: 0.75,
+            height: 1.76,
             jitter: 0.045,
             sides: 30,
             seed: seed &+ 0xA93

@@ -163,6 +163,7 @@ final class GameWorld {
         let options: [RiftPortalOption]
         var elapsed: Float = 0
         var selectedIndex: Int?
+        var didSwapDestinationVisuals = false
 
         init(root: Entity, gates: [Entity], guide: ModelEntity, options: [RiftPortalOption]) {
             self.root = root
@@ -935,7 +936,21 @@ final class GameWorld {
                 let highlighted = index == hovered
                 let breathe = 1 + 0.018 * sin(elapsedTime * 2.1 + Float(index))
                 let emphasis: Float = highlighted && t > 0.35 ? 1.1 : 1
-                gate.scale = SIMD3(repeating: breathe * emphasis)
+                let targetScale = SIMD3<Float>(repeating: breathe * emphasis)
+                gate.scale += (targetScale - gate.scale) * min(1, deltaTime * 8)
+
+                if let nodes = gate.children.first(where: { $0.name == "junctionRimNodes" }) {
+                    let shimmer = 1 + 0.035 * sin(elapsedTime * 2.3 + Float(index))
+                    nodes.scale = SIMD3(repeating: shimmer)
+                    nodes.orientation = simd_quatf(
+                        angle: 0.025 * sin(elapsedTime * 0.9 + Float(index)),
+                        axis: SIMD3(0, 0, 1)
+                    )
+                }
+                if let innerRim = gate.children.first(where: { $0.name == "junctionInnerRim" }) {
+                    let glow = highlighted ? 1.025 : 1
+                    innerRim.scale = SIMD3(repeating: glow)
+                }
 
                 if let signature = gate.children.first(where: { $0.name == "junctionBiomeSignature" }) {
                     signature.orientation = simd_quatf(
@@ -966,6 +981,18 @@ final class GameWorld {
         guard let selected = junction.selectedIndex else { return }
         let crossingElapsed = junction.elapsed - choiceDuration
         let t = min(1, crossingElapsed / RiftJunctionRules.crossingSeconds)
+        let option = junction.options[selected]
+
+        // The selected aperture is already directly in front of the player here.
+        // Swap the distant rift while it is occluded, then hold the destination
+        // palette behind the crossing so its reveal feels instantaneous.
+        if !junction.didSwapDestinationVisuals {
+            buildPortalRim()
+            buildPortalInterior()
+            junction.didSwapDestinationVisuals = true
+        }
+        applyPalette(EnvironmentCatalog.profile(for: option.environment).palette, telegraph: 0)
+
         for index in junction.gates.indices {
             let gate = junction.gates[index]
             // Continue the same forward velocity after commitment. Passing the
@@ -973,7 +1000,8 @@ final class GameWorld {
             gate.position.z = head.z - 0.18 + t * 1.1
             if index == selected {
                 gate.position.x += (head.x - gate.position.x) * min(1, deltaTime * 7)
-                gate.scale = SIMD3(repeating: 1.1)
+                let crossingPulse = 1.1 + 0.07 * sin(t * .pi)
+                gate.scale = SIMD3(repeating: crossingPulse)
             } else {
                 let direction: Float = index < selected ? -1 : 1
                 gate.position.x += direction * deltaTime * 1.5
@@ -982,7 +1010,6 @@ final class GameWorld {
         }
 
         guard t >= 1 else { return }
-        let option = junction.options[selected]
         junction.root.removeFromParent()
         self.junction = nil
         portalRoot.scale = SIMD3(repeating: 1)
@@ -996,9 +1023,7 @@ final class GameWorld {
         if activeSpawnProfile.twist == .windShove {
             timeUntilWind = nextFloat(in: 1.2...2.5)
         }
-        buildPortalRim()
-        buildPortalInterior()
-        applyPalette(environmentDirector.displayedPalette, telegraph: 1)
+        applyPalette(environmentDirector.displayedPalette, telegraph: 0)
         distanceUntilSpawn = 2.2
         GameMusic.shared.resetPlaybackFlow()
     }
@@ -1314,6 +1339,9 @@ final class GameWorld {
             // Tutorial skip reuses this dissolve, then hands back to the ready menu.
             if gameModel?.isTutorialRun == true {
                 gameModel?.finalizeTutorialSkip()
+            } else {
+                // Publishing this state starts the existing rise/scale console reveal.
+                gameModel?.revealGameOverMenu()
             }
             return
         }

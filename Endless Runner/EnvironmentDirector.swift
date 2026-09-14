@@ -153,6 +153,12 @@ final class EnvironmentDirector {
         guard case .normal = playMode, isAwaitingNormalChoice else { return }
         isAwaitingNormalChoice = false
         enter(id, telegraph: true, announceMusic: true)
+        // The destination was revealed behind the crossing gate. Keep it there
+        // instead of visibly blending from the old biome after the gate clears.
+        displayedPalette = targetPalette
+        blendFrom = targetPalette
+        blendElapsed = EnvironmentCatalog.ambienceLerpSeconds
+        telegraphRemaining = 0
     }
 
     func update(deltaTime: Float) -> EnvironmentFrame {

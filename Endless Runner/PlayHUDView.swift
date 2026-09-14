@@ -43,6 +43,7 @@ struct PlayHUDView: View {
         .animation(.easeInOut(duration: 0.3), value: gameModel.tutorialBannerText)
         .animation(.easeInOut(duration: 0.25), value: gameModel.isOffPlayfield)
         .animation(.easeInOut(duration: 0.35), value: gameModel.isChoosingPortal)
+        .animation(.easeInOut(duration: 0.3), value: gameModel.isGameOverMenuVisible)
     }
 
     private var runReadout: some View {
@@ -145,6 +146,7 @@ struct PlayHUDView: View {
 
     private var centerHUDOpacity: Double {
         if gameModel.isChoosingPortal { return 0 }
+        if gameModel.isGameOver, !gameModel.isGameOverMenuVisible { return 0 }
         // Keep Skip reachable for the whole tutorial (including auto-start / overdrive).
         // Only yield the center stage during the success banner.
         if gameModel.isTutorialRun {
@@ -198,7 +200,7 @@ struct PlayHUDView: View {
                     .font(.system(size: 17, weight: .medium, design: .rounded))
                     .foregroundStyle(.secondary)
             }
-        } else if gameModel.isGameOver {
+        } else if gameModel.isGameOver, gameModel.isGameOverMenuVisible {
             Button {
                 gameModel.startRun()
             } label: {

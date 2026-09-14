@@ -29,6 +29,7 @@ struct ImmersiveView: View {
     private var showMenuConsole: Bool {
         guard !gameModel.isPlaying else { return false }
         if gameModel.isTutorialRun, gameModel.isGameOver { return false }
+        if gameModel.isGameOver { return gameModel.isGameOverMenuVisible }
         return true
     }
 

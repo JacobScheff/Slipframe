@@ -43,6 +43,8 @@ final class GameModel: ObservableObject {
 
     @Published var isPlaying: Bool = false
     @Published var isGameOver: Bool = false
+    /// Delayed until the crash hold and field-collapse animation have completed.
+    @Published private(set) var isGameOverMenuVisible: Bool = false
     @Published var immersiveSpaceOpen: Bool = false
     /// True during Normal mode's wordless three-rift recovery/choice event.
     @Published var isChoosingPortal: Bool = false
@@ -283,12 +285,20 @@ final class GameModel: ObservableObject {
             finishTutorial(markCompleted: false)
             return
         }
-        isPlaying = false
+        isGameOverMenuVisible = false
         isGameOver = true
+        isPlaying = false
         isChoosingPortal = false
         prefersRoomDimming = false
         isOffPlayfield = false
         recordPersonalBestsIfNeeded()
+    }
+
+    /// Called by GameWorld after all failed-run geometry has moved out of view.
+    func revealGameOverMenu() {
+        guard isGameOver, !isGameOverMenuVisible else { return }
+        pendingMenuReveal = true
+        isGameOverMenuVisible = true
     }
 
     func applyTutorialOverlay(
@@ -341,9 +351,10 @@ final class GameModel: ObservableObject {
         stats.portalsCrossed = 0
         stats.shieldsBroken = 0
         scoreRemainder = 0
+        isGameOverMenuVisible = false
         isChoosingPortal = false
-        isGameOver = false
         isPlaying = true
+        isGameOver = false
         isTutorialRun = tutorial
         prefersRoomDimming = false
         isOffPlayfield = false
