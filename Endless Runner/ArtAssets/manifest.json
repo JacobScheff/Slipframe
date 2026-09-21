@@ -1,0 +1,1346 @@
+{
+  "version": 1,
+  "source": "Art/Blender/Slipframe_ArtSource.blend",
+  "assets": [
+    {
+      "id": "crystal_azure",
+      "file": "crystal_azure.usdz",
+      "family": "crystal_azure",
+      "triangles": 110,
+      "meshCount": 2,
+      "boundsMin": [
+        -0.06499999761581421,
+        -0.06800000369548798,
+        -0.03999999910593033
+      ],
+      "boundsMax": [
+        0.06499999761581421,
+        0.12999999523162842,
+        0.06402113288640976
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 14710
+    },
+    {
+      "id": "crystal_azure_charged",
+      "file": "crystal_azure_charged.usdz",
+      "family": "crystal_azure_charged",
+      "triangles": 370,
+      "meshCount": 4,
+      "boundsMin": [
+        -0.08699999749660492,
+        -0.08699999749660492,
+        -0.03999999910593033
+      ],
+      "boundsMax": [
+        0.08699999749660492,
+        0.14300000667572021,
+        0.06402113288640976
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 40355
+    },
+    {
+      "id": "crystal_combined",
+      "file": "crystal_combined.usdz",
+      "family": "crystal_combined",
+      "triangles": 332,
+      "meshCount": 3,
+      "boundsMin": [
+        -0.14499999582767487,
+        -0.1599999964237213,
+        -0.08227241039276123
+      ],
+      "boundsMax": [
+        0.14499999582767487,
+        0.1599999964237213,
+        0.08227241039276123
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 35779
+    },
+    {
+      "id": "crystal_coral",
+      "file": "crystal_coral.usdz",
+      "family": "crystal_coral",
+      "triangles": 114,
+      "meshCount": 2,
+      "boundsMin": [
+        -0.07000000029802322,
+        -0.06800000369548798,
+        -0.03999999910593033
+      ],
+      "boundsMax": [
+        0.07000000029802322,
+        0.12000000476837158,
+        0.06402113288640976
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 15115
+    },
+    {
+      "id": "crystal_coral_charged",
+      "file": "crystal_coral_charged.usdz",
+      "family": "crystal_coral_charged",
+      "triangles": 374,
+      "meshCount": 4,
+      "boundsMin": [
+        -0.08699999749660492,
+        -0.08699999749660492,
+        -0.03999999910593033
+      ],
+      "boundsMax": [
+        0.08699999749660492,
+        0.14300000667572021,
+        0.06402113288640976
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 40758
+    },
+    {
+      "id": "environment_emberRun",
+      "file": "environment_emberRun.usdz",
+      "family": "environment_emberRun",
+      "triangles": 12876,
+      "meshCount": 9,
+      "boundsMin": [
+        -46.0,
+        -16.0,
+        -42.5
+      ],
+      "boundsMax": [
+        46.0,
+        32.0,
+        12.5
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 1519993
+    },
+    {
+      "id": "environment_lowCrawl",
+      "file": "environment_lowCrawl.usdz",
+      "family": "environment_lowCrawl",
+      "triangles": 20760,
+      "meshCount": 7,
+      "boundsMin": [
+        -46.0,
+        -16.0,
+        -42.5
+      ],
+      "boundsMax": [
+        46.0,
+        32.0,
+        12.5
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 2262252
+    },
+    {
+      "id": "floor_crystalCave",
+      "file": "floor_crystalCave.usdz",
+      "family": "floor_crystalCave",
+      "triangles": 360,
+      "meshCount": 2,
+      "boundsMin": [
+        -1.0750000476837158,
+        0.0029999995604157448,
+        -0.4650000035762787
+      ],
+      "boundsMax": [
+        1.0750000476837158,
+        0.020999999716877937,
+        0.4650000035762787
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 306888
+    },
+    {
+      "id": "floor_emberRun",
+      "file": "floor_emberRun.usdz",
+      "family": "floor_emberRun",
+      "triangles": 360,
+      "meshCount": 2,
+      "boundsMin": [
+        -1.0750000476837158,
+        0.0029999995604157448,
+        -0.4650000035762787
+      ],
+      "boundsMax": [
+        1.0750000476837158,
+        0.020999999716877937,
+        0.4650000035762787
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 243589
+    },
+    {
+      "id": "floor_ghostGlass",
+      "file": "floor_ghostGlass.usdz",
+      "family": "floor_ghostGlass",
+      "triangles": 360,
+      "meshCount": 2,
+      "boundsMin": [
+        -1.0750000476837158,
+        0.0029999995604157448,
+        -0.4650000035762787
+      ],
+      "boundsMax": [
+        1.0750000476837158,
+        0.020999999716877937,
+        0.4650000035762787
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 368137
+    },
+    {
+      "id": "floor_lowCrawl",
+      "file": "floor_lowCrawl.usdz",
+      "family": "floor_lowCrawl",
+      "triangles": 360,
+      "meshCount": 2,
+      "boundsMin": [
+        -1.0750000476837158,
+        0.0029999995604157448,
+        -0.4650000035762787
+      ],
+      "boundsMax": [
+        1.0750000476837158,
+        0.020999999716877937,
+        0.4650000035762787
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 258040
+    },
+    {
+      "id": "floor_stormPass",
+      "file": "floor_stormPass.usdz",
+      "family": "floor_stormPass",
+      "triangles": 360,
+      "meshCount": 2,
+      "boundsMin": [
+        -1.0750000476837158,
+        0.0029999995604157448,
+        -0.4650000035762787
+      ],
+      "boundsMax": [
+        1.0750000476837158,
+        0.020999999716877937,
+        0.4650000035762787
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 274147
+    },
+    {
+      "id": "floor_summitStep",
+      "file": "floor_summitStep.usdz",
+      "family": "floor_summitStep",
+      "triangles": 360,
+      "meshCount": 2,
+      "boundsMin": [
+        -1.0750000476837158,
+        0.0029999995604157448,
+        -0.4650000035762787
+      ],
+      "boundsMax": [
+        1.0750000476837158,
+        0.020999999716877937,
+        0.4650000035762787
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 353622
+    },
+    {
+      "id": "fx_shard",
+      "file": "fx_shard.usdz",
+      "family": "fx_shard",
+      "triangles": 24,
+      "meshCount": 1,
+      "boundsMin": [
+        -1.0,
+        -1.0,
+        -1.0
+      ],
+      "boundsMax": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 5154
+    },
+    {
+      "id": "glyph_aegis",
+      "file": "glyph_aegis.usdz",
+      "family": "glyph_aegis",
+      "triangles": 16,
+      "meshCount": 1,
+      "boundsMin": [
+        -0.41999998688697815,
+        -0.5,
+        -0.03999999910593033
+      ],
+      "boundsMax": [
+        0.41999998688697815,
+        0.5,
+        0.03999999910593033
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 4477
+    },
+    {
+      "id": "glyph_lock",
+      "file": "glyph_lock.usdz",
+      "family": "glyph_lock",
+      "triangles": 28,
+      "meshCount": 1,
+      "boundsMin": [
+        -0.4000000059604645,
+        -0.44999998807907104,
+        -0.03999999910593033
+      ],
+      "boundsMax": [
+        0.4000000059604645,
+        0.5,
+        0.03999999910593033
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 5717
+    },
+    {
+      "id": "glyph_magnet",
+      "file": "glyph_magnet.usdz",
+      "family": "glyph_magnet",
+      "triangles": 316,
+      "meshCount": 1,
+      "boundsMin": [
+        -0.44999998807907104,
+        -0.5,
+        -0.03999999910593033
+      ],
+      "boundsMax": [
+        0.44999998807907104,
+        0.4399999976158142,
+        0.03999999910593033
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 33630
+    },
+    {
+      "id": "glyph_overdrive",
+      "file": "glyph_overdrive.usdz",
+      "family": "glyph_overdrive",
+      "triangles": 20,
+      "meshCount": 1,
+      "boundsMin": [
+        -0.4000000059604645,
+        -0.550000011920929,
+        -0.03999999910593033
+      ],
+      "boundsMax": [
+        0.4000000059604645,
+        0.550000011920929,
+        0.03999999910593033
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 4901
+    },
+    {
+      "id": "glyph_precision",
+      "file": "glyph_precision.usdz",
+      "family": "glyph_precision",
+      "triangles": 44,
+      "meshCount": 1,
+      "boundsMin": [
+        -0.5,
+        -0.5,
+        -0.03999999910593033
+      ],
+      "boundsMax": [
+        0.5,
+        0.5,
+        0.03999999910593033
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 7315
+    },
+    {
+      "id": "glyph_risk",
+      "file": "glyph_risk.usdz",
+      "family": "glyph_risk",
+      "triangles": 12,
+      "meshCount": 1,
+      "boundsMin": [
+        -0.5,
+        -0.5,
+        -0.03999999910593033
+      ],
+      "boundsMax": [
+        0.5,
+        0.5,
+        0.03999999910593033
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 4086
+    },
+    {
+      "id": "gust_ribbon",
+      "file": "gust_ribbon.usdz",
+      "family": "gust_ribbon",
+      "triangles": 300,
+      "meshCount": 2,
+      "boundsMin": [
+        -0.4999999403953552,
+        -0.0948655754327774,
+        -0.00750000262632966
+      ],
+      "boundsMax": [
+        0.5021963715553284,
+        0.0948655754327774,
+        0.00750000262632966
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 33805
+    },
+    {
+      "id": "hazard_duck",
+      "file": "hazard_duck.usdz",
+      "family": "hazard_duck",
+      "triangles": 2160,
+      "meshCount": 5,
+      "boundsMin": [
+        -1.25,
+        -0.375,
+        -0.29750001430511475
+      ],
+      "boundsMax": [
+        1.25,
+        0.375,
+        0.29750001430511475
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 438578
+    },
+    {
+      "id": "hazard_jump",
+      "file": "hazard_jump.usdz",
+      "family": "hazard_jump",
+      "triangles": 540,
+      "meshCount": 3,
+      "boundsMin": [
+        -1.25,
+        -0.07000000029802322,
+        -0.10999999940395355
+      ],
+      "boundsMax": [
+        1.25,
+        0.07000000029802322,
+        0.10999999940395355
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 371533
+    },
+    {
+      "id": "preview_emberRun",
+      "file": "preview_emberRun.usdz",
+      "family": "preview_emberRun",
+      "triangles": 1032,
+      "meshCount": 6,
+      "boundsMin": [
+        -0.36500000953674316,
+        -0.8849999904632568,
+        -0.22499999403953552
+      ],
+      "boundsMax": [
+        0.36500000953674316,
+        0.8849999904632568,
+        0.22499999403953552
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 316600
+    },
+    {
+      "id": "preview_lowCrawl",
+      "file": "preview_lowCrawl.usdz",
+      "family": "preview_lowCrawl",
+      "triangles": 1680,
+      "meshCount": 5,
+      "boundsMin": [
+        -0.36500000953674316,
+        -0.8849999904632568,
+        -0.22499999403953552
+      ],
+      "boundsMax": [
+        0.36500000953674316,
+        0.8849999904632568,
+        0.22499999403953552
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 390540
+    },
+    {
+      "id": "prop_emberRun",
+      "file": "prop_emberRun.usdz",
+      "family": "prop_emberRun",
+      "triangles": 268,
+      "meshCount": 3,
+      "boundsMin": [
+        -0.6444874405860901,
+        -0.14304101467132568,
+        -0.4775342047214508
+      ],
+      "boundsMax": [
+        0.638013482093811,
+        2.2660183906555176,
+        0.44932448863983154
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 234607
+    },
+    {
+      "id": "prop_lowCrawl",
+      "file": "prop_lowCrawl.usdz",
+      "family": "prop_lowCrawl",
+      "triangles": 660,
+      "meshCount": 4,
+      "boundsMin": [
+        -0.4099999964237213,
+        -6.217249626115146e-17,
+        -0.36000001430511475
+      ],
+      "boundsMax": [
+        0.4099999964237213,
+        2.0999999046325684,
+        0.4749999940395355
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 288551
+    },
+    {
+      "id": "rail_segment",
+      "file": "rail_segment.usdz",
+      "family": "rail_segment",
+      "triangles": 300,
+      "meshCount": 3,
+      "boundsMin": [
+        -0.07000000029802322,
+        -0.054999999701976776,
+        -0.5
+      ],
+      "boundsMax": [
+        0.07000000029802322,
+        0.054999999701976776,
+        0.5
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 34345
+    },
+    {
+      "id": "start_pad",
+      "file": "start_pad.usdz",
+      "family": "start_pad",
+      "triangles": 540,
+      "meshCount": 3,
+      "boundsMin": [
+        -1.25,
+        -0.013000000268220901,
+        -0.3199999928474426
+      ],
+      "boundsMax": [
+        1.25,
+        0.028500013053417206,
+        0.3199999928474426
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 58874
+    },
+    {
+      "id": "token",
+      "file": "token.usdz",
+      "family": "token",
+      "triangles": 392,
+      "meshCount": 3,
+      "boundsMin": [
+        -0.09999999403953552,
+        -0.0860000029206276,
+        -0.05999999865889549
+      ],
+      "boundsMax": [
+        0.09999999403953552,
+        0.0860000029206276,
+        0.05999999865889549
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 41516
+    },
+    {
+      "id": "track_endcap",
+      "file": "track_endcap.usdz",
+      "family": "track_endcap",
+      "triangles": 240,
+      "meshCount": 2,
+      "boundsMin": [
+        -1.600000023841858,
+        -0.02250000089406967,
+        -0.05999999865889549
+      ],
+      "boundsMax": [
+        1.600000023841858,
+        0.03100000135600567,
+        0.05999999865889549
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 27656
+    },
+    {
+      "id": "track_segment",
+      "file": "track_segment.usdz",
+      "family": "track_segment",
+      "triangles": 900,
+      "meshCount": 5,
+      "boundsMin": [
+        -1.600000023841858,
+        -0.05000000074505806,
+        -0.5
+      ],
+      "boundsMax": [
+        1.600000023841858,
+        0.03400000184774399,
+        0.5
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 94982
+    },
+    {
+      "id": "wall_emberRun_0",
+      "file": "wall_emberRun_0.usdz",
+      "family": "wall_emberRun_0",
+      "triangles": 1046,
+      "meshCount": 6,
+      "boundsMin": [
+        -0.3499999940395355,
+        -0.8999999761581421,
+        -0.3499999940395355
+      ],
+      "boundsMax": [
+        0.3499999940395355,
+        0.8999999761581421,
+        0.3499999940395355
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 314383
+    },
+    {
+      "id": "wall_emberRun_1",
+      "file": "wall_emberRun_1.usdz",
+      "family": "wall_emberRun_1",
+      "triangles": 1046,
+      "meshCount": 6,
+      "boundsMin": [
+        -0.3499999940395355,
+        -0.8999999761581421,
+        -0.3499999940395355
+      ],
+      "boundsMax": [
+        0.3499999940395355,
+        0.8999999761581421,
+        0.3499999940395355
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 314230
+    },
+    {
+      "id": "wall_emberRun_2",
+      "file": "wall_emberRun_2.usdz",
+      "family": "wall_emberRun_2",
+      "triangles": 1046,
+      "meshCount": 6,
+      "boundsMin": [
+        -0.3499999940395355,
+        -0.8999999761581421,
+        -0.3499999940395355
+      ],
+      "boundsMax": [
+        0.3499999940395355,
+        0.8999999761581421,
+        0.3499999940395355
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 314234
+    },
+    {
+      "id": "wall_lowCrawl_0",
+      "file": "wall_lowCrawl_0.usdz",
+      "family": "wall_lowCrawl_0",
+      "triangles": 1852,
+      "meshCount": 5,
+      "boundsMin": [
+        -0.3499999940395355,
+        -0.8999999761581421,
+        -0.3499999940395355
+      ],
+      "boundsMax": [
+        0.3499999940395355,
+        0.8999999761581421,
+        0.3499999940395355
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 407191
+    },
+    {
+      "id": "wall_lowCrawl_1",
+      "file": "wall_lowCrawl_1.usdz",
+      "family": "wall_lowCrawl_1",
+      "triangles": 1852,
+      "meshCount": 5,
+      "boundsMin": [
+        -0.3499999940395355,
+        -0.8999999761581421,
+        -0.3499999940395355
+      ],
+      "boundsMax": [
+        0.3499999940395355,
+        0.8999999761581421,
+        0.3499999940395355
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 406824
+    },
+    {
+      "id": "wall_lowCrawl_2",
+      "file": "wall_lowCrawl_2.usdz",
+      "family": "wall_lowCrawl_2",
+      "triangles": 1852,
+      "meshCount": 5,
+      "boundsMin": [
+        -0.3499999940395355,
+        -0.8999999761581421,
+        -0.3499999940395355
+      ],
+      "boundsMax": [
+        0.3499999940395355,
+        0.8999999761581421,
+        0.3499999940395355
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 407155
+    },
+    {
+      "id": "wall_ghostGlass_0",
+      "file": "wall_ghostGlass_0.usdz",
+      "family": "ghostGlass",
+      "triangles": 1088,
+      "meshCount": 3,
+      "boundsMin": [
+        -0.3499999940395355,
+        -0.8999999761581421,
+        -0.3499999940395355
+      ],
+      "boundsMax": [
+        0.3499999940395355,
+        0.8999999761581421,
+        0.3499999940395355
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 113781
+    },
+    {
+      "id": "wall_ghostGlass_1",
+      "file": "wall_ghostGlass_1.usdz",
+      "family": "ghostGlass",
+      "triangles": 1088,
+      "meshCount": 3,
+      "boundsMin": [
+        -0.3499999940395355,
+        -0.8999999761581421,
+        -0.3499999940395355
+      ],
+      "boundsMax": [
+        0.3499999940395355,
+        0.8999999761581421,
+        0.3499999940395355
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 113781
+    },
+    {
+      "id": "wall_ghostGlass_2",
+      "file": "wall_ghostGlass_2.usdz",
+      "family": "ghostGlass",
+      "triangles": 1088,
+      "meshCount": 3,
+      "boundsMin": [
+        -0.3499999940395355,
+        -0.8999999761581421,
+        -0.3499999940395355
+      ],
+      "boundsMax": [
+        0.3499999940395355,
+        0.8999999761581421,
+        0.3499999940395355
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 113779
+    },
+    {
+      "id": "prop_ghostGlass",
+      "file": "prop_ghostGlass.usdz",
+      "family": "ghostGlass",
+      "triangles": 304,
+      "meshCount": 2,
+      "boundsMin": [
+        -0.48500001430511475,
+        0.04999995231628418,
+        -0.26499998569488525
+      ],
+      "boundsMax": [
+        0.48500001430511475,
+        2.3499999046325684,
+        0.03600013628602028
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 34626
+    },
+    {
+      "id": "preview_ghostGlass",
+      "file": "preview_ghostGlass.usdz",
+      "family": "ghostGlass",
+      "triangles": 908,
+      "meshCount": 4,
+      "boundsMin": [
+        -0.36500000953674316,
+        -0.8849999904632568,
+        -0.22499999403953552
+      ],
+      "boundsMax": [
+        0.36500000953674316,
+        0.8849999904632568,
+        0.22499999403953552
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 424339
+    },
+    {
+      "id": "environment_ghostGlass",
+      "file": "environment_ghostGlass.usdz",
+      "family": "ghostGlass",
+      "triangles": 13504,
+      "meshCount": 7,
+      "boundsMin": [
+        -46.0,
+        -16.0,
+        -42.5
+      ],
+      "boundsMax": [
+        46.0,
+        32.0,
+        12.5
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 1335962
+    },
+    {
+      "id": "wall_stormPass_0",
+      "file": "wall_stormPass_0.usdz",
+      "family": "stormPass",
+      "triangles": 1572,
+      "meshCount": 4,
+      "boundsMin": [
+        -0.3499999940395355,
+        -0.8999999761581421,
+        -0.3499999940395355
+      ],
+      "boundsMax": [
+        0.3499999940395355,
+        0.8999999761581421,
+        0.3499999940395355
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 395130
+    },
+    {
+      "id": "wall_stormPass_1",
+      "file": "wall_stormPass_1.usdz",
+      "family": "stormPass",
+      "triangles": 1572,
+      "meshCount": 4,
+      "boundsMin": [
+        -0.3499999940395355,
+        -0.8999999761581421,
+        -0.3499999940395355
+      ],
+      "boundsMax": [
+        0.3499999940395355,
+        0.8999999761581421,
+        0.3499999940395355
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 395059
+    },
+    {
+      "id": "wall_stormPass_2",
+      "file": "wall_stormPass_2.usdz",
+      "family": "stormPass",
+      "triangles": 1572,
+      "meshCount": 4,
+      "boundsMin": [
+        -0.3499999940395355,
+        -0.8999999761581421,
+        -0.3499999940395355
+      ],
+      "boundsMax": [
+        0.3499999940395355,
+        0.8999999761581421,
+        0.3499999940395355
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 395338
+    },
+    {
+      "id": "prop_stormPass",
+      "file": "prop_stormPass.usdz",
+      "family": "stormPass",
+      "triangles": 886,
+      "meshCount": 4,
+      "boundsMin": [
+        -0.375,
+        -7.105427198782324e-17,
+        -0.4000000059604645
+      ],
+      "boundsMax": [
+        0.5600000023841858,
+        2.5,
+        0.4000000059604645
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 327566
+    },
+    {
+      "id": "preview_stormPass",
+      "file": "preview_stormPass.usdz",
+      "family": "stormPass",
+      "triangles": 2268,
+      "meshCount": 5,
+      "boundsMin": [
+        -0.36500000953674316,
+        -0.8849999904632568,
+        -0.22499999403953552
+      ],
+      "boundsMax": [
+        0.36500000953674316,
+        0.8849999904632568,
+        0.22499999403953552
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 463960
+    },
+    {
+      "id": "environment_stormPass",
+      "file": "environment_stormPass.usdz",
+      "family": "stormPass",
+      "triangles": 20452,
+      "meshCount": 9,
+      "boundsMin": [
+        -46.0,
+        -16.0,
+        -42.5
+      ],
+      "boundsMax": [
+        46.0,
+        32.0,
+        12.5
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 2255663
+    },
+    {
+      "id": "wall_crystalCave_0",
+      "file": "wall_crystalCave_0.usdz",
+      "family": "crystalCave",
+      "triangles": 556,
+      "meshCount": 6,
+      "boundsMin": [
+        -0.3499999940395355,
+        -0.8999999761581421,
+        -0.3499999940395355
+      ],
+      "boundsMax": [
+        0.3499999940395355,
+        0.8999999761581421,
+        0.3499999940395355
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 330733
+    },
+    {
+      "id": "wall_crystalCave_1",
+      "file": "wall_crystalCave_1.usdz",
+      "family": "crystalCave",
+      "triangles": 556,
+      "meshCount": 6,
+      "boundsMin": [
+        -0.3499999940395355,
+        -0.8999999761581421,
+        -0.3499999940395355
+      ],
+      "boundsMax": [
+        0.3499999940395355,
+        0.8999999761581421,
+        0.3499999940395355
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 330652
+    },
+    {
+      "id": "wall_crystalCave_2",
+      "file": "wall_crystalCave_2.usdz",
+      "family": "crystalCave",
+      "triangles": 556,
+      "meshCount": 6,
+      "boundsMin": [
+        -0.3499999940395355,
+        -0.8999999761581421,
+        -0.3499999940395355
+      ],
+      "boundsMax": [
+        0.3499999940395355,
+        0.8999999761581421,
+        0.3499999940395355
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 330715
+    },
+    {
+      "id": "prop_crystalCave",
+      "file": "prop_crystalCave.usdz",
+      "family": "crystalCave",
+      "triangles": 370,
+      "meshCount": 5,
+      "boundsMin": [
+        -0.6479907631874084,
+        -0.10274387151002884,
+        -0.551022469997406
+      ],
+      "boundsMax": [
+        0.7192877531051636,
+        2.294254779815674,
+        0.5375471115112305
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 309735
+    },
+    {
+      "id": "preview_crystalCave",
+      "file": "preview_crystalCave.usdz",
+      "family": "crystalCave",
+      "triangles": 1076,
+      "meshCount": 6,
+      "boundsMin": [
+        -0.36500000953674316,
+        -0.8849999904632568,
+        -0.22499999403953552
+      ],
+      "boundsMax": [
+        0.36500000953674316,
+        0.8849999904632568,
+        0.22499999403953552
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 379780
+    },
+    {
+      "id": "environment_crystalCave",
+      "file": "environment_crystalCave.usdz",
+      "family": "crystalCave",
+      "triangles": 11834,
+      "meshCount": 11,
+      "boundsMin": [
+        -46.0,
+        -16.0,
+        -42.5
+      ],
+      "boundsMax": [
+        46.0,
+        32.0,
+        12.5
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 1441211
+    },
+    {
+      "id": "wall_summitStep_0",
+      "file": "wall_summitStep_0.usdz",
+      "family": "summitStep",
+      "triangles": 568,
+      "meshCount": 6,
+      "boundsMin": [
+        -0.3499999940395355,
+        -0.8999999761581421,
+        -0.3499999940395355
+      ],
+      "boundsMax": [
+        0.3499999940395355,
+        0.8999999761581421,
+        0.3499999940395355
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 381362
+    },
+    {
+      "id": "wall_summitStep_1",
+      "file": "wall_summitStep_1.usdz",
+      "family": "summitStep",
+      "triangles": 568,
+      "meshCount": 6,
+      "boundsMin": [
+        -0.3499999940395355,
+        -0.8999999761581421,
+        -0.3499999940395355
+      ],
+      "boundsMax": [
+        0.3499999940395355,
+        0.8999999761581421,
+        0.3499999940395355
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 381155
+    },
+    {
+      "id": "wall_summitStep_2",
+      "file": "wall_summitStep_2.usdz",
+      "family": "summitStep",
+      "triangles": 568,
+      "meshCount": 6,
+      "boundsMin": [
+        -0.3499999940395355,
+        -0.8999999761581421,
+        -0.3499999940395355
+      ],
+      "boundsMax": [
+        0.3499999940395355,
+        0.8999999761581421,
+        0.3499999940395355
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 381297
+    },
+    {
+      "id": "prop_summitStep",
+      "file": "prop_summitStep.usdz",
+      "family": "summitStep",
+      "triangles": 208,
+      "meshCount": 3,
+      "boundsMin": [
+        -0.6444874405860901,
+        -0.14304101467132568,
+        -0.4775342047214508
+      ],
+      "boundsMax": [
+        0.638013482093811,
+        2.2660183906555176,
+        0.44932448863983154
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 341568
+    },
+    {
+      "id": "preview_summitStep",
+      "file": "preview_summitStep.usdz",
+      "family": "summitStep",
+      "triangles": 740,
+      "meshCount": 5,
+      "boundsMin": [
+        -0.36500000953674316,
+        -0.8849999904632568,
+        -0.22499999403953552
+      ],
+      "boundsMax": [
+        0.36500000953674316,
+        0.8849999904632568,
+        0.22499999403953552
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 398023
+    },
+    {
+      "id": "environment_summitStep",
+      "file": "environment_summitStep.usdz",
+      "family": "summitStep",
+      "triangles": 10612,
+      "meshCount": 10,
+      "boundsMin": [
+        -46.0,
+        -16.0,
+        -42.5
+      ],
+      "boundsMax": [
+        46.0,
+        32.0,
+        12.5
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 1419586
+    },
+    {
+      "id": "rift_frame",
+      "file": "rift_frame.usdz",
+      "family": "01_Shared_RiftKit",
+      "triangles": 6116,
+      "meshCount": 6,
+      "boundsMin": [
+        -2.239269733428955,
+        -1.5433052778244019,
+        -0.18770524859428406
+      ],
+      "boundsMax": [
+        2.239269733428955,
+        1.590000033378601,
+        0.35899999737739563
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 593640
+    },
+    {
+      "id": "rift_aperture",
+      "file": "rift_aperture.usdz",
+      "family": "01_Shared_RiftKit",
+      "triangles": 64,
+      "meshCount": 1,
+      "boundsMin": [
+        -1.840000033378601,
+        -1.2799999713897705,
+        -2.8421708795129297e-16
+      ],
+      "boundsMax": [
+        1.840000033378601,
+        1.2799999713897705,
+        2.8421708795129297e-16
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 9598
+    },
+    {
+      "id": "rift_energy",
+      "file": "rift_energy.usdz",
+      "family": "01_Shared_RiftKit",
+      "triangles": 1216,
+      "meshCount": 2,
+      "boundsMin": [
+        -1.0119999647140503,
+        -1.0119999647140503,
+        -0.006000000052154064
+      ],
+      "boundsMax": [
+        1.0119999647140503,
+        1.0119999647140503,
+        0.024000000208616257
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 120608
+    },
+    {
+      "id": "junction_frame",
+      "file": "junction_frame.usdz",
+      "family": "01_Shared_RiftKit",
+      "triangles": 2752,
+      "meshCount": 5,
+      "boundsMin": [
+        -0.48500001430511475,
+        -1.1024999618530273,
+        -0.10000000149011612
+      ],
+      "boundsMax": [
+        0.48500001430511475,
+        1.1125000715255737,
+        0.2475000023841858
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 269439
+    },
+    {
+      "id": "junction_aperture",
+      "file": "junction_aperture.usdz",
+      "family": "01_Shared_RiftKit",
+      "triangles": 64,
+      "meshCount": 1,
+      "boundsMin": [
+        -0.38999998569488525,
+        -0.9470000267028809,
+        -2.1027624679323528e-16
+      ],
+      "boundsMax": [
+        0.38999998569488525,
+        0.9470000267028809,
+        2.1027624679323528e-16
+      ],
+      "metersPerUnit": 1.0,
+      "upAxis": "Y",
+      "bytes": 9600
+    }
+  ]
+}

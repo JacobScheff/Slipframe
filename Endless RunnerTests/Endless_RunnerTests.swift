@@ -9,6 +9,7 @@ import XCTest
 @testable import Endless_Runner
 import Combine
 import simd
+import RealityKit
 
 @MainActor
 final class Endless_RunnerTests: XCTestCase {
@@ -1766,6 +1767,123 @@ final class Endless_RunnerTests: XCTestCase {
             XCTAssertFalse(kind.symbolName.isEmpty)
             XCTAssertFalse(kind.cardBlurb.isEmpty)
         }
+    }
+
+    // MARK: - Authored art, cosmetic variation and portable animation
+
+    func testSceneryVariationIsRepeatableAndSeeded() {
+        for biome in EnvironmentID.allCases where biome != .lowCrawl {
+            let first = SceneryVariation.placements(biome: biome, seed: 125)
+            XCTAssertEqual(first.count, 8)
+            XCTAssertEqual(first, SceneryVariation.placements(biome: biome, seed: 125))
+            XCTAssertNotEqual(first, SceneryVariation.placements(biome: biome, seed: 126))
+        }
+        XCTAssertTrue(SceneryVariation.placements(biome: .lowCrawl, seed: 125).isEmpty)
+    }
+
+    func testSceneryVariationStaysModestAndOutsideLanes() {
+        for biome in EnvironmentID.allCases {
+            for seed in 0..<32 {
+                for placement in SceneryVariation.placements(biome: biome, seed: UInt64(seed)) {
+                    XCTAssertGreaterThanOrEqual(abs(placement.position.x), 3.05)
+                    XCTAssertLessThan(placement.position.z, -3.5)
+                    XCTAssertGreaterThan(placement.position.z, -21)
+                    XCTAssertTrue((0.85...1.13).contains(placement.scale.x))
+                    XCTAssertTrue((0.80...1.22).contains(placement.scale.y))
+                    XCTAssertLessThanOrEqual(abs(placement.yaw), 0.24)
+                    XCTAssertLessThanOrEqual(abs(placement.lean), 0.045)
+                }
+            }
+        }
+    }
+
+    func testSceneryDoesNotAdvanceDailyGameplayStream() {
+        var gameplay = DailyChallenge.makeGameplayGenerator(dayKey: "2026-09-20")
+        var control = DailyChallenge.makeGameplayGenerator(dayKey: "2026-09-20")
+        for biome in EnvironmentID.allCases {
+            _ = SceneryVariation.placements(biome: biome, seed: 42)
+            XCTAssertEqual(gameplay.next(), control.next())
+        }
+    }
+
+    func testRainLoopFadesAtWrapAndFallsDownward() {
+        let rain = RiftMoteComponent(basePosition: .zero, phase: 0, radius: 0.09, falling: true)
+        XCTAssertEqual(rain.sample(at: 0).opacity, 0)
+        XCTAssertGreaterThan(rain.sample(at: 0.5).offset.y, rain.sample(at: 1.0).offset.y)
+        XCTAssertGreaterThan(rain.sample(at: 0.5).opacity, 0.5)
+        XCTAssertLessThan(rain.sample(at: 1 / 0.55).opacity, 0.001)
+    }
+
+    func testAuthoredTurbineRotationKeepsItsPivotFixed() {
+        let node = Entity()
+        let motion = AuthoredMotion(entity: node, base: node.transform, kind: .rotor)
+        let pivot = SIMD3<Float>(0, 4.2, -28)
+        motion.update(time: 12)
+        let transformed = node.position + node.orientation.act(pivot)
+        XCTAssertLessThan(simd_distance(transformed, pivot), 0.0001)
+        let first = node.transform
+        motion.update(time: 12)
+        XCTAssertLessThan(simd_distance(node.position, first.translation), 0.0001)
+    }
+
+    func testEveryAuthoredAssetIsBundledAndLoads() async throws {
+        XCTAssertEqual(BiomeAssetID.required.count, 67)
+        XCTAssertEqual(Set(BiomeAssetID.required).count, BiomeAssetID.required.count)
+        await BiomeAssetCatalog.preload()
+        XCTAssertTrue(BiomeAssetCatalog.missingAssets.isEmpty, "Missing: \(BiomeAssetCatalog.missingAssets)")
+        for name in BiomeAssetID.required {
+            XCTAssertNotNil(Bundle.main.url(forResource: name, withExtension: "usdz", subdirectory: "ArtAssets"), name)
+            let model = try XCTUnwrap(BiomeAssetCatalog.clone(name), name)
+            XCTAssertFalse(BiomeAssetCatalog.models(in: model).isEmpty, name)
+        }
+    }
+
+    func testImportedWallVariantsPreserveCollisionEnvelope() async {
+        await BiomeAssetCatalog.preload()
+        for biome in EnvironmentID.allCases {
+            for seed in 0..<BiomeAssetID.wallVariantCount {
+                let wall = GameVisualBuilders.makeBiomeObstacle(biome: biome, width: 0.7, height: 1.8, depth: 0.7,
+                    profile: EnvironmentCatalog.profile(for: biome), seed: UInt64(seed))
+                let size = wall.visualBounds(relativeTo: wall).extents
+                XCTAssertEqual(size.x, 0.7, accuracy: 0.002, biome.rawValue)
+                XCTAssertEqual(size.y, 1.8, accuracy: 0.002, biome.rawValue)
+                XCTAssertEqual(size.z, 0.7, accuracy: 0.002, biome.rawValue)
+            }
+        }
+    }
+
+    func testImportedWorldsExposeTheirAnimationParts() async throws {
+        await BiomeAssetCatalog.preload()
+        for name in ["environment_stormPass", "environment_ghostGlass", "environment_crystalCave"] {
+            let world = try XCTUnwrap(BiomeAssetCatalog.clone(name))
+            XCTAssertFalse(BiomeAssetCatalog.motionBindings(in: world).isEmpty, name)
+        }
+    }
+
+    func testImportedDecorationsAreGroundedAndOutsidePlaySpace() async {
+        await BiomeAssetCatalog.preload()
+        for biome in EnvironmentID.allCases {
+            let interior = GameVisualBuilders.makePortalInterior(portalHeight: 2.5, biome: biome, scenerySeed: 42)
+            for prop in interior.children where prop.name.hasPrefix("sceneryVariation_") {
+                let bounds = prop.visualBounds(relativeTo: interior)
+                XCTAssertEqual(bounds.min.y, -1.25, accuracy: 0.002)
+                XCTAssertTrue(bounds.min.x > 1.85 || bounds.max.x < -1.85, biome.rawValue)
+                XCTAssertNil(prop.components[CollisionComponent.self])
+            }
+        }
+    }
+
+    func testPortalEnergyAnimationDoesNotMoveFrameOrAperture() async throws {
+        await BiomeAssetCatalog.preload()
+        let rim = GameVisualBuilders.makePortalRim(width: 3.6, height: 2.5, cornerRadius: 0.2, thickness: 0.1)
+        let frame = try XCTUnwrap(rim.children.first)
+        let before = frame.visualBounds(relativeTo: rim)
+        GameVisualBuilders.animatePortalEnergy(in: rim, name: "riftEnergyOuter", time: 17, speed: 0.15)
+        let after = frame.visualBounds(relativeTo: rim)
+        XCTAssertLessThan(simd_distance(before.min, after.min), 0.0001)
+        XCTAssertLessThan(simd_distance(before.max, after.max), 0.0001)
+        let ring = try XCTUnwrap(rim.children.first(where: { $0.name == "riftEnergyOuter" })?.children.first)
+        XCTAssertNotEqual(ring.orientation.angle, 0)
     }
 
     // MARK: - Helpers

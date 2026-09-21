@@ -23,6 +23,7 @@ struct ImmersiveView: View {
     /// Prevents `openWindow` from spawning duplicate Game Center host windows.
     @State private var isGameCenterAuthWindowOpen = false
     @State private var didOfferAutoTutorial = false
+    @State private var isWorldReady = false
 
     /// Console shows between runs; hide while a run is active.
     /// Also stay hidden while a skipped tutorial dissolves the field.
@@ -41,9 +42,14 @@ struct ImmersiveView: View {
 
     var body: some View {
         RealityView { content, attachments in
+            await BiomeAssetCatalog.preload()
+            guard !Task.isCancelled else { return }
             gameWorld.attach(to: content, gameModel: gameModel)
             attachPanels(from: attachments)
+            isWorldReady = true
+            offerAutoTutorialIfNeeded()
         } update: { _, attachments in
+            guard isWorldReady else { return }
             gameWorld.syncRun(with: gameModel)
             attachPanels(from: attachments)
             gameWorld.setMenuChromeVisible(showMenuConsole)
@@ -75,9 +81,9 @@ struct ImmersiveView: View {
             gameModel.immersiveSpaceOpen = true
             gameCenter.start()
             syncGameCenterAuthWindow()
-            offerAutoTutorialIfNeeded()
         }
         .onDisappear {
+            isWorldReady = false
             gameModel.immersiveSpaceOpen = false
             gameModel.isPlaying = false
             gameModel.prefersRoomDimming = false

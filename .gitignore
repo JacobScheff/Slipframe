@@ -1,0 +1,4 @@
+# Local Blender backup versions; the editable .blend source is tracked.
+Art/Blender/*.blend[0-9]*
+**/__pycache__/
+.DS_Store
