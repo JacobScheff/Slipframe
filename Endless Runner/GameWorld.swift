@@ -8,7 +8,7 @@
 //  - Obstacles emerge from the portal into the real room
 //  - Biomes tint ambience / walls / coins
 //  - Each biome applies one gameplay twist via EnvironmentDirector
-//  Visuals: polished procedural meshes + catalog textures (see ASSET_SPEC.md).
+//  Visuals: cached Blender-authored USDZ models (see ASSET_SPEC.md).
 //
 
 import ARKit
@@ -278,6 +278,12 @@ final class GameWorld {
 
     // Fixed track slab from the stand line to just behind the portal.
     private static let trackWidth: Float = 3.2
+    /// Scene kit currently displayed; may lead gameplay during a portal crossing.
+    private var visualEnvironmentID: EnvironmentID?
+    private var lastArtPalette: EnvironmentPalette?
+    private var lastArtTelegraph: Int = -1
+    private var portalMotions: [AuthoredMotion] = []
+    private var junctionMotions: [AuthoredMotion] = []
     /// Track slab extends this far behind the stand line (+Z).
     private static let trackNearZ: Float = 1.1
     /// End the track this far in front of the portal so the slab cannot occlude emerging walls.
@@ -410,10 +416,12 @@ final class GameWorld {
     private var gameOverWallBases: [(entity: Entity, position: SIMD3<Float>, scale: SIMD3<Float>)] = []
     /// Daily-only spawn/wind stream (nil → unseeded SystemRandom for other modes).
     private var gameplayRNG: SeededGenerator?
-    /// Purely cosmetic per-instance seed for procedural obstacle geometry —
+    /// Purely cosmetic per-instance seed for authored obstacle variants —
     /// deliberately separate from `gameplayRNG` so shape variety never shifts
     /// the deterministic daily-challenge spawn/wind sequence.
     private var visualSeedCounter: UInt64 = 0
+    private var sceneryRunSeed: UInt64 = UInt64.random(in: .min ... .max)
+    private var sceneryVisit: UInt64 = 0
 
     private func nextVisualSeed() -> UInt64 {
         visualSeedCounter &+= 0x9E37_79B9_7F4A_7C15
@@ -468,7 +476,8 @@ final class GameWorld {
         didSnapWithFloor = false
         lastPreviewMode = gameModel.resolvedPlayMode
         elapsedTime = 0
-        GameMaterials.warmTextures()
+        visualEnvironmentID = nil
+        lastArtPalette = nil
         visualFX.attach(to: root)
         // Pre-build collect-burst meshes so the first coin does not hitch the tick.
         visualFX.prepare()
@@ -589,6 +598,7 @@ final class GameWorld {
         aegisAura = nil
         resetGameOverClear()
         clearJunction()
+        portalMotions.removeAll()
         clearDynamicContent()
         dropHeldHalves()
         gameplayRNG = nil
@@ -688,10 +698,12 @@ final class GameWorld {
         let track = GameVisualBuilders.makeTrack(
             width: GameWorld.trackWidth,
             depth: depth,
-            laneXs: Lane.allCases.map(\.x)
+            laneXs: Lane.allCases.map(\.x),
+            biome: visualEnvironmentID ?? environmentDirector.currentID
         )
         track.position = SIMD3(0, 0, centerZ)
         trackRoot.addChild(track)
+        lastArtPalette = nil
     }
 
     /// Always-on Synth Riders-style aperture at the end of the track.
@@ -701,15 +713,8 @@ final class GameWorld {
         portalWorld.name = "portalWorld"
         portalWorld.components.set(WorldComponent())
 
-        // Irregular "tear in reality" aperture instead of a rounded rectangle —
-        // same seed the rim's hot inner edge uses so the two stay concentric.
-        let apertureOutline = GameVisualBuilders.riftOutline(
-            width: GameWorld.portalWidth,
-            height: GameWorld.portalHeight,
-            jitter: 0.14,
-            seed: GameVisualBuilders.riftApertureSeed
-        )
-        let portalMesh = (try? ProceduralGeometry.filledPolygon(points: apertureOutline)) ?? MeshResource.generatePlane(
+        // Exported mask matches the authored frame and has baked Y-up vertices.
+        let portalMesh = BiomeAssetCatalog.mesh("rift_aperture") ?? MeshResource.generatePlane(
             width: GameWorld.portalWidth,
             height: GameWorld.portalHeight,
             cornerRadius: GameWorld.portalCornerRadius
@@ -757,6 +762,7 @@ final class GameWorld {
             thickness: GameWorld.portalRimThickness
         )
         portalRoot.addChild(rim)
+        lastArtPalette = nil
     }
 
     /// Dark tunnel visible only through the portal — blocks passthrough cleanly.
@@ -765,7 +771,13 @@ final class GameWorld {
         if let existing = portalWorld.children.first(where: { $0.name == "portalInterior" }) {
             existing.removeFromParent()
         }
-        portalWorld.addChild(GameVisualBuilders.makePortalInterior(portalHeight: GameWorld.portalHeight))
+        let interior = GameVisualBuilders.makePortalInterior(
+            portalHeight: GameWorld.portalHeight,
+            biome: visualEnvironmentID ?? environmentDirector.currentID,
+            scenerySeed: sceneryRunSeed ^ (sceneryVisit &* 0x9E37_79B9_7F4A_7C15)
+        )
+        portalWorld.addChild(interior)
+        portalMotions = BiomeAssetCatalog.motionBindings(in: interior)
     }
 
     private func layoutPortal() {
@@ -801,9 +813,7 @@ final class GameWorld {
         if activeSpawnProfile.twist == .windShove {
             timeUntilWind = nextFloat(in: 1.0...2.0)
         }
-        rebuildFixedTrack(force: true)
         buildPortalRim()
-        buildPortalInterior()
         applyPalette(environmentDirector.displayedPalette, telegraph: 0)
         layoutPortal()
         tutorialHitCooldown = 0
@@ -895,6 +905,7 @@ final class GameWorld {
         }
         root.addChild(junctionRoot)
         junction = JunctionState(root: junctionRoot, gates: gates, guide: guide, options: options)
+        junctionMotions = BiomeAssetCatalog.motionBindings(in: junctionRoot)
         gameModel?.isChoosingPortal = true
         GameSFX.shared.playJunctionOpen()
     }
@@ -933,6 +944,7 @@ final class GameWorld {
 
             for index in junction.gates.indices {
                 let gate = junction.gates[index]
+                GameVisualBuilders.animatePortalEnergy(in: gate, name: "junctionEnergy", time: elapsedTime + Float(index), speed: 0.22)
                 gate.position.z = approachZ
                 let highlighted = index == hovered
                 let breathe: Float = 1 + 0.018 * sin(elapsedTime * 2.1 + Float(index))
@@ -940,24 +952,9 @@ final class GameWorld {
                 let targetScale = SIMD3<Float>(repeating: breathe * emphasis)
                 gate.scale += (targetScale - gate.scale) * min(1, deltaTime * 8)
 
-                if let nodes = gate.children.first(where: { $0.name == "junctionRimNodes" }) {
-                    let shimmer: Float = 1 + 0.035 * sin(elapsedTime * 2.3 + Float(index))
-                    nodes.scale = SIMD3<Float>(repeating: shimmer)
-                    nodes.orientation = simd_quatf(
-                        angle: 0.025 * sin(elapsedTime * 0.9 + Float(index)),
-                        axis: SIMD3(0, 0, 1)
-                    )
-                }
-                if let innerRim = gate.children.first(where: { $0.name == "junctionInnerRim" }) {
-                    let glow: Float = highlighted ? 1.025 : 1
-                    innerRim.scale = SIMD3<Float>(repeating: glow)
-                }
-
-                if let signature = gate.children.first(where: { $0.name == "junctionBiomeSignature" }) {
-                    signature.orientation = simd_quatf(
-                        angle: 0.035 * sin(elapsedTime * 1.4 + Float(index)),
-                        axis: SIMD3(0, 0, 1)
-                    )
+                if let world = gate.children.first(where: { $0.name == "junctionDestinationWorld" }),
+                   let interior = world.children.first(where: { $0.name == "portalInterior" }) {
+                    animateRiftMotes(in: interior)
                 }
                 if let markers = gate.children.first(where: { $0.name == "junctionDifficultyMarkers" }) {
                     let pulse: Float = 1 + 0.055 * sin(elapsedTime * 3 + Float(index))
@@ -989,8 +986,6 @@ final class GameWorld {
         // palette behind the crossing so its reveal feels instantaneous.
         if !junction.didSwapDestinationVisuals {
             environmentDirector.revealNormalDestinationPalette(option.environment)
-            buildPortalRim()
-            buildPortalInterior()
             junction.didSwapDestinationVisuals = true
         }
         applyPalette(EnvironmentCatalog.profile(for: option.environment).palette, telegraph: 0)
@@ -1015,6 +1010,7 @@ final class GameWorld {
         guard t >= 1 else { return }
         junction.root.removeFromParent()
         self.junction = nil
+        junctionMotions.removeAll()
         portalRoot.scale = SIMD3(repeating: 1)
         gameModel.isChoosingPortal = false
         environmentDirector.chooseNormalEnvironment(option.environment)
@@ -1039,71 +1035,35 @@ final class GameWorld {
     // MARK: - Palette / room dimming
 
     private func applyPalette(_ palette: EnvironmentPalette, telegraph: Float) {
-        // Polished track nests floor/stripes under trackAssembly.
-        let trackNodes = trackRoot.children.flatMap { child -> [Entity] in
-            if child.name == "trackAssembly" { return Array(child.children) }
-            return [child]
+        let destination: EnvironmentID
+        if let junction, junction.didSwapDestinationVisuals, let selected = junction.selectedIndex {
+            destination = junction.options[selected].environment
+        } else {
+            destination = environmentDirector.currentID
         }
-        for child in trackNodes {
-            guard let model = child as? ModelEntity else { continue }
-            if child.name == "floor" {
-                model.model?.materials = [GameMaterials.trackFloor(tint: EnvironmentMaterials.uiColor(palette.floor))]
-            } else if child.name == "laneStripe" {
-                model.model?.materials = [GameMaterials.laneCore(tint: EnvironmentMaterials.uiColor(palette.laneStripe))]
-            }
-        }
-
-        if let rim = portalRoot.children.first(where: { $0.name == "portalRim" }) {
-            // Brief rim pulse on biome switch — no full-screen wash in front of the player.
-            var rimTint = palette.portalRim
-            if telegraph > 0.01 {
-                let boost = 0.35 * telegraph
-                rimTint = TintColor(
-                    r: min(1, rimTint.r + boost),
-                    g: min(1, rimTint.g + boost),
-                    b: min(1, rimTint.b + boost),
-                    a: rimTint.a
-                )
-            }
-            let rimColor = EnvironmentMaterials.uiColor(rimTint)
-            for child in rim.children {
-                guard let model = child as? ModelEntity else { continue }
-                switch child.name {
-                case "portalHot":
-                    // Hot inner edge skews toward white so it still reads as
-                    // the brightest layer against the mid/bloom bands.
-                    let hot = EnvironmentMaterials.lerpColor(rimColor, .white, 0.45)
-                    model.model?.materials = [UnlitMaterial(color: hot)]
-                case "portalMid":
-                    model.model?.materials = [UnlitMaterial(color: rimColor)]
-                case "portalBloom":
-                    // Keep the soft glow texture; only its tint shifts per biome.
-                    model.model?.materials = [GameMaterials.portalRimBloom(tint: rimColor)]
-                default:
-                    // Shard fringe / energy tendrils keep their own bespoke,
-                    // biome-independent alien-tech gradient materials.
-                    continue
-                }
-            }
+        if visualEnvironmentID != destination {
+            visualEnvironmentID = destination
+            sceneryVisit &+= 1
+            buildPortalInterior()
+            rebuildFixedTrack(force: true)
+            lastArtPalette = nil
         }
 
-        if let interior = portalWorld.children.first(where: { $0.name == "portalInterior" }) {
-            for child in interior.children {
-                guard let model = child as? ModelEntity else { continue }
-                switch child.name {
-                case "portalRail":
-                    model.model?.materials = [EnvironmentMaterials.unlit(palette.portalRail)]
-                case "portalAccent", "farCore":
-                    model.model?.materials = [EnvironmentMaterials.unlit(palette.portalAccent)]
-                case "portalFloor", "portalCeiling", "portalSide", "portalBack":
-                    model.model?.materials = [EnvironmentMaterials.unlit(palette.portalVoid)]
-                default:
-                    // Keep polished rings / chevrons / bloom on their neon materials.
-                    continue
-                }
+        // Avoid traversing imported hierarchies or allocating new materials every
+        // frame once the palette settles. Quantize only the brief switch pulse.
+        let pulseStep = Int(min(1, max(0, telegraph)) * 16)
+        if lastArtPalette != palette || lastArtTelegraph != pulseStep {
+            lastArtPalette = palette
+            lastArtTelegraph = pulseStep
+            BiomeAssetCatalog.tint(trackRoot, role: "tint_lane",
+                                   color: EnvironmentMaterials.uiColor(palette.laneStripe))
+            if let rim = portalRoot.children.first(where: { $0.name == "portalRim" }) {
+                let color = EnvironmentMaterials.uiColor(palette.portalRim)
+                let hot = EnvironmentMaterials.lerpColor(color, .white, 0.35 + Float(pulseStep) / 40)
+                BiomeAssetCatalog.tint(rim, role: "tint_rim", color: color)
+                BiomeAssetCatalog.tint(rim, role: "tint_hot", color: hot)
             }
         }
-
         syncRoomDimming()
     }
 
@@ -1302,6 +1262,7 @@ final class GameWorld {
     private func clearJunction() {
         junction?.root.removeFromParent()
         junction = nil
+        junctionMotions.removeAll()
         junctionQueued = false
         portalRoot.isEnabled = true
         portalRoot.scale = SIMD3(repeating: 1)
@@ -1870,9 +1831,14 @@ final class GameWorld {
         switch mode {
         case .daily:
             gameplayRNG = DailyChallenge.makeGameplayGenerator(dayKey: DailyChallenge.dayKey())
+            sceneryRunSeed = DailyChallenge.seed(for: DailyChallenge.dayKey())
         case .normal, .solo, .playlist, .tutorial:
             gameplayRNG = nil
+            sceneryRunSeed = UInt64.random(in: .min ... .max)
         }
+        visualSeedCounter = sceneryRunSeed
+        sceneryVisit = 0
+        visualEnvironmentID = nil
     }
 
     private func nextFloat(in range: ClosedRange<Float>) -> Float {
@@ -1943,20 +1909,13 @@ final class GameWorld {
     private func animatePortal(deltaTime: Float) {
         _ = deltaTime
         guard let rim = portalRoot.children.first(where: { $0.name == "portalRim" }) else { return }
-        let pulse = 1.0 + 0.035 * sin(elapsedTime * 2.2)
-        rim.scale = SIMD3(pulse, pulse, 1)
+        // The rigid frame and aperture stay aligned; only energy geometry moves.
+        GameVisualBuilders.animatePortalEnergy(in: rim, name: "riftEnergyOuter", time: elapsedTime, speed: 0.15)
+        GameVisualBuilders.animatePortalEnergy(in: rim, name: "riftEnergyInner", time: elapsedTime, speed: -0.10)
+        for motion in portalMotions { motion.update(time: elapsedTime) }
+        for motion in junctionMotions { motion.update(time: elapsedTime) }
 
-        if let bloom = rim.children.first(where: { $0.name == "portalBloom" }) {
-            let bloomPulse = 1.0 + 0.06 * sin(elapsedTime * 1.6 + 0.4)
-            bloom.scale = SIMD3(bloomPulse, bloomPulse, 1)
-        }
-
-        // Subtle far-glow breathe inside the tunnel.
         if let interior = portalWorld.children.first(where: { $0.name == "portalInterior" }) {
-            if let farCore = interior.children.first(where: { $0.name == "farCore" }) {
-                let glow = 1.0 + 0.12 * sin(elapsedTime * 1.8)
-                farCore.scale = SIMD3(repeating: glow)
-            }
             animateRiftMotes(in: interior)
         }
     }
@@ -1967,13 +1926,9 @@ final class GameWorld {
         for child in interior.children {
             guard child.name == "riftMote",
                   let mote = child.components[RiftMoteComponent.self] else { continue }
-            let t = elapsedTime * 0.5 + mote.phase
-            let drift = SIMD3<Float>(
-                sin(t) * mote.radius,
-                cos(t * 0.7) * mote.radius * 0.6,
-                sin(t * 0.5) * mote.radius * 0.4
-            )
-            child.position = mote.basePosition + drift
+            let sample = mote.sample(at: elapsedTime)
+            child.position = mote.basePosition + sample.offset
+            if mote.falling { child.components.set(OpacityComponent(opacity: sample.opacity)) }
         }
     }
 
@@ -2355,15 +2310,11 @@ final class GameWorld {
         gust.name = "windGust"
         gust.position = SIMD3(0, GameWorld.gustBarY, GameWorld.gustBarZ)
 
-        // Unit-width bar; X scale + offset grow/shrink along the shove axis.
-        let mesh = MeshResource.generateBox(
-            width: 1,
-            height: GameWorld.gustBarHeight,
-            depth: GameWorld.gustBarDepth
-        )
-        let mat = UnlitMaterial(color: UIColor(red: 0.55, green: 0.75, blue: 1.0, alpha: 0.2))
-        let model = ModelEntity(mesh: mesh, materials: [mat])
+        let model = BiomeAssetCatalog.clone("gust_ribbon") ?? Entity()
         model.name = "windGustBar"
+        if direction < 0 {
+            model.orientation = simd_quatf(angle: .pi, axis: SIMD3(0, 1, 0))
+        }
         gust.addChild(model)
         root.addChild(gust)
         gustEntity = gust
@@ -2376,7 +2327,7 @@ final class GameWorld {
 
     /// Expands toward the shove, then shrinks the other way (wipes onward in shove direction).
     private func layoutGustBar(progress: Float, direction: Float) {
-        guard let model = gustEntity?.children.first as? ModelEntity else { return }
+        guard let model = gustEntity?.children.first else { return }
 
         let layout = StormWind.gustBarLayout(
             progress: progress,
@@ -2396,9 +2347,7 @@ final class GameWorld {
         let settle = CGFloat(min(1, layout.width / max(0.001, GameWorld.gustBarWidth)))
         let pulse = 0.5 + 0.5 * sin(Double(progress) * .pi * 4)
         let alpha = visible ? ((0.2 + 0.4 * settle) + 0.2 * pulse * settle) : 0
-        model.model?.materials = [
-            UnlitMaterial(color: UIColor(red: 0.55, green: 0.8, blue: 1.0, alpha: alpha))
-        ]
+        model.components.set(OpacityComponent(opacity: Float(alpha)))
     }
 
     // MARK: - Spawning
@@ -2580,10 +2529,9 @@ final class GameWorld {
             let material = UnlitMaterial(color: GamePalette.neonCyanHot.withAlphaComponent(0.86))
             for index in 0..<12 {
                 let angle = Float(index) / 12 * .pi * 2
-                let node = ModelEntity(
-                    mesh: MeshResource.generateSphere(radius: index.isMultiple(of: 3) ? 0.026 : 0.014),
-                    materials: [material]
-                )
+                let node = ModelEntity(mesh: BiomeAssetCatalog.mesh("fx_shard") ?? .generateSphere(radius: 1),
+                                       materials: [material])
+                node.scale = SIMD3(repeating: index.isMultiple(of: 3) ? 0.026 : 0.014)
                 node.position = SIMD3(cos(angle) * 0.43, 0.055, sin(angle) * 0.43)
                 aura.addChild(node)
             }
@@ -2850,14 +2798,7 @@ final class GameWorld {
             roll = CrystalCombine.makeHalf(rng: &rng)
         }
         let radius: Float = roll.charged ? 0.085 : 0.07
-        let mesh = (try? ProceduralGeometry.crystalHalf(
-            sides: roll.charged ? 7 : 6,
-            radius: radius,
-            apexHeight: radius * 2.3,
-            seed: UInt64(bitPattern: Int64(halves.count)) &+ 0x4321
-        )) ?? MeshResource.generateSphere(radius: radius)
-        let material = EnvironmentMaterials.crystalHalf(type: roll.type, charged: roll.charged)
-        let entity = ModelEntity(mesh: mesh, materials: [material])
+        let entity = BiomeAssetCatalog.crystal(type: roll.type, charged: roll.charged, radius: radius)
         let outward: Float = lane == .center ? 0 : (lane.x > 0 ? GameWorld.coinOutwardOffset : -GameWorld.coinOutwardOffset)
         let streamZ = patternStreamSpawnZ
         entity.name = roll.charged ? "halfCrystalCharged" : "halfCrystal"
@@ -2960,7 +2901,7 @@ final class GameWorld {
             right.entity.removeFromParent()
             heldLeft = nil
             heldRight = nil
-            visualFX.spawnCoinBurst(at: (leftPos + rightPos) * 0.5)
+            visualFX.spawnCrystalMerge(at: (leftPos + rightPos) * 0.5)
             GameSFX.shared.playCoinCollect()
             let model = self.gameModel
             DispatchQueue.main.async {
@@ -3029,16 +2970,7 @@ final class GameWorld {
         source.entity.removeFromParent()
 
         let radius: Float = source.charged ? 0.08 : 0.065
-        let mesh = (try? ProceduralGeometry.crystalHalf(
-            sides: source.charged ? 7 : 6,
-            radius: radius,
-            apexHeight: radius * 2.3,
-            seed: UInt64(bitPattern: Int64(index)) &+ 0x8765
-        )) ?? MeshResource.generateSphere(radius: radius)
-        let heldEntity = ModelEntity(
-            mesh: mesh,
-            materials: [EnvironmentMaterials.crystalHalf(type: source.type, charged: source.charged)]
-        )
+        let heldEntity = BiomeAssetCatalog.crystal(type: source.type, charged: source.charged, radius: radius)
         heldEntity.name = "heldHalf"
         root.addChild(heldEntity)
         var held = HeldHalf(type: source.type, charged: source.charged, entity: heldEntity)

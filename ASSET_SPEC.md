@@ -1,114 +1,87 @@
-# Visual Asset Pipeline — Slipframe
+# Slipframe — Blender asset pipeline
 
-Slipframe ships **zero authored art assets** (no USDZ, no PNG). Every mesh,
-material, and surface texture is generated procedurally at runtime in Swift.
-This keeps the "Xenotech Rift" look — irregular, hand-torn geometry and
-etched alien plating — perfectly consistent across every biome and lets any
-palette/shape tweak land in code instead of a re-export pipeline.
+The game now uses **67 authored USDZ assets** instead of building its artwork from Swift primitives. The editable source is `Art/Blender/Slipframe_ArtSource.blend`; the original user scene and verification sphere are preserved. The `Slipframe_ArtLibrary` scene organizes individual assets into collections. No manual saving or scene switching is required during MCP authoring.
 
-Art direction: **Xenotech Rift** — the portal is a literal tear in reality,
-its edges jagged and shard-fringed with energy tendrils leaking into the
-room. Obstacles read as alien-machined debris (a different silhouette
-language per biome), crystals are faceted cut gems, and the HUD reads as
-synthetic instrumentation (glass panels, gradient hairlines, corner-bracket
-reticles) rather than a stock rounded card.
+## Visual direction
 
----
+- **Ember Run:** chipped basalt, molten cracks, copper restraints, lava channels and a distant forge ring.
+- **Summit Step:** irregular gray rock, snow-covered upper facets, alpine cliffs and warm trail markers.
+- **Ghost Glass:** fractured translucent obstacles, suspended glass architecture and drifting fragments. No fog is added.
+- **Low Crawl:** deep service housings, cooling vanes, overhead ribs and clearly marked duck clearance.
+- **Storm Pass:** armored turbine machinery, wind-swept gantries, sparse rain and a slowly turning distant rotor.
+- **Crystal Cave:** layered mineral rock, teal/rose/violet crystal growths and gently suspended crystals.
 
-## 1. Geometry toolkit — `ProceduralGeometry.swift`
+Both portal types use layered mechanical frames, inset luminous channels, fasteners, clamps and separately animated energy accents. Main and choice apertures are real RealityKit portals; choice portals show the destination's three-dimensional environment. The editor's portal-kit render is an asset review, not an in-game screenshot.
 
-Shared deterministic mesh-building primitives used by every visual builder:
+Shared track sections, rails, floor inserts, endcaps, the start pad, tokens, crystal halves, charged variants, the merged crystal, wind ribbon, effect shards and modifier glyphs are also authored assets. Six Blender renders supply the biome-selection cards; controls, labels and accessibility remain native SwiftUI.
 
-- `RadialNoise` — cheap seeded angular noise (summed sine harmonics) used to
-  perturb outlines so nothing reads as a perfect circle/rectangle.
-- `jaggedOutline` — a closed irregular polygon (radius-per-angle around the
-  origin) — the "torn reality" silhouette reused by the portal rift, shatter
-  panes, and obstacle clusters.
-- `filledPolygon` — flat fan-triangulated mesh from a 2D outline (portal
-  aperture, rim layers, rings).
-- `extrudedPolygon` — flat-shaded prism extruded from a 2D outline along Z
-  (obstacle chunks, rail vertebrae, shatter pane bodies).
-- `edgeShard` — a single thin outward-tapering shard between two boundary
-  points (the rift's torn-edge debris fringe).
-- `bipyramid` / `crystalHalf` — faceted full/half gem meshes (Crystal Cave
-  spires and the hand-held collectible crystal halves).
+The obsolete runtime mesh/texture authoring files, `ProceduralGeometry.swift` and `ProceduralTextures.swift`, were removed from the app and Xcode target. Their previous versions remain recoverable from Git.
 
-All builders are seeded (`SeededGenerator`, shared with `DailyChallenge`) so
-a given spawn looks identical on replay while still reading as hand-cut
-rather than stamped out.
+## Source and runtime files
 
-**Collision stays decoupled:** every obstacle's hit-test is a plain AABB
-(`WallCollision.swift`) sized independently from its jagged visual mesh, so
-shapes can be as irregular as the art direction wants without ever touching
-gameplay fairness.
+- `Art/Blender/Slipframe_ArtSource.blend`: editable source, with packed texture images.
+- `Art/Blender/Textures/`: six portable baked base-color textures.
+- `Endless Runner/ArtAssets/`: self-contained USDZ files plus `manifest.json`.
+- `Art/Previews/`: wall lineup, portal kit and six environment review renders.
+- `Endless Runner/Assets.xcassets/Biome_*.imageset/`: shipped menu thumbnails.
+- `BiomeAssetCatalog.swift`: asynchronous prototype loading, cloning, role-based tinting and motion bindings.
+- `GameVisuals.swift` / `GameVisualsObstacles.swift`: assembly and lightweight animation, not mesh-authoring code.
 
----
+`ArtAssets` is an Xcode folder resource, so new exports retain their names and relative paths in the app bundle. The catalog preloads once before the world attaches. Spawning only clones cached mesh/material resources. Missing obstacles get visible fallback boxes and load failures are logged. Simple runtime planes remain for portal/effect infrastructure and fallbacks.
 
-## 2. Mesh builders — `GameVisuals.swift` / `GameVisualsObstacles.swift`
+## Coordinate and gameplay contract
 
-| System | Builder | Notes |
-|---|---|---|
-| Portal rift | `GameVisualBuilders.makePortalRim` | Layered jagged bloom/mid/hot rim bands, torn-edge shard fringe, crackling energy tendrils arcing into the room. |
-| Portal tunnel | `GameVisualBuilders.makePortalInterior` | 26 m deep void with receding jagged rift echoes, alien monolith silhouettes, and ambient drifting motes (`RiftMoteComponent`, animated in `GameWorld.animateRiftMotes`). |
-| Portal aperture | `GameWorld.buildPortal` | The `PortalComponent` plane itself is a jagged `filledPolygon`, not a rounded rect — same seed as the rim's hot inner edge so they stay concentric. |
-| Obstacles (per biome) | `GameVisualsObstacles.makeBiomeObstacle` | Dispatches per `EnvironmentID`: Ember Run (magma obelisk cluster), Summit Step (rock outcrop), Storm Pass (levitating debris + sparks), Low Crawl (rib lattice fence), Crystal Cave (geode spire cluster), Ghost Glass (jagged shatter pane). |
-| Duck / jump hazards | `makeDuckTendrilCurtain` / `makeSummitSpikeRidge` | Bespoke silhouettes instead of a shared bar. |
-| Data Token | `GameVisualBuilders.makeCoin` | Glowing octahedron / diamond + neon facet wireframe + pulsing core + aura. |
-| Crystal halves | `ProceduralGeometry.crystalHalf` | Faceted half-gem (spawn, held, and merge burst all share this mesh). |
-| Track | `GameVisualBuilders.makeTrack` | Etched-plating floor, neon lane guides, segmented alien conduit rails (`makeConduitRail`). |
-| Start pad | `GameVisualBuilders.makeStartMarker` | Jagged calibration sigil instead of a rounded rect. |
-| Rift junction gates | `GameVisualBuilders.makeJunctionPortal` | Three clean, wordless destination apertures. Biome identity is drawn inside; difficulty uses 1–3 warning diamonds; modifiers use coin, shield, bolt, magnet, target, and lock glyphs. |
+Blender source uses X right, Y forward into the course, Z up. USD export converts to **meters, Y up, forward -Z**. Mesh transforms, including the axis conversion, are baked into vertices and normals. Export removes only the source-library display offset.
 
----
+- All three wall variants in every biome have a centered **0.70 × 1.80 × 0.70 m** envelope (game X/Y/Z).
+- The centered duck hazard is **2.50 × 0.75 × 0.595 m**.
+- The centered jump hazard is **2.50 × 0.14 × 0.22 m**.
+- Portal masks lie in XY and face +Z, toward the player. Their edges overlap the opaque frame throat slightly to prevent seams.
+- AABB collision, lane positions, duck/jump clearance, wind displacement and obstacle scheduling remain independent of art.
+- Mesh names follow `assetID__role__materialKey`. Keep `tint_lane`, `tint_rim`, `tint_hot`, `ghost_body`, `ghost_edge`, `tint_pickup`, `tint_glyph`, `motion_rotor` and `motion_float` roles when editing.
 
-## 3. Surface textures — `ProceduralTextures.swift`
+## Animation and variation
 
-Every texture the materials use is drawn at launch with Core Graphics
-(`CGContext` + `CGPath`/`CGGradient`) and wrapped in a `TextureResource` —
-no imagesets, no shipped PNGs:
+These USDZ files intentionally contain **static authored geometry**. Swift/RealityKit animates named parts with transforms and opacity: two counter-rotating main-portal accents, choice-portal accents, the distant Storm rotor, floating Ghost/Crystal details, peripheral motes/rain and a short crystal-merge effect. This avoids depending on Blender shader nodes, constraints or simulation caches surviving export.
 
-| Texture | Used by | Look |
-|---|---|---|
-| `trackFloor()` | `GameMaterials.trackFloor` | Etched xenotech hull plating — jittered panel grid, glowing seams, rivet glints, grain. |
-| `coinFace()` | `GameMaterials.coinMetal` | Embossed alien rune disc — concentric grooves, rim tick marks, hexagonal sigil + spokes. |
-| `portalGlow()` | `GameMaterials.portalRimBloom` | Alien corona bloom — cyan-to-violet radial falloff, jagged energy ring, outward streaks. |
-| `laneStripe()` | `GameMaterials.laneCore` | Energized conduit — bright core gradient + segmented circuit-tick bands. |
-| `startPad()` | `GameMaterials.startPad` | Warm calibration glow glyph with etched circuit arcs. |
+The rotor's authored pivot is game-space `(0, 4.2, -28)`. If moving it in Blender, update the corresponding `AuthoredMotion` pivot. Rigid portal frames and masks are not independently animated.
 
-`GameMaterials.warmTextures()` generates each texture once and caches the
-result; biome retinting (`GameWorld.applyPalette`) recolors the *tint*
-passed into `trackFloor(tint:)` / `laneCore(tint:)` rather than discarding
-the texture for a flat fill.
+`SceneryVariation` has a separate deterministic stream, keyed by run, biome and visit. Natural decorative props use 86–112% overall scale, a small additional height adjustment, up to about 14° yaw and 2.6° lean. Imported bounds are grounded after transformation. All extra scenery remains outside the course; the worst-case inner edge checked against the current asset bounds is **2.00 m from center**, beyond the 1.60 m track edge.
 
----
+Storm machinery uses much smaller variation; Low Crawl's structural cabinets remain aligned. Walls choose one of three authored variants but never receive random collision-changing scale or rotation. Daily scenery repeats for the same day and visit sequence without consuming the gameplay RNG.
 
-## 4. HUD chrome — `XenotechPanel.swift`
+Apple references: [USD entity loading](https://developer.apple.com/documentation/realitykit/entity/init(contentsof:withname:)), [portal worlds](https://developer.apple.com/documentation/realitykit/portalcomponent), [RealityKit transforms](https://developer.apple.com/documentation/realitykit/hastransform), [opacity](https://developer.apple.com/documentation/realitykit/opacitycomponent).
 
-Every world-anchored SwiftUI panel (`PlayHUDView`, `LevelSelectView`,
-`LeaderboardPanelView`, `TutorialOverlayView`) shares one modifier,
-`.xenotechPanel(primary:secondary:cornerRadius:)`:
+## Editing and exporting
 
-- Tinted glass fill + `glassBackgroundEffect(in:)` on a `RoundedRectangle`
-  (the only shapes visionOS renders with proper specular glass edges).
-- A gradient hairline border blending the panel's two accent colors.
-- `XenotechCornerBrackets` — four L-shaped reticle marks just inside the
-  bounds, the shared "alien instrumentation" framing motif tying every
-  panel back to the game's identity.
+1. Open the saved source and edit an asset's mesh/materials in its named collection. Leave each asset root's origin contract intact; rack positions are display-only.
+2. Re-export with `Tools/Blender/export_from_source.py`. It scans existing collections and exports without rebuilding or discarding artist edits.
+3. Run `Tools/Blender/validate_assets.py` in Blender's Python.
+4. Re-render thumbnails with `Tools/Blender/render_previews.py`.
+5. Build and test in Xcode.
 
----
+Example terminal commands, with `blender` on PATH:
 
-## 5. Adding a new biome obstacle
+```sh
+blender --background Art/Blender/Slipframe_ArtSource.blend --python Tools/Blender/export_from_source.py
+blender --background --python Tools/Blender/validate_assets.py
+blender --background Art/Blender/Slipframe_ArtSource.blend --python Tools/Blender/render_previews.py
+```
 
-1. Add a case to `EnvironmentID` / `EnvironmentCatalog` as usual.
-2. Add a builder function to `GameVisualsObstacles.swift` (or reuse
-   `makeJaggedShardCluster` with new parameters) returning an `Entity`
-   named `"wallSlab"`.
-3. Wire it into `GameVisualBuilders.makeBiomeObstacle`'s switch.
-4. Leave `WallCollision.swift` untouched — the AABB is sized from the
-   `width`/`height`/`depth` constants only, not the mesh.
+`build_slipframe.py` is the initial library authoring script; it refuses to replace an existing library scene. `refine_slipframe.py` recreates the generated wall/scenery/portal collections for this refinement pass: **do not rerun it over subsequent hand edits**. Use `export_from_source.py` for normal artist work.
 
-## 6. Regenerating a texture
+## Verification and handoff
 
-Edit the matching function in `ProceduralTextures.swift` — every draw call
-is deterministic Core Graphics, so tweaking a gradient stop or line width is
-a normal code change with no export/re-import step.
+Validated on Windows with Blender 5.2:
+
+- All 67 packages open, contain their texture dependencies, use aligned uncompressed USDZ members, and have identity transforms / Y-up meter units.
+- Mesh points and triangle indices are valid; aperture normals face the player.
+- All 18 wall variants and both special hazards preserve their nominal envelopes.
+- Decorative variation stays outside the playable corridor at its extreme settings.
+- Total library: 139,988 triangles and approximately 22.98 MiB of USDZ packages. This is the whole library, not one frame's draw count.
+- Blender review renders were inspected and refined.
+- All 35 app/test Swift files passed the syntax-only parser; `git diff --check` passed.
+
+XCTest coverage was added for loading all bundled art, wall bounds, grounding/clearance, repeatable scenery, gameplay RNG independence, fixed turbine pivots, portal-frame stability and rain-loop fading.
+
+**Still requires Mac/Xcode and visionOS validation:** Swift type checking, XCTest execution, actual USDZ material import, main/choice portal clipping and crossing, Ghost transparency, launch latency and on-device frame time. Blender renders are art previews, not proof of device rendering. Test one run in each biome and a three-choice crossing before shipping.

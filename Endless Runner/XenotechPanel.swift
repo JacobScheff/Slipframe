@@ -241,7 +241,7 @@ private struct Diamond: Shape {
     }
 }
 
-/// Colored biome tile: swatch + SF Symbol + name + twist caption.
+/// Blender-rendered destination preview with native labels and selection controls.
 struct BiomeCard: View {
     var id: EnvironmentID
     var isOn: Bool
@@ -257,23 +257,15 @@ struct BiomeCard: View {
     var body: some View {
         Button(action: action) {
             VStack(spacing: 8) {
-                ZStack {
-                    Circle()
-                        .fill(
-                            RadialGradient(
-                                colors: [biomeColor.opacity(isOn ? 0.85 : 0.45), biomeColor.opacity(0.12)],
-                                center: .center,
-                                startRadius: 2,
-                                endRadius: 28
-                            )
-                        )
-                        .frame(width: 52, height: 52)
-                        .shadow(color: isOn ? biomeColor.opacity(0.55) : .clear, radius: 8)
-                    Image(systemName: id.symbolName)
-                        .font(.system(size: 22, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .symbolRenderingMode(.hierarchical)
-                }
+                Image("Biome_\(id.rawValue)")
+                    .resizable()
+                    .scaledToFill()
+                    .frame(height: 82)
+                    .frame(maxWidth: .infinity)
+                    .clipped()
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .saturation(isOn ? 1 : 0.72)
+                    .accessibilityHidden(true)
 
                 Text(id.displayName)
                     .font(.system(size: 14, weight: isOn ? .bold : .semibold, design: .rounded))
