@@ -201,7 +201,7 @@ enum GameVisualBuilders {
             root.addChild(environment)
         }
         for (index, placement) in SceneryVariation.placements(biome: biome, seed: scenerySeed).enumerated() {
-            guard let prop = BiomeAssetCatalog.clone("prop_\(biome.rawValue)") else { continue }
+            guard let prop = BiomeAssetCatalog.clone(BiomeAssetID.prop(biome, variant: placement.variant)) else { continue }
             prop.name = "sceneryVariation_\(index)"
             prop.scale = placement.scale
             let yaw = simd_quatf(angle: placement.yaw, axis: SIMD3(0, 1, 0))

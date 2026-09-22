@@ -1777,6 +1777,13 @@ final class Endless_RunnerTests: XCTestCase {
             XCTAssertEqual(first.count, 8)
             XCTAssertEqual(first, SceneryVariation.placements(biome: biome, seed: 125))
             XCTAssertNotEqual(first, SceneryVariation.placements(biome: biome, seed: 126))
+            XCTAssertEqual(Set(first.map(\.variant)), Set(0..<BiomeAssetID.propVariantCount(biome)))
+            for (left, right) in zip(first, first.dropFirst()) {
+                XCTAssertNotEqual(left.variant, right.variant)
+            }
+            for pair in stride(from: 0, to: first.count, by: 2) {
+                XCTAssertGreaterThan(first[pair].position.z - first[pair + 1].position.z, 0.44)
+            }
         }
         XCTAssertTrue(SceneryVariation.placements(biome: .lowCrawl, seed: 125).isEmpty)
     }
@@ -1792,6 +1799,7 @@ final class Endless_RunnerTests: XCTestCase {
                     XCTAssertTrue((0.80...1.22).contains(placement.scale.y))
                     XCTAssertLessThanOrEqual(abs(placement.yaw), 0.24)
                     XCTAssertLessThanOrEqual(abs(placement.lean), 0.045)
+                    XCTAssertTrue((0..<BiomeAssetID.propVariantCount(biome)).contains(placement.variant))
                 }
             }
         }
@@ -1827,7 +1835,7 @@ final class Endless_RunnerTests: XCTestCase {
     }
 
     func testEveryAuthoredAssetIsBundledAndLoads() async throws {
-        XCTAssertEqual(BiomeAssetID.required.count, 67)
+        XCTAssertEqual(BiomeAssetID.required.count, 77)
         XCTAssertEqual(Set(BiomeAssetID.required).count, BiomeAssetID.required.count)
         await BiomeAssetCatalog.preload()
         XCTAssertTrue(BiomeAssetCatalog.missingAssets.isEmpty, "Missing: \(BiomeAssetCatalog.missingAssets)")

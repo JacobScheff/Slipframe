@@ -1,6 +1,6 @@
 # Slipframe — Blender asset pipeline
 
-The game now uses **67 authored USDZ assets** instead of building its artwork from Swift primitives. The editable source is `Art/Blender/Slipframe_ArtSource.blend`; the original user scene and verification sphere are preserved. The `Slipframe_ArtLibrary` scene organizes individual assets into collections. No manual saving or scene switching is required during MCP authoring.
+The game now uses **77 authored USDZ assets** instead of building its artwork from Swift primitives. The editable source is `Art/Blender/Slipframe_ArtSource.blend`; the original user scene and verification sphere are preserved. The `Slipframe_ArtLibrary` scene organizes individual assets into collections. No manual saving or scene switching is required during MCP authoring.
 
 ## Visual direction
 
@@ -50,6 +50,32 @@ The rotor's authored pivot is game-space `(0, 4.2, -28)`. If moving it in Blende
 
 Storm machinery uses much smaller variation; Low Crawl's structural cabinets remain aligned. Walls choose one of three authored variants but never receive random collision-changing scale or rotation. Daily scenery repeats for the same day and visit sequence without consuming the gameplay RNG.
 
+Five biomes now have three decorative prop silhouettes each (the original plus `_1` and `_2`). Seeded shuffled groups use every silhouette without adjacent duplicates, including at group boundaries. The two sides are staggered in depth instead of forming matching rows. New variants fit inside the original prop bounds, preserving the existing clearance limits. Low Crawl keeps its aligned original cabinetry.
+
+## Background visibility and depth pass
+
+The September 21 recording exposed unreadable rock faces under the portal's isolated lighting. Background meshes now use private copies of their materials with four directional emission levels, with stronger warm/cool separation for Summit. This fill travels through USD Preview Surface without adding runtime lights or changing shared portal/obstacle materials.
+
+All six environments replace their flat backdrop boxes with inward-facing, opaque sky domes with baked gradients. Three separated skyline layers, continued roads that blend into the terrain, and distant biome structures hide the old 27 m stage ending. No translucent fog is used. Source environment racks are spaced 350 m apart to keep their sky domes separate.
+
+`refine_backgrounds.py` incrementally applies this pass once, preserving existing scene art except the backdrop boxes. Its guard prevents accidental reapplication. `refresh_distance()` rebuilds only the horizon/road additions, and `export()` updates only background/prop packages and their manifest records. Portal assets, hazard assets, collision, and teleportation logic are unchanged.
+
+`render_backgrounds.py` makes emission-only EEVEE reviews with no physical lights or environment fill and updates the six menu cards. The new `*-background.png` previews are the current background reviews; the older lit studio renders remain as historical art references. These reviews still do not replace RealityKit/on-device validation.
+
+The second pass, `polish_backgrounds.py`, adds uneven cliff profiles, snow ledges, rubble, smaller distant sunlight, trail cables/pennants, forge vents, glass fragments, service panels, wind vanes, and mineral seams. New low scenery stays beyond 1.85 m from center. Existing animated rotor geometry and its pivot remain untouched.
+
+Background surface detail uses small baked linear-emission textures to retain the first pass's visibility under isolated portal lighting. They must export as USD UV textures with `sourceColorSpace = raw`; treating these linear values as sRGB would darken the rocks. The package validator checks this contract. The second-pass script is guarded against accidental reapplication; `surface_relief(force=True)` refreshes only its own textures when tuning the art.
+
+### Player-distance correction
+
+`refine_portal_composition.py` restores the ten deformed original rock/mineral meshes exactly from the committed `b4933e4` source, retaining their visibility materials. It removes the added floating-looking Summit shelves and adds grounded, substantial snow-capped buttresses, basalt formations, crystal clusters, glass pillars, turbine supports and service cabinets. These additions sit outside the 1.85 m corridor and are composed for the restricted main-portal sightline, not a free-orbit camera. The original large structures, gameplay code, animated turbine pivot and portal/teleportation assets are preserved. This one-time correction is guarded; normal edits should use the saved source.
+
+The apparent disappearance of original cliffs in the library was also traced to **Local View**: old meshes were excluded while new additions were included. Local View is now disabled, and creating a review scene exits it to prevent partial assemblies. A recoverable pre-correction source copy is retained as `Art/Blender/Slipframe_ArtSource.blend20260921-pre-portal-composition`.
+
+`render_portal_reviews.py` uses the actual authored elliptical opening (1.84 m horizontal / 1.28 m vertical radii), an opaque review-only surround, and portal-plane clipping of disposable review meshes. It renders all six environments at the default 8 m distance, plus Summit at 3.5 and 10 m and small lateral/height offsets. First-hit ray checks verify that original structures and new landmarks are visible at 8 m and at 10 m with centered and ±0.6 m lateral positions, rather than merely lying inside a theoretical cone. Review masks and clipped copies are never exported. These checks verify geometry/composition, not RealityKit lighting or headset performance.
+
+The saved Blender file opens in `PortalReview_summitStep_8m`; select another `PortalReview_<biome>_8m` scene in the top-right scene selector to review it. `Slipframe_ArtLibrary` remains the editable source; review geometry is disposable. Current clipped previews are `Art/Previews/<biome>-portal-8m.png`. Generate them with `blender --background Art/Blender/Slipframe_ArtSource.blend --python Tools/Blender/render_portal_reviews.py`.
+
 Apple references: [USD entity loading](https://developer.apple.com/documentation/realitykit/entity/init(contentsof:withname:)), [portal worlds](https://developer.apple.com/documentation/realitykit/portalcomponent), [RealityKit transforms](https://developer.apple.com/documentation/realitykit/hastransform), [opacity](https://developer.apple.com/documentation/realitykit/opacitycomponent).
 
 ## Editing and exporting
@@ -74,11 +100,11 @@ blender --background Art/Blender/Slipframe_ArtSource.blend --python Tools/Blende
 
 Validated on Windows with Blender 5.2:
 
-- All 67 packages open, contain their texture dependencies, use aligned uncompressed USDZ members, and have identity transforms / Y-up meter units.
+- All 77 packages open, contain their texture dependencies, use aligned uncompressed USDZ members, and have identity transforms / Y-up meter units.
 - Mesh points and triangle indices are valid; aperture normals face the player.
 - All 18 wall variants and both special hazards preserve their nominal envelopes.
 - Decorative variation stays outside the playable corridor at its extreme settings.
-- Total library: 139,988 triangles and approximately 22.98 MiB of USDZ packages. This is the whole library, not one frame's draw count.
+- Total library after the player-distance correction: 173,543 triangles and approximately 31.57 MiB of USDZ packages. Each environment remains below 25,000 triangles (15,629–23,592). This is the whole library, not one frame's draw count.
 - Blender review renders were inspected and refined.
 - All 35 app/test Swift files passed the syntax-only parser; `git diff --check` passed.
 

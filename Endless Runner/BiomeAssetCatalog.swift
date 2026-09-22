@@ -13,6 +13,7 @@ enum SceneryVariation {
         let scale: SIMD3<Float>
         let yaw: Float
         let lean: Float
+        let variant: Int
     }
 
     static func placements(biome: EnvironmentID, seed: UInt64) -> [Placement] {
@@ -30,16 +31,35 @@ enum SceneryVariation {
         }
         let natural = biome == .emberRun || biome == .summitStep || biome == .crystalCave
         let angle: Float = natural ? 0.24 : 0.08
+        // Shuffle small bags so every silhouette appears, without the obvious
+        // 0-1-2 repeat. Keep sampling explicit for stable cross-platform replays.
+        let variantCount = BiomeAssetID.propVariantCount(biome)
+        var variants = Array(0..<variantCount)
+        var previousVariant: Int?
         return (0..<8).map { index in
+            if index.isMultiple(of: variantCount) {
+                if variantCount > 1 {
+                    for slot in stride(from: variantCount - 1, through: 1, by: -1) {
+                        variants.swapAt(slot, Int(rng.next() % UInt64(slot + 1)))
+                    }
+                    if variants[0] == previousVariant {
+                        variants.swapAt(0, 1 + Int(rng.next() % UInt64(variantCount - 1)))
+                    }
+                }
+            }
+            let variant = variants[index % variantCount]
+            previousVariant = variant
             let side: Float = index.isMultiple(of: 2) ? -1 : 1
             let size = sample(natural ? 0.86...1.12 : 0.95...1.05)
             let height = natural ? sample(0.94...1.08) : 1
             return Placement(
                 position: SIMD3(side * sample(3.05...3.45), 0,
-                                -4.0 - Float(index / 2) * 5.4 + sample(-0.38...0.38)),
+                                -4.0 - Float(index / 2) * 5.1
+                                    - (index.isMultiple(of: 2) ? 0 : 1.05) + sample(-0.30...0.30)),
                 scale: SIMD3(size, size * height, size),
                 yaw: sample(-angle...angle),
-                lean: natural ? sample(-0.045...0.045) : 0
+                lean: natural ? sample(-0.045...0.045) : 0,
+                variant: variant
             )
         }
     }
@@ -48,6 +68,15 @@ enum SceneryVariation {
 /// Pure naming contract shared by the asset manifest, gameplay and tests.
 enum BiomeAssetID {
     static let wallVariantCount = 3
+
+    static func propVariantCount(_ biome: EnvironmentID) -> Int {
+        biome == .lowCrawl ? 1 : 3
+    }
+
+    static func prop(_ biome: EnvironmentID, variant: Int) -> String {
+        let index = variant % propVariantCount(biome)
+        return "prop_\(biome.rawValue)" + (index == 0 ? "" : "_\(index)")
+    }
 
     static func wall(_ biome: EnvironmentID, seed: UInt64) -> String {
         "wall_\(biome.rawValue)_\(seed % UInt64(wallVariantCount))"
@@ -70,7 +99,8 @@ enum BiomeAssetID {
         shared + EnvironmentID.allCases.flatMap { biome in
             (0..<wallVariantCount).map { wall(biome, seed: UInt64($0)) }
                 + ["floor_\(biome.rawValue)", "environment_\(biome.rawValue)",
-                   "preview_\(biome.rawValue)", "prop_\(biome.rawValue)"]
+                   "preview_\(biome.rawValue)"]
+                + (0..<propVariantCount(biome)).map { prop(biome, variant: $0) }
         }
     }
 }
