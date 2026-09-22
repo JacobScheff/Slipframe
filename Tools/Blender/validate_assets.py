@@ -8,7 +8,7 @@ import itertools
 import json
 import math
 import zipfile
-from pxr import Gf, Usd, UsdGeom, Sdf
+from pxr import Gf, Usd, UsdGeom, UsdShade, Sdf
 
 ROOT = Path(__file__).resolve().parents[2]
 ART = ROOT / 'Endless Runner' / 'ArtAssets'
@@ -23,10 +23,14 @@ def check():
     manifest = json.loads((ART / 'manifest.json').read_text())
     records = {a['id']: a for a in manifest['assets']}
     expected = set(SHARED)
+    for base in ['hazard_duck','hazard_jump','token','crystal_azure','crystal_coral','crystal_azure_charged','crystal_coral_charged']:
+        expected.update(f'{base}_{i}' for i in [1,2])
     for biome in BIOMES:
         expected.update(f'wall_{biome}_{i}' for i in range(3))
         expected.update(f'{kind}_{biome}' for kind in ['floor', 'prop', 'preview', 'environment'])
-    assert len(records) == len(manifest['assets']) == 67
+        if biome != 'lowCrawl':
+            expected.update(f'prop_{biome}_{i}' for i in [1, 2])
+    assert len(records) == len(manifest['assets']) == len(expected)
     assert set(records) == expected
     assert {p.stem for p in ART.glob('*.usdz')} == expected
     bounds = {}
@@ -48,6 +52,10 @@ def check():
         mesh_count = triangle_count = 0
         mesh_names = []
         for prim in stage.Traverse():
+            if prim.IsA(UsdShade.Shader) and prim.GetParent().GetName().startswith('SF_NearInvisible_'):
+                if prim.GetAttribute('info:id').Get() == 'UsdPreviewSurface':
+                    opacity=prim.GetAttribute('inputs:opacity').Get()
+                    assert opacity is not None and 0 < opacity <= .035001, (name,'opaque Ghost Glass export',prim.GetPath(),opacity)
             if prim.IsA(UsdGeom.Xformable):
                 ops = UsdGeom.Xformable(prim).GetOrderedXformOps()
                 assert not ops, (name, 'unbaked transform', prim.GetPath())
@@ -57,11 +65,19 @@ def check():
                     if value and value.path:
                         relative = value.path.removeprefix('./')
                         assert relative in members, (name, 'external/missing dependency', relative)
+                        if relative.endswith('_relief.png'):
+                            assert prim.GetAttribute('inputs:sourceColorSpace').Get() == 'raw', (name, 'emission detail must stay linear')
             if not prim.IsA(UsdGeom.Mesh):
                 continue
             mesh_count += 1
             mesh_names.append(prim.GetName())
             mesh = UsdGeom.Mesh(prim)
+            if name.startswith(('wall_ghostGlass','prop_ghostGlass')):
+                targets=[prim]+[child for child in prim.GetChildren() if child.IsA(UsdGeom.Subset)]
+                for target in targets:
+                    material,_=UsdShade.MaterialBindingAPI(target).ComputeBoundMaterial()
+                    if material:
+                        assert material.GetPrim().GetName().startswith('SF_NearInvisible_'), (name,'opaque ghost binding',target.GetPath())
             points = mesh.GetPointsAttr().Get()
             counts = mesh.GetFaceVertexCountsAttr().Get()
             indices = mesh.GetFaceVertexIndicesAttr().Get()
@@ -74,6 +90,11 @@ def check():
                 for i in range(0, len(indices), 3):
                     p, q, r = [Gf.Vec3d(points[j]) for j in indices[i:i+3]]
                     assert Gf.Cross(q-p, r-p)[2] > 0, (name, 'mask faces away from player')
+            if '__sky__' in prim.GetName():
+                center = Gf.Vec3d(0, 0, -15)
+                for i in range(0, len(indices), 3):
+                    p, q, r = [Gf.Vec3d(points[j]) for j in indices[i:i+3]]
+                    assert Gf.Dot(Gf.Cross(q-p, r-p), (p+q+r)/3-center) < 0, (name, 'outward sky face')
         assert mesh_count == record['meshCount'] and triangle_count == record['triangles'], name
         motion_role = {'environment_stormPass': '__motion_rotor__',
                        'environment_ghostGlass': '__motion_float__',
@@ -87,18 +108,29 @@ def check():
             assert all(abs(a-b) < 1e-5 for a, b in zip(computed, exported)), name
         nominal = None
         if name.startswith('wall_'): nominal = (.7, 1.8, .7)
-        if name == 'hazard_duck': nominal = (2.5, .75, .595)
-        if name == 'hazard_jump': nominal = (2.5, .14, .22)
+        if name.startswith('hazard_duck'): nominal = (2.5, .75, .595)
+        if name.startswith('hazard_jump'): nominal = (2.5, .14, .22)
         if nominal:
             assert all(abs(a-b) < .0001 for a, b in zip(box.GetSize(), nominal)), (name, box.GetSize())
             assert box.GetMidpoint().GetLength() < .0001, (name, 'off-center hazard')
         if name.startswith('wall_'): assert triangle_count < 5000, name
         if name.startswith('environment_'): assert triangle_count < 25000, name
+        if name.startswith('environment_'):
+            assert any('__sky__' in part for part in mesh_names), (name, 'missing continuous sky')
+            assert not any('__backdrop__' in part for part in mesh_names), (name, 'old flat enclosure')
+            assert any('__distanceRoad__' in part for part in mesh_names), (name, 'road still ends early')
+            assert any('__detail__portal' in part for part in mesh_names), (name, 'missing player-distance landmarks')
     # Worst-case variation bounds, including tilt, anisotropic scale and all corners.
     clearance = float('inf')
     for biome in BIOMES:
         if biome == 'lowCrawl': continue
+        # Every new silhouette is contained by the original envelope, so the
+        # following extreme rotation/scale test also bounds all the variants.
         box = bounds['prop_' + biome]
+        for variant in [1, 2]:
+            other = bounds[f'prop_{biome}_{variant}']
+            assert all(a >= b-1e-5 for a, b in zip(other.GetMin(), box.GetMin())), (biome, variant)
+            assert all(a <= b+1e-5 for a, b in zip(other.GetMax(), box.GetMax())), (biome, variant)
         natural = biome in ['emberRun', 'summitStep', 'crystalCave']
         for yaw, lean in itertools.product([-0.24, 0, .24] if natural else [-.08, 0, .08], [-.045, 0, .045] if natural else [0]):
             scale = 1.12 if natural else 1.05

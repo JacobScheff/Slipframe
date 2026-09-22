@@ -25,6 +25,13 @@ def copy_asset(scene,name,position=(0,0,0),scale=1):
 
 
 def studio(name,size=(1000,700)):
+    # A Local View inherited from the library can hide old meshes while new
+    # additions remain visible. Reviews must always contain the full assembly.
+    if bpy.context.screen:
+        for area in bpy.context.screen.areas:
+            if area.type=='VIEW_3D' and area.spaces.active.local_view:
+                with bpy.context.temp_override(area=area,region=next(r for r in area.regions if r.type=='WINDOW')):
+                    bpy.ops.view3d.localview(frame_selected=False)
     scene=bpy.data.scenes.new(name)
     bpy.context.window.scene=scene
     scene.render.engine='CYCLES'

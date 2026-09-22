@@ -126,6 +126,7 @@ final class GameWorld {
         let entity: Entity
         let type: CrystalHalfType
         let charged: Bool
+        let visualSeed: UInt64
         /// Logical stream depth — matches wall spawn lead.
         var playfieldZ: Float
         var collected = false
@@ -137,12 +138,14 @@ final class GameWorld {
             entity: Entity,
             type: CrystalHalfType,
             charged: Bool,
-            playfieldZ: Float
+            playfieldZ: Float,
+            visualSeed: UInt64
         ) {
             self.entity = entity
             self.type = type
             self.charged = charged
             self.playfieldZ = playfieldZ
+            self.visualSeed = visualSeed
         }
     }
 
@@ -2761,11 +2764,13 @@ final class GameWorld {
     ) {
         // Spawn-time biome tint only (no live retint on switch) — Ember keeps polished gold.
         let coinColors = GameCoinTint.colors(for: activeSpawnProfile)
+        let visualSeed = nextVisualSeed()
         let coin = GameVisualBuilders.makeCoin(
             radius: GameWorld.coinRadius,
             tint: coinColors.base,
             hot: coinColors.hot,
-            tintsFaceTexture: coinColors.tintsFaceTexture
+            tintsFaceTexture: coinColors.tintsFaceTexture,
+            seed: visualSeed
         )
         // Mild outward offset — still a reach, but easier to snag mid-dodge.
         let outward: Float = lane == .center ? 0 : (lane.x > 0 ? GameWorld.coinOutwardOffset : -GameWorld.coinOutwardOffset)
@@ -2798,7 +2803,9 @@ final class GameWorld {
             roll = CrystalCombine.makeHalf(rng: &rng)
         }
         let radius: Float = roll.charged ? 0.085 : 0.07
-        let entity = BiomeAssetCatalog.crystal(type: roll.type, charged: roll.charged, radius: radius)
+        let visualSeed = nextVisualSeed()
+        let entity = BiomeAssetCatalog.crystal(type: roll.type, charged: roll.charged,
+                                               radius: radius, seed: visualSeed)
         let outward: Float = lane == .center ? 0 : (lane.x > 0 ? GameWorld.coinOutwardOffset : -GameWorld.coinOutwardOffset)
         let streamZ = patternStreamSpawnZ
         entity.name = roll.charged ? "halfCrystalCharged" : "halfCrystal"
@@ -2812,7 +2819,8 @@ final class GameWorld {
             entity: entity,
             type: roll.type,
             charged: roll.charged,
-            playfieldZ: streamZ
+            playfieldZ: streamZ,
+            visualSeed: visualSeed
         )
         item.lastLightingWeight = 0
         halves.append(item)
@@ -2970,7 +2978,8 @@ final class GameWorld {
         source.entity.removeFromParent()
 
         let radius: Float = source.charged ? 0.08 : 0.065
-        let heldEntity = BiomeAssetCatalog.crystal(type: source.type, charged: source.charged, radius: radius)
+        let heldEntity = BiomeAssetCatalog.crystal(type: source.type, charged: source.charged,
+                                                   radius: radius, seed: source.visualSeed)
         heldEntity.name = "heldHalf"
         root.addChild(heldEntity)
         var held = HeldHalf(type: source.type, charged: source.charged, entity: heldEntity)

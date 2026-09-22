@@ -1777,6 +1777,13 @@ final class Endless_RunnerTests: XCTestCase {
             XCTAssertEqual(first.count, 8)
             XCTAssertEqual(first, SceneryVariation.placements(biome: biome, seed: 125))
             XCTAssertNotEqual(first, SceneryVariation.placements(biome: biome, seed: 126))
+            XCTAssertEqual(Set(first.map(\.variant)), Set(0..<BiomeAssetID.propVariantCount(biome)))
+            for (left, right) in zip(first, first.dropFirst()) {
+                XCTAssertNotEqual(left.variant, right.variant)
+            }
+            for pair in stride(from: 0, to: first.count, by: 2) {
+                XCTAssertGreaterThan(first[pair].position.z - first[pair + 1].position.z, 0.44)
+            }
         }
         XCTAssertTrue(SceneryVariation.placements(biome: .lowCrawl, seed: 125).isEmpty)
     }
@@ -1792,6 +1799,7 @@ final class Endless_RunnerTests: XCTestCase {
                     XCTAssertTrue((0.80...1.22).contains(placement.scale.y))
                     XCTAssertLessThanOrEqual(abs(placement.yaw), 0.24)
                     XCTAssertLessThanOrEqual(abs(placement.lean), 0.045)
+                    XCTAssertTrue((0..<BiomeAssetID.propVariantCount(biome)).contains(placement.variant))
                 }
             }
         }
@@ -1802,6 +1810,21 @@ final class Endless_RunnerTests: XCTestCase {
         var control = DailyChallenge.makeGameplayGenerator(dayKey: "2026-09-20")
         for biome in EnvironmentID.allCases {
             _ = SceneryVariation.placements(biome: biome, seed: 42)
+            XCTAssertEqual(gameplay.next(), control.next())
+        }
+    }
+
+    func testSpawnVisualVariationIsRepeatableAndDoesNotUseGameplayStream() {
+        XCTAssertEqual(SpawnVisualVariation.unit(71), SpawnVisualVariation.unit(71))
+        XCTAssertNotEqual(SpawnVisualVariation.unit(71), SpawnVisualVariation.unit(72))
+        XCTAssertNotEqual(SpawnVisualVariation.yaw(71), SpawnVisualVariation.yaw(72))
+        XCTAssertLessThanOrEqual(abs(SpawnVisualVariation.yaw(71)), 0.21)
+
+        var gameplay = DailyChallenge.makeGameplayGenerator(dayKey: "2026-09-21")
+        var control = DailyChallenge.makeGameplayGenerator(dayKey: "2026-09-21")
+        for seed in 0..<24 {
+            _ = SpawnVisualVariation.unit(UInt64(seed))
+            _ = SpawnVisualVariation.yaw(UInt64(seed))
             XCTAssertEqual(gameplay.next(), control.next())
         }
     }
@@ -1827,7 +1850,7 @@ final class Endless_RunnerTests: XCTestCase {
     }
 
     func testEveryAuthoredAssetIsBundledAndLoads() async throws {
-        XCTAssertEqual(BiomeAssetID.required.count, 67)
+        XCTAssertEqual(BiomeAssetID.required.count, 91)
         XCTAssertEqual(Set(BiomeAssetID.required).count, BiomeAssetID.required.count)
         await BiomeAssetCatalog.preload()
         XCTAssertTrue(BiomeAssetCatalog.missingAssets.isEmpty, "Missing: \(BiomeAssetCatalog.missingAssets)")
@@ -1841,13 +1864,29 @@ final class Endless_RunnerTests: XCTestCase {
     func testImportedWallVariantsPreserveCollisionEnvelope() async {
         await BiomeAssetCatalog.preload()
         for biome in EnvironmentID.allCases {
-            for seed in 0..<BiomeAssetID.wallVariantCount {
+            var seen = Set<String>()
+            for seed in 0..<32 {
+                seen.insert(BiomeAssetID.wall(biome, seed: UInt64(seed)))
                 let wall = GameVisualBuilders.makeBiomeObstacle(biome: biome, width: 0.7, height: 1.8, depth: 0.7,
                     profile: EnvironmentCatalog.profile(for: biome), seed: UInt64(seed))
                 let size = wall.visualBounds(relativeTo: wall).extents
                 XCTAssertEqual(size.x, 0.7, accuracy: 0.002, biome.rawValue)
                 XCTAssertEqual(size.y, 1.8, accuracy: 0.002, biome.rawValue)
                 XCTAssertEqual(size.z, 0.7, accuracy: 0.002, biome.rawValue)
+            }
+            XCTAssertEqual(seen.count, BiomeAssetID.wallVariantCount)
+        }
+    }
+
+    func testSpecialHazardVariantsRetainTheirClearanceEnvelope() async {
+        await BiomeAssetCatalog.preload()
+        for seed in 0..<32 {
+            let duck = GameVisualBuilders.makeDuckTendrilCurtain(width: 2.5, height: 0.75, depth: 0.595, seed: UInt64(seed))
+            let jump = GameVisualBuilders.makeSummitSpikeRidge(width: 2.5, height: 0.14, depth: 0.22, seed: UInt64(seed))
+            for (entity, expected) in [(duck, SIMD3<Float>(2.5, 0.75, 0.595)), (jump, SIMD3<Float>(2.5, 0.14, 0.22))] {
+                let bounds = entity.visualBounds(relativeTo: entity)
+                XCTAssertLessThan(simd_distance(bounds.extents, expected), 0.002)
+                XCTAssertLessThan(simd_length(bounds.center), 0.002)
             }
         }
     }

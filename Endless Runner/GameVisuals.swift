@@ -106,13 +106,19 @@ enum GameMaterials {
 @MainActor
 enum GameVisualBuilders {
     static func makeCoin(radius: Float, tint: UIColor = GamePalette.coinGold,
-                         hot: UIColor = GamePalette.coinGoldHot, tintsFaceTexture: Bool = false) -> Entity {
+                         hot: UIColor = GamePalette.coinGoldHot, tintsFaceTexture: Bool = false,
+                         seed: UInt64 = 0) -> Entity {
         let root = Entity()
         root.name = "coin"
-        if let visual = BiomeAssetCatalog.clone("token") {
+        if let visual = BiomeAssetCatalog.clone(BiomeAssetID.varied("token", seed: seed)) {
             visual.scale = SIMD3(repeating: radius / 0.07)
+            visual.orientation = simd_quatf(angle: SpawnVisualVariation.yaw(seed), axis: SIMD3(0, 1, 0))
             if tintsFaceTexture { BiomeAssetCatalog.tint(visual, role: "tint_pickup", color: tint) }
-            BiomeAssetCatalog.tint(visual, role: "tint_hot", color: hot)
+            BiomeAssetCatalog.tint(
+                visual,
+                role: "tint_hot",
+                color: SpawnVisualVariation.accent(base: hot, alternate: tint, seed: seed)
+            )
             root.addChild(visual)
         } else {
             root.addChild(ModelEntity(mesh: .generateSphere(radius: radius),
@@ -201,7 +207,7 @@ enum GameVisualBuilders {
             root.addChild(environment)
         }
         for (index, placement) in SceneryVariation.placements(biome: biome, seed: scenerySeed).enumerated() {
-            guard let prop = BiomeAssetCatalog.clone("prop_\(biome.rawValue)") else { continue }
+            guard let prop = BiomeAssetCatalog.clone(BiomeAssetID.prop(biome, variant: placement.variant)) else { continue }
             prop.name = "sceneryVariation_\(index)"
             prop.scale = placement.scale
             let yaw = simd_quatf(angle: placement.yaw, axis: SIMD3(0, 1, 0))
