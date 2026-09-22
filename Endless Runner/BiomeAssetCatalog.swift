@@ -65,6 +65,37 @@ enum SceneryVariation {
     }
 }
 
+/// Stable, cosmetic-only samples for spawned art. This deliberately has no
+/// dependency on `gameplayRNG`: changing an accent must never change a daily
+/// pattern, collision, pickup value, or wind sequence.
+enum SpawnVisualVariation {
+    private static func mixed(_ seed: UInt64, salt: UInt64) -> UInt64 {
+        var value = seed &+ salt &+ 0x9E37_79B9_7F4A_7C15
+        value = (value ^ (value >> 30)) &* 0xBF58_476D_1CE4_E5B9
+        value = (value ^ (value >> 27)) &* 0x94D0_49BB_1331_11EB
+        return value ^ (value >> 31)
+    }
+
+    /// Fixed 24-bit conversion keeps the visual result stable across devices.
+    static func unit(_ seed: UInt64, salt: UInt64 = 0) -> Float {
+        Float(mixed(seed, salt: salt) >> 40) / Float(0xFF_FFFF)
+    }
+
+    static func accent(base: UIColor, alternate: UIColor, seed: UInt64) -> UIColor {
+        // Keep every warning/readability color in its biome family; this is a
+        // modest shift, not a recolor that could make a hazard misleading.
+        EnvironmentMaterials.lerpColor(base, alternate, 0.10 + unit(seed) * 0.32)
+    }
+
+    static func yaw(_ seed: UInt64) -> Float {
+        (unit(seed, salt: 0x5941_57) - 0.5) * 0.42
+    }
+
+    static func variant(_ seed: UInt64, count: Int = 3) -> Int {
+        Int(mixed(seed, salt: 0x5348_4150_45) % UInt64(count))
+    }
+}
+
 /// Pure naming contract shared by the asset manifest, gameplay and tests.
 enum BiomeAssetID {
     static let wallVariantCount = 3
@@ -79,11 +110,16 @@ enum BiomeAssetID {
     }
 
     static func wall(_ biome: EnvironmentID, seed: UInt64) -> String {
-        "wall_\(biome.rawValue)_\(seed % UInt64(wallVariantCount))"
+        "wall_\(biome.rawValue)_\(SpawnVisualVariation.variant(seed, count: wallVariantCount))"
     }
 
-    static func crystal(_ type: CrystalHalfType, charged: Bool) -> String {
-        "crystal_\(type == .blue ? "azure" : "coral")\(charged ? "_charged" : "")"
+    static func varied(_ base: String, seed: UInt64) -> String {
+        let variant = SpawnVisualVariation.variant(seed)
+        return base + (variant == 0 ? "" : "_\(variant)")
+    }
+
+    static func crystal(_ type: CrystalHalfType, charged: Bool, seed: UInt64) -> String {
+        varied("crystal_\(type == .blue ? "azure" : "coral")\(charged ? "_charged" : "")", seed: seed)
     }
 
     static let shared = [
@@ -96,8 +132,11 @@ enum BiomeAssetID {
     ]
 
     static var required: [String] {
-        shared + EnvironmentID.allCases.flatMap { biome in
-            (0..<wallVariantCount).map { wall(biome, seed: UInt64($0)) }
+        let variants = ["hazard_duck", "hazard_jump", "token", "crystal_azure",
+                        "crystal_coral", "crystal_azure_charged", "crystal_coral_charged"]
+            .flatMap { base in (1...2).map { "\(base)_\($0)" } }
+        return shared + variants + EnvironmentID.allCases.flatMap { biome in
+            (0..<wallVariantCount).map { "wall_\(biome.rawValue)_\($0)" }
                 + ["floor_\(biome.rawValue)", "environment_\(biome.rawValue)",
                    "preview_\(biome.rawValue)"]
                 + (0..<propVariantCount(biome)).map { prop(biome, variant: $0) }
@@ -137,7 +176,11 @@ enum BiomeAssetCatalog {
     }
 
     static func clone(_ name: String) -> Entity? {
-        prototypes[name]?.clone(recursive: true)
+        guard let clone = prototypes[name]?.clone(recursive: true) else { return nil }
+        if name.hasPrefix("prop_ghostGlass") || name == "preview_ghostGlass" {
+            ghostOpacity(clone, opacity: 0.012)
+        }
+        return clone
     }
 
     /// Exports bake all transforms to their vertices, including Blender's Z→Y up
@@ -186,21 +229,21 @@ enum BiomeAssetCatalog {
     }
 
     static func ghostOpacity(_ root: Entity, opacity: Float) {
-        for node in models(in: root) where hasRole(node, "ghost_body") {
+        let bodyOpacity = min(0.02, max(0.001, opacity))
+        for node in models(in: root) {
             guard var model = node.components[ModelComponent.self] else { continue }
-            model.materials = model.materials.map { source -> any RealityKit.Material in
-                var material = (source as? PhysicallyBasedMaterial) ?? PhysicallyBasedMaterial()
+            let edge = hasRole(node, "ghost_edge") || hasRole(node, "accent")
+            model.materials = model.materials.map { _ -> any RealityKit.Material in
+                var material = PhysicallyBasedMaterial()
                 material.baseColor = .init(tint: UIColor(red: 0.48, green: 0.76, blue: 0.84, alpha: 1))
-                material.roughness = .init(floatLiteral: 0.2)
+                material.roughness = .init(floatLiteral: 0.38)
                 material.emissiveColor = .init(color: UIColor(red: 0.18, green: 0.31, blue: 0.38, alpha: 1))
-                material.emissiveIntensity = 0.18
-                material.blending = .transparent(opacity: .init(floatLiteral: opacity))
+                material.emissiveIntensity = edge ? 0.025 : 0
+                material.blending = .transparent(opacity: .init(floatLiteral: edge ? min(0.035, bodyOpacity * 2.5) : bodyOpacity))
                 return material
             }
             node.components.set(model)
         }
-        // An edge cue remains even on the deliberately faint ghost variant.
-        tint(root, role: "ghost_edge", color: UIColor(red: 0.60, green: 0.88, blue: 1, alpha: CGFloat(max(0.22, opacity))))
     }
 
     static func obstacle(_ id: String, dimensions: SIMD3<Float>, nominal: SIMD3<Float>) -> Entity {
@@ -219,10 +262,22 @@ enum BiomeAssetCatalog {
         return root
     }
 
-    static func crystal(type: CrystalHalfType, charged: Bool, radius: Float) -> Entity {
+    static func crystal(type: CrystalHalfType, charged: Bool, radius: Float, seed: UInt64 = 0) -> Entity {
         let root = Entity()
-        if let visual = clone(BiomeAssetID.crystal(type, charged: charged)) {
+        if let visual = clone(BiomeAssetID.crystal(type, charged: charged, seed: seed)) {
             visual.scale = SIMD3(repeating: radius / 0.07)
+            visual.orientation = simd_quatf(angle: SpawnVisualVariation.yaw(seed), axis: SIMD3(0, 1, 0))
+            if charged {
+                BiomeAssetCatalog.tint(
+                    visual,
+                    role: "charged_core",
+                    color: SpawnVisualVariation.accent(
+                        base: .white,
+                        alternate: type == .blue ? .systemCyan : .systemPink,
+                        seed: seed
+                    )
+                )
+            }
             root.addChild(visual)
         } else {
             root.addChild(ModelEntity(mesh: .generateSphere(radius: radius),

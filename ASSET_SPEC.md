@@ -80,6 +80,12 @@ Apple references: [USD entity loading](https://developer.apple.com/documentation
 
 ## Editing and exporting
 
+`vary_game_objects.py` is a guarded one-time pass that replaces wall variants 1/2 with distinct front assemblies and adds two variants each for duck gates, jump gates, tokens and all four crystal-half states. Spawn selection hashes the separate cosmetic seed; all authored wall/hazard bounds remain exact, and pickup variants retain the original asset envelope. The runtime preload list explicitly enumerates all 91 packages (never random selection during enumeration). `render_object_variations.py` renders the actual source variants side by side and creates the `ObjectVariationReview` scene.
+
+Ghost Glass walls, props and elevated scenery now use near-invisible materials: ordinary bodies at 0.012 opacity, spectral walls at 0.004 at runtime, and faint edges no higher than 0.035. The floor and sky retain their existing appearance. Runtime handling applies transparent PBR materials to all ghost wall/prop parts and does not overwrite the edges with opaque unlit materials. The exporter explicitly preserves `SF_NearInvisible_*` opacity in USD Preview Surface because the tested Blender 5.2 exporter otherwise wrote opacity 1 for the blended material. Package validation checks the resulting opacity and ghost material bindings. This is a Blender/USD check; final RealityKit rendering still needs device verification.
+
+The source before this pass is recoverable from `Art/Blender/Slipframe_ArtSource.blend20260921-pre-object-variants`.
+
 1. Open the saved source and edit an asset's mesh/materials in its named collection. Leave each asset root's origin contract intact; rack positions are display-only.
 2. Re-export with `Tools/Blender/export_from_source.py`. It scans existing collections and exports without rebuilding or discarding artist edits.
 3. Run `Tools/Blender/validate_assets.py` in Blender's Python.
@@ -100,11 +106,11 @@ blender --background Art/Blender/Slipframe_ArtSource.blend --python Tools/Blende
 
 Validated on Windows with Blender 5.2:
 
-- All 77 packages open, contain their texture dependencies, use aligned uncompressed USDZ members, and have identity transforms / Y-up meter units.
+- All 91 packages open, contain their texture dependencies, use aligned uncompressed USDZ members, and have identity transforms / Y-up meter units.
 - Mesh points and triangle indices are valid; aperture normals face the player.
 - All 18 wall variants and both special hazards preserve their nominal envelopes.
 - Decorative variation stays outside the playable corridor at its extreme settings.
-- Total library after the player-distance correction: 173,543 triangles and approximately 31.57 MiB of USDZ packages. Each environment remains below 25,000 triangles (15,629–23,592). This is the whole library, not one frame's draw count.
+- Total library after the object-variation pass: 170,237 triangles and approximately 31.99 MiB of USDZ packages. Each environment remains below 25,000 triangles (15,629–23,592). This is the whole library, not one frame's draw count.
 - Blender review renders were inspected and refined.
 - All 35 app/test Swift files passed the syntax-only parser; `git diff --check` passed.
 

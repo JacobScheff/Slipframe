@@ -8,7 +8,7 @@ import itertools
 import json
 import math
 import zipfile
-from pxr import Gf, Usd, UsdGeom, Sdf
+from pxr import Gf, Usd, UsdGeom, UsdShade, Sdf
 
 ROOT = Path(__file__).resolve().parents[2]
 ART = ROOT / 'Endless Runner' / 'ArtAssets'
@@ -23,6 +23,8 @@ def check():
     manifest = json.loads((ART / 'manifest.json').read_text())
     records = {a['id']: a for a in manifest['assets']}
     expected = set(SHARED)
+    for base in ['hazard_duck','hazard_jump','token','crystal_azure','crystal_coral','crystal_azure_charged','crystal_coral_charged']:
+        expected.update(f'{base}_{i}' for i in [1,2])
     for biome in BIOMES:
         expected.update(f'wall_{biome}_{i}' for i in range(3))
         expected.update(f'{kind}_{biome}' for kind in ['floor', 'prop', 'preview', 'environment'])
@@ -50,6 +52,10 @@ def check():
         mesh_count = triangle_count = 0
         mesh_names = []
         for prim in stage.Traverse():
+            if prim.IsA(UsdShade.Shader) and prim.GetParent().GetName().startswith('SF_NearInvisible_'):
+                if prim.GetAttribute('info:id').Get() == 'UsdPreviewSurface':
+                    opacity=prim.GetAttribute('inputs:opacity').Get()
+                    assert opacity is not None and 0 < opacity <= .035001, (name,'opaque Ghost Glass export',prim.GetPath(),opacity)
             if prim.IsA(UsdGeom.Xformable):
                 ops = UsdGeom.Xformable(prim).GetOrderedXformOps()
                 assert not ops, (name, 'unbaked transform', prim.GetPath())
@@ -66,6 +72,12 @@ def check():
             mesh_count += 1
             mesh_names.append(prim.GetName())
             mesh = UsdGeom.Mesh(prim)
+            if name.startswith(('wall_ghostGlass','prop_ghostGlass')):
+                targets=[prim]+[child for child in prim.GetChildren() if child.IsA(UsdGeom.Subset)]
+                for target in targets:
+                    material,_=UsdShade.MaterialBindingAPI(target).ComputeBoundMaterial()
+                    if material:
+                        assert material.GetPrim().GetName().startswith('SF_NearInvisible_'), (name,'opaque ghost binding',target.GetPath())
             points = mesh.GetPointsAttr().Get()
             counts = mesh.GetFaceVertexCountsAttr().Get()
             indices = mesh.GetFaceVertexIndicesAttr().Get()
@@ -96,8 +108,8 @@ def check():
             assert all(abs(a-b) < 1e-5 for a, b in zip(computed, exported)), name
         nominal = None
         if name.startswith('wall_'): nominal = (.7, 1.8, .7)
-        if name == 'hazard_duck': nominal = (2.5, .75, .595)
-        if name == 'hazard_jump': nominal = (2.5, .14, .22)
+        if name.startswith('hazard_duck'): nominal = (2.5, .75, .595)
+        if name.startswith('hazard_jump'): nominal = (2.5, .14, .22)
         if nominal:
             assert all(abs(a-b) < .0001 for a, b in zip(box.GetSize(), nominal)), (name, box.GetSize())
             assert box.GetMidpoint().GetLength() < .0001, (name, 'off-center hazard')

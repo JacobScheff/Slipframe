@@ -508,7 +508,7 @@ def biome_assets(key):
 
 def bake_usd_transforms(path):
     """Bake the axis conversion into mesh data; runtime pivots stay identity/Y-up."""
-    from pxr import Usd, UsdGeom, UsdUtils, Gf, Vt
+    from pxr import Usd, UsdGeom, UsdShade, UsdUtils, Gf, Vt, Sdf
     with tempfile.TemporaryDirectory(prefix='slipframe_usd_') as folder:
         with zipfile.ZipFile(path) as archive:
             archive.extractall(folder)
@@ -516,6 +516,16 @@ def bake_usd_transforms(path):
         stage=Usd.Stage.Open(str(layer))
         cache=UsdGeom.XformCache()
         for prim in stage.Traverse():
+            # Blender 5.2 currently writes opacity=1 for these blended materials
+            # despite their Principled Alpha. Preserve our explicit Ghost Glass
+            # contract in the portable Preview Surface used by RealityKit.
+            if (prim.IsA(UsdShade.Shader)
+                    and prim.GetAttribute('info:id').Get() == 'UsdPreviewSurface'
+                    and prim.GetParent().GetName().startswith('SF_NearInvisible_')):
+                shader=UsdShade.Shader(prim)
+                alpha=.035 if prim.GetParent().GetName().endswith('_edge') else .012
+                shader.CreateInput('opacity',Sdf.ValueTypeNames.Float).Set(alpha)
+                shader.CreateInput('opacityThreshold',Sdf.ValueTypeNames.Float).Set(0)
             if prim.IsA(UsdGeom.Mesh):
                 mesh=UsdGeom.Mesh(prim); matrix=cache.GetLocalToWorldTransform(prim)
                 points=[Gf.Vec3f(matrix.Transform(Gf.Vec3d(p))) for p in mesh.GetPointsAttr().Get()]

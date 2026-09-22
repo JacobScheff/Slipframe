@@ -327,7 +327,7 @@ enum EnvironmentCatalog {
             )
 
         case .ghostGlass:
-            // Mix readable glass with rarer spectral panes — no fog / haze volumes.
+            // Nearly invisible glass; spectral panes are fainter still.
             return EnvironmentProfile(
                 id: .ghostGlass,
                 twist: .ghostWalls,
@@ -341,14 +341,14 @@ enum EnvironmentCatalog {
                     ambienceBrightness: 1.0,
                     fogDensity: 0.0,
                     fogColor: TintColor(r: 0.7, g: 0.8, b: 0.9, a: 0.0),
-                    wallTint: TintColor(r: 0.95, g: 0.97, b: 1.0, a: 0.24),
+                    wallTint: TintColor(r: 0.95, g: 0.97, b: 1.0, a: 0.012),
                     wallEmissive: TintColor(r: 0.85, g: 0.92, b: 1.0, a: 1),
-                    wallOpacity: 0.24,
-                    wallEmissiveIntensity: 0.28,
+                    wallOpacity: 0.012,
+                    wallEmissiveIntensity: 0,
                     coinTint: TintColor(r: 0.85, g: 0.95, b: 1.0, a: 1)
                 ),
                 ghostWallChance: 0.45,
-                ghostWallOpacity: 0.075,
+                ghostWallOpacity: 0.004,
                 lowCrawlTeachCount: 0,
                 duckHazardChance: 0,
                 summitStepTeachCount: 0,
