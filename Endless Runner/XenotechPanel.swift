@@ -32,50 +32,10 @@ struct ConsoleSelectionStyle: ButtonStyle {
             .overlay {
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .strokeBorder(selected ? SlipframeUI.accent.opacity(0.65) : .clear, lineWidth: 1)
+                    .allowsHitTesting(false)
             }
-            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .contentShape(.interaction, RoundedRectangle(cornerRadius: 10, style: .continuous))
             .hoverEffect(.highlight)
-    }
-}
-
-/// Four L-shaped accent marks drawn just inside a panel's bounds — the
-/// "targeting reticle" motif that ties every panel back to the game's
-/// xenotech identity.
-struct XenotechCornerBrackets: Shape {
-    var length: CGFloat = 22
-    var inset: CGFloat = 8
-
-    func path(in rect: CGRect) -> Path {
-        var p = Path()
-        let l = max(6, min(length, min(rect.width, rect.height) * 0.3))
-        let corners: [(CGPoint, CGPoint, CGPoint)] = [
-            (
-                CGPoint(x: rect.minX + inset, y: rect.minY + inset + l),
-                CGPoint(x: rect.minX + inset, y: rect.minY + inset),
-                CGPoint(x: rect.minX + inset + l, y: rect.minY + inset)
-            ),
-            (
-                CGPoint(x: rect.maxX - inset - l, y: rect.minY + inset),
-                CGPoint(x: rect.maxX - inset, y: rect.minY + inset),
-                CGPoint(x: rect.maxX - inset, y: rect.minY + inset + l)
-            ),
-            (
-                CGPoint(x: rect.maxX - inset, y: rect.maxY - inset - l),
-                CGPoint(x: rect.maxX - inset, y: rect.maxY - inset),
-                CGPoint(x: rect.maxX - inset - l, y: rect.maxY - inset)
-            ),
-            (
-                CGPoint(x: rect.minX + inset + l, y: rect.maxY - inset),
-                CGPoint(x: rect.minX + inset, y: rect.maxY - inset),
-                CGPoint(x: rect.minX + inset, y: rect.maxY - inset - l)
-            )
-        ]
-        for (a, b, c) in corners {
-            p.move(to: a)
-            p.addLine(to: b)
-            p.addLine(to: c)
-        }
-        return p
     }
 }
 
@@ -111,11 +71,6 @@ private struct XenotechPanelModifier: ViewModifier {
                     lineWidth: 1
                 )
                 .allowsHitTesting(false)
-            }
-            .overlay {
-                XenotechCornerBrackets(length: 10, inset: 9)
-                    .stroke(primary.opacity(0.38), lineWidth: 1)
-                    .allowsHitTesting(false)
             }
             .overlay(alignment: .top) {
                 Capsule()
@@ -300,6 +255,7 @@ struct BiomeCard: View {
                     .frame(maxWidth: .infinity)
                     .clipped()
                     .saturation(isOn ? 1 : 0.8)
+                    .allowsHitTesting(false)
                     .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 4) {
@@ -318,9 +274,11 @@ struct BiomeCard: View {
                     .fill(isOn ? accent.opacity(0.10) : SlipframeUI.inset)
             }
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .contentShape(.interaction, RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .strokeBorder(isOn ? accent.opacity(0.8) : SlipframeUI.hairline, lineWidth: 1)
+                    .allowsHitTesting(false)
             }
             .overlay(alignment: .topTrailing) {
                 Image(systemName: isOn ? "checkmark.circle.fill" : (selectionStyle == .radio ? "circle" : "plus.circle"))
@@ -329,6 +287,7 @@ struct BiomeCard: View {
                     .padding(5)
                     .background(SlipframeUI.surface.opacity(0.92), in: Circle())
                     .padding(8)
+                    .allowsHitTesting(false)
                     .accessibilityHidden(true)
             }
         }

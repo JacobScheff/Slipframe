@@ -71,6 +71,7 @@ struct LevelSelectView: View {
                         }
                         .padding(12)
                         .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(.interaction, RoundedRectangle(cornerRadius: 10, style: .continuous))
                     }
                     .buttonStyle(ConsoleSelectionStyle(selected: selected))
                     .accessibilityLabel("\(kind.title), \(kind.cardBlurb)")
@@ -83,13 +84,7 @@ struct LevelSelectView: View {
     private var normalBody: some View {
         VStack(alignment: .leading, spacing: 16) {
             ZStack(alignment: .leading) {
-                GeometryReader { proxy in
-                    Image("Biome_emberRun")
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: proxy.size.width, height: proxy.size.height)
-                        .clipped()
-                }
+                BiomeSlideshow(isActive: !gameModel.isPlaying && (!gameModel.isGameOver || gameModel.isGameOverMenuVisible))
                 LinearGradient(
                     stops: [
                         .init(color: SlipframeUI.surface.opacity(0.98), location: 0),
@@ -112,6 +107,9 @@ struct LevelSelectView: View {
             }
             .frame(height: 180)
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            // Cropping affects drawing, not hit testing. The entire hero is
+            // decorative so its oversized image cannot intercept the mode row.
+            .allowsHitTesting(false)
             .accessibilityElement(children: .combine)
 
             DisclosureGroup(isExpanded: $showsPortalGuide) {
@@ -128,7 +126,9 @@ struct LevelSelectView: View {
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(modifier.displayName)
                                         .font(.system(size: 14, weight: .semibold))
-                                    Text(modifier.effectDescription)
+                                    Text(modifier == .tokenSurge
+                                         ? "Tokens arrive in threes. Each token is worth 2×. More crystal halves in Crystal Cave."
+                                         : modifier.effectDescription)
                                         .font(.system(size: 12))
                                         .foregroundStyle(.secondary)
                                         .fixedSize(horizontal: false, vertical: true)
@@ -361,6 +361,61 @@ struct LevelSelectView: View {
                 .font(.system(size: 14))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
+/// Only the artwork changes; the hero's text and geometry stay still.
+private struct BiomeSlideshow: View {
+    var isActive: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var biome = EnvironmentID.allCases.randomElement() ?? .emberRun
+
+    private var shouldAdvance: Bool {
+        isActive && scenePhase == .active
+    }
+
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack {
+                Image("Biome_\(biome.rawValue)")
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: proxy.size.width, height: proxy.size.height)
+                    .clipped()
+                    .id(biome)
+                    .transition(.opacity)
+            }
+            .frame(width: proxy.size.width, height: proxy.size.height)
+            .clipped()
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+        .task(id: shouldAdvance) {
+            guard shouldAdvance else { return }
+            // Use a separate shuffled bag; menu animation never consumes the
+            // deterministic gameplay random stream used by Daily challenges.
+            var upcoming = EnvironmentID.allCases.filter { $0 != biome }.shuffled()
+            while !Task.isCancelled {
+                do {
+                    try await Task.sleep(for: .seconds(6))
+                } catch {
+                    return
+                }
+                guard !Task.isCancelled else { return }
+                if upcoming.isEmpty {
+                    upcoming = EnvironmentID.allCases.shuffled()
+                    if upcoming.count > 1, upcoming.first == biome {
+                        upcoming.swapAt(0, 1)
+                    }
+                }
+                guard !upcoming.isEmpty else { return }
+                let next = upcoming.removeFirst()
+                withAnimation(reduceMotion ? nil : .easeInOut(duration: 1)) {
+                    biome = next
+                }
+            }
         }
     }
 }

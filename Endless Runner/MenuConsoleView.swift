@@ -34,10 +34,23 @@ enum MenuConsoleTab: String, CaseIterable, Identifiable {
 struct MenuConsoleView: View {
     @EnvironmentObject private var gameModel: GameModel
     @State private var tab: MenuConsoleTab = .play
+    @State private var contentHeight: CGFloat = 360
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let neon = SlipframeUI.accent
     private let gold = SlipframeUI.reward
+
+    private var consoleWidth: CGFloat {
+        if tab == .scores { return 800 }
+        if tab == .play, gameModel.playKind == .playlist || gameModel.playKind == .solo { return 800 }
+        return 720
+    }
+
+    /// Keep the world-anchored console within a comfortable viewing envelope.
+    /// Longer guides and rankings can scroll after the panel reaches this limit.
+    private var viewportHeight: CGFloat {
+        min(max(contentHeight, 220), tab == .play ? 660 : 720)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -63,37 +76,38 @@ struct MenuConsoleView: View {
                 }
                 .padding(28)
                 .frame(maxWidth: .infinity, alignment: .topLeading)
+                .fixedSize(horizontal: false, vertical: true)
+                .onGeometryChange(for: CGFloat.self) { proxy in
+                    ceil(proxy.size.height)
+                } action: { height in
+                    contentHeight = height
+                }
             }
-            .frame(height: 420)
+            .frame(height: viewportHeight)
+            .contentShape(Rectangle())
+            .scrollBounceBehavior(.basedOnSize)
             .scrollIndicators(.visible)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: viewportHeight)
             .id(tab)
 
             if tab == .play {
                 launchBar
             }
         }
-        .frame(width: 720, alignment: .top)
+        .frame(width: consoleWidth, alignment: .top)
         .xenotechPanel(primary: neon, cornerRadius: 22)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: consoleWidth)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: tab)
     }
 
     private var header: some View {
         HStack(spacing: 14) {
             RiftGlyph(accent: neon, size: 32)
-            VStack(alignment: .leading, spacing: 5) {
-                Text("SLIPFRAME")
-                    .font(.system(size: 25, weight: .semibold))
-                    .tracking(4)
-                    .foregroundStyle(.primary)
-                Text("Find your rhythm. Choose your rift.")
-                    .font(.system(size: 13))
-                    .foregroundStyle(.secondary)
-            }
+            Text("SLIPFRAME")
+                .font(.system(size: 25, weight: .semibold))
+                .tracking(4)
+                .foregroundStyle(.primary)
             Spacer(minLength: 8)
-            Text("RIFT RUNNER")
-                .font(.system(size: 10, weight: .medium, design: .monospaced))
-                .tracking(1.5)
-                .foregroundStyle(neon.opacity(0.8))
         }
     }
 
