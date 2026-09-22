@@ -2,37 +2,40 @@
 //  LevelSelectView.swift
 //  Slipframe
 //
-//  Play-tab content for the centered command console.
+//  Run setup. The console owns the persistent launch action.
 //
 
 import SwiftUI
 
 struct LevelSelectView: View {
     @EnvironmentObject private var gameModel: GameModel
+    @EnvironmentObject private var personalBests: PersonalBestStore
     @Environment(\.openURL) private var openURL
+    @State private var showsPortalGuide = false
     @State private var showReplayConfirm = false
 
-    private let neon = Color(red: 0.35, green: 0.92, blue: 1.0)
-    private let gold = Color(red: 1.0, green: 0.82, blue: 0.32)
-    private let dailyAccent = Color(red: 0.45, green: 0.88, blue: 0.78)
-
-    private let biomeColumns = [
-        GridItem(.flexible(), spacing: 10),
-        GridItem(.flexible(), spacing: 10),
-        GridItem(.flexible(), spacing: 10)
-    ]
+    private let accent = SlipframeUI.accent
+    private let gold = SlipframeUI.reward
+    private let biomeColumns = [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 22) {
             if !gameModel.hasCompletedTutorial {
-                playTutorialButton
+                tutorialPrompt
             }
 
             modePicker
 
-            modeBody
+            Group {
+                switch gameModel.playKind {
+                case .normal: normalBody
+                case .solo: soloBody
+                case .playlist: playlistBody
+                case .daily: dailyBody
+                }
+            }
 
-            footerRow
+            footer
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .onChange(of: gameModel.isPlaying) { _, playing in
@@ -40,515 +43,389 @@ struct LevelSelectView: View {
         }
     }
 
-    /// Privacy + optional replay control share one footer row to save vertical space.
-    private var footerRow: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 12) {
-            privacyFooter
-            Spacer(minLength: 8)
-            if gameModel.hasCompletedTutorial {
-                replayTutorialFooter
-            }
-        }
-        .padding(.top, 4)
-    }
-
-    private var privacyFooter: some View {
-        Link(destination: SlipframeLinks.privacyPolicy) {
-            Text("Privacy Policy")
-                .font(.system(size: 12, weight: .medium, design: .rounded))
-                .foregroundStyle(.secondary)
-                .underline()
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Privacy Policy")
-    }
-
-    private var playTutorialButton: some View {
-        Button {
-            gameModel.startTutorial()
-        } label: {
-            HStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(gold.opacity(0.22))
-                        .frame(width: 40, height: 40)
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(gold)
-                }
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Play Tutorial")
-                        .font(.system(size: 17, weight: .bold, design: .rounded))
-                    Text("Guided calibration with coaching overlays.")
-                        .font(.system(size: 13, weight: .regular, design: .rounded))
-                        .foregroundStyle(.secondary)
-                }
-                Spacer(minLength: 4)
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(gold.opacity(0.7))
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
-            .background {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(gold.opacity(0.14))
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .strokeBorder(gold.opacity(0.55), lineWidth: 1)
-            }
-        }
-        .buttonStyle(.plain)
-        .disabled(gameModel.isPlaying)
-    }
-
-    /// Quiet footer — confirmation is inline because attachment views can't present dialogs.
-    @ViewBuilder
-    private var replayTutorialFooter: some View {
-        if showReplayConfirm {
-            VStack(alignment: .trailing, spacing: 8) {
-                Text("Replay the full tutorial?")
-                    .font(.system(size: 13, weight: .medium, design: .rounded))
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.trailing)
-
-                HStack(spacing: 10) {
-                    Button("Cancel") {
-                        showReplayConfirm = false
-                    }
-                    .buttonStyle(.plain)
-                    .font(.system(size: 13, weight: .medium, design: .rounded))
-                    .foregroundStyle(.secondary)
-
-                    Button("Replay") {
-                        showReplayConfirm = false
-                        gameModel.startTutorial()
-                    }
-                    .buttonStyle(.plain)
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
-                    .foregroundStyle(gold.opacity(0.9))
-                }
-            }
-            .transition(.opacity.combined(with: .move(edge: .bottom)))
-        } else {
-            Button {
-                withAnimation(.easeInOut(duration: 0.18)) {
-                    showReplayConfirm = true
-                }
-            } label: {
-                Text("Replay tutorial…")
-                    .font(.system(size: 15, weight: .medium, design: .rounded))
-                    .foregroundStyle(.tertiary)
-            }
-            .buttonStyle(.plain)
-            .disabled(gameModel.isPlaying)
-            .accessibilityLabel("Replay tutorial")
-        }
-    }
-
     private var modePicker: some View {
-        LazyVGrid(
-            columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)],
-            spacing: 10
-        ) {
-            ForEach(PlayModeKind.allCases) { kind in
-                modeCard(kind)
-            }
-        }
-    }
-
-    private func modeCard(_ kind: PlayModeKind) -> some View {
-        let selected = gameModel.playKind == kind
-        return Button {
-            gameModel.playKind = kind
-        } label: {
-            HStack(spacing: 12) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(selected ? neon.opacity(0.28) : Color.white.opacity(0.08))
-                        .frame(width: 44, height: 44)
-                    Image(systemName: kind.symbolName)
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundStyle(selected ? neon : .secondary)
-                        .symbolRenderingMode(.hierarchical)
+        VStack(alignment: .leading, spacing: 10) {
+            sectionLabel("RUN MODE")
+            HStack(spacing: 8) {
+                ForEach(PlayModeKind.allCases) { kind in
+                    let selected = gameModel.playKind == kind
+                    Button {
+                        gameModel.playKind = kind
+                    } label: {
+                        VStack(alignment: .leading, spacing: 9) {
+                            HStack {
+                                Image(systemName: kind.symbolName)
+                                    .foregroundStyle(selected ? accent : Color.secondary)
+                                Spacer()
+                                if selected {
+                                    Image(systemName: "checkmark")
+                                        .font(.system(size: 10, weight: .bold))
+                                        .foregroundStyle(accent)
+                                }
+                            }
+                            Text(kind.title)
+                                .font(.system(size: 16, weight: .semibold))
+                            Text(kind.cardBlurb)
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(.interaction, RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    }
+                    .buttonStyle(ConsoleSelectionStyle(selected: selected))
+                    .accessibilityLabel("\(kind.title), \(kind.cardBlurb)")
+                    .accessibilityAddTraits(selected ? .isSelected : [])
                 }
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(kind.title)
-                        .font(.system(size: 17, weight: selected ? .bold : .semibold, design: .rounded))
-                        .foregroundStyle(.primary)
-                    Text(kind.cardBlurb)
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
-                        .foregroundStyle(.secondary)
-                }
-                Spacer(minLength: 0)
             }
-            .padding(12)
-            .background {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(selected ? neon.opacity(0.16) : Color.white.opacity(0.05))
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .strokeBorder(selected ? neon.opacity(0.75) : Color.white.opacity(0.1), lineWidth: selected ? 1.5 : 1)
-            }
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(kind.title)
-        .accessibilityAddTraits(selected ? .isSelected : [])
-    }
-
-    @ViewBuilder
-    private var modeBody: some View {
-        switch gameModel.playKind {
-        case .normal:
-            normalBody
-        case .playlist:
-            playlistBody
-        case .solo:
-            soloBody
-        case .daily:
-            dailyBody
         }
     }
 
     private var normalBody: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(PlayModeKind.normal.subtitle)
-                .font(.system(size: 15, weight: .regular, design: .rounded))
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            HStack(spacing: 10) {
-                ForEach(EnvironmentID.allCases) { id in
-                    biomePip(id)
+        VStack(alignment: .leading, spacing: 16) {
+            ZStack(alignment: .leading) {
+                BiomeSlideshow(isActive: !gameModel.isPlaying && (!gameModel.isGameOver || gameModel.isGameOverMenuVisible))
+                LinearGradient(
+                    stops: [
+                        .init(color: SlipframeUI.surface.opacity(0.98), location: 0),
+                        .init(color: SlipframeUI.surface.opacity(0.90), location: 0.38),
+                        .init(color: SlipframeUI.surface.opacity(0.12), location: 1)
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+                VStack(alignment: .leading, spacing: 10) {
+                    sectionLabel("SIX BIOMES. YOUR PATH.")
+                    Text("Into the rift.")
+                        .font(.system(size: 30, weight: .semibold))
+                    Text("Dodge. Reach. Find your flow.\nChoose your next world at each crossing.")
+                        .font(.system(size: 14))
+                        .foregroundStyle(.white.opacity(0.78))
+                        .lineSpacing(3)
                 }
+                .padding(22)
             }
-            .frame(maxWidth: .infinity)
+            .frame(height: 180)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            // Cropping affects drawing, not hit testing. The entire hero is
+            // decorative so its oversized image cannot intercept the mode row.
+            .allowsHitTesting(false)
+            .accessibilityElement(children: .combine)
 
-            Text("PORTAL MODIFIERS")
-                .font(.system(size: 11, weight: .bold, design: .rounded))
-                .tracking(1.1)
-                .foregroundStyle(.secondary)
-
-            LazyVGrid(columns: biomeColumns, spacing: 8) {
-                ForEach(RiftModifier.allCases, id: \.rawValue) { modifier in
-                    modifierKey(modifier)
+            DisclosureGroup(isExpanded: $showsPortalGuide) {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Step into a lane to choose a portal. More warning diamonds mean harder patterns. The symbol below a portal shows its bonus.")
+                        .font(.system(size: 14))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], alignment: .leading, spacing: 16) {
+                        ForEach(RiftModifier.allCases, id: \.rawValue) { modifier in
+                            HStack(alignment: .top, spacing: 10) {
+                                RiftModifierIcon(modifier: modifier, accent: gold, size: 18)
+                                    .frame(width: 24, height: 22)
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(modifier.displayName)
+                                        .font(.system(size: 14, weight: .semibold))
+                                    Text(modifier == .tokenSurge
+                                         ? "Tokens arrive in threes. Each token is worth 2×. More crystal halves in Crystal Cave."
+                                         : modifier.effectDescription)
+                                        .font(.system(size: 12))
+                                        .foregroundStyle(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                                Spacer(minLength: 0)
+                            }
+                        }
+                    }
+                    Text("No symbol means no modifier.")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
                 }
-                noModifierKey
+                .padding(.top, 14)
+            } label: {
+                Label("Portal field guide", systemImage: "book.closed")
+                    .font(.system(size: 14, weight: .medium))
+                    .frame(minHeight: 44)
             }
+            .tint(accent)
         }
-    }
-
-    private func modifierKey(_ modifier: RiftModifier) -> some View {
-        HStack(spacing: 8) {
-            RiftModifierIcon(modifier: modifier, accent: gold, size: 14)
-                .frame(width: 20)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(modifier.displayName)
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
-                Text(modifier.effectDescription)
-                    .font(.system(size: 9, weight: .medium, design: .rounded))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 9)
-        .padding(.vertical, 7)
-        .background {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color.white.opacity(0.05))
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(modifier.displayName), \(modifier.effectDescription)")
-    }
-
-    private var noModifierKey: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "minus.circle")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(.secondary)
-                .frame(width: 20)
-            VStack(alignment: .leading, spacing: 1) {
-                Text("No Modifier")
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
-                Text("No effect icon")
-                    .font(.system(size: 9, weight: .medium, design: .rounded))
-                    .foregroundStyle(.secondary)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 9)
-        .padding(.vertical, 7)
-        .background {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color.white.opacity(0.05))
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("No modifier, no effect icon")
-    }
-
-    private func biomePip(_ id: EnvironmentID) -> some View {
-        let tint = EnvironmentCatalog.profile(for: id).palette.portalRim
-        let color = Color(red: Double(tint.r), green: Double(tint.g), blue: Double(tint.b))
-        return VStack(spacing: 6) {
-            ZStack {
-                Circle()
-                    .fill(color.opacity(0.28))
-                    .frame(width: 36, height: 36)
-                Image(systemName: id.symbolName)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(color)
-            }
-            Text(id.displayName)
-                .font(.system(size: 10, weight: .medium, design: .rounded))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-        }
-        .frame(maxWidth: .infinity)
-        .accessibilityLabel(id.displayName)
     }
 
     private var soloBody: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(PlayModeKind.solo.subtitle)
-                .font(.system(size: 15, weight: .regular, design: .rounded))
-                .foregroundStyle(.secondary)
-
-            biomeGrid(selection: .solo)
+        VStack(alignment: .leading, spacing: 14) {
+            sectionHeading("Find your rhythm", detail: "Choose one biome to play on repeat.")
+            biomeGrid(isPlaylist: false)
         }
     }
 
     private var playlistBody: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(PlayModeKind.playlist.subtitle)
-                .font(.system(size: 15, weight: .regular, design: .rounded))
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            Text("BIOMES")
-                .font(.system(size: 12, weight: .bold, design: .rounded))
-                .tracking(1.2)
-                .foregroundStyle(.secondary)
-
-            biomeGrid(selection: .playlist)
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline) {
+                sectionHeading("Choose your biomes", detail: "Selected biomes shuffle throughout your run.")
+                Spacer()
+                Text("\(gameModel.playlistEnvironments.count) / \(EnvironmentID.allCases.count) selected")
+                    .font(.system(size: 12, weight: .medium, design: .monospaced))
+                    .foregroundStyle(accent)
+            }
+            biomeGrid(isPlaylist: true)
 
             if gameModel.playlistEnvironments.isEmpty {
-                Text("Select at least one biome.")
-                    .font(.system(size: 14, weight: .medium, design: .rounded))
-                    .foregroundStyle(.orange)
-            }
-
-            Text("STARTING BIOME")
-                .font(.system(size: 12, weight: .bold, design: .rounded))
-                .tracking(1.2)
-                .foregroundStyle(.secondary)
-                .padding(.top, 4)
-
-            playlistStartPicker
-        }
-    }
-
-    private var playlistStartPicker: some View {
-        let selected = gameModel.playlistEnvironments
-        return FlowChips {
-            startChip(title: "Random", isOn: gameModel.playlistStart == nil) {
-                gameModel.playlistStart = nil
-            }
-            ForEach(EnvironmentID.allCases) { id in
-                if selected.contains(id) {
-                    startChip(title: id.displayName, isOn: gameModel.playlistStart == id) {
-                        gameModel.playlistStart = id
+                Label("Choose at least one biome to start.", systemImage: "info.circle")
+                    .font(.system(size: 14))
+                    .foregroundStyle(gold)
+            } else {
+                sectionLabel("STARTING BIOME")
+                    .padding(.top, 4)
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 8)], spacing: 8) {
+                    startChip("Random", id: nil)
+                    ForEach(EnvironmentID.allCases.filter { gameModel.playlistEnvironments.contains($0) }) { id in
+                        startChip(id.displayName, id: id)
                     }
                 }
             }
         }
     }
 
-    private func startChip(title: String, isOn: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title)
-                .font(.system(size: 14, weight: isOn ? .bold : .medium, design: .rounded))
-                .padding(.horizontal, 12)
-                .padding(.vertical, 7)
-                .background {
-                    Capsule(style: .continuous)
-                        .fill(isOn ? gold.opacity(0.22) : Color.white.opacity(0.06))
+    private func startChip(_ title: String, id: EnvironmentID?) -> some View {
+        let selected = gameModel.playlistStart == id
+        return Button {
+            gameModel.playlistStart = id
+        } label: {
+            HStack(spacing: 6) {
+                if selected {
+                    Image(systemName: "checkmark").font(.system(size: 11, weight: .bold))
                 }
-                .overlay {
-                    Capsule(style: .continuous)
-                        .strokeBorder(isOn ? gold.opacity(0.75) : Color.white.opacity(0.14), lineWidth: 1)
-                }
+                Text(title).font(.system(size: 13, weight: .medium))
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 8)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(ConsoleSelectionStyle(selected: selected))
+        .accessibilityLabel("Start: \(title)")
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    private func biomeGrid(isPlaylist: Bool) -> some View {
+        LazyVGrid(columns: biomeColumns, spacing: 12) {
+            ForEach(EnvironmentID.allCases) { id in
+                BiomeCard(
+                    id: id,
+                    isOn: isPlaylist ? gameModel.playlistEnvironments.contains(id) : gameModel.soloEnvironment == id,
+                    selectionStyle: isPlaylist ? .check : .radio,
+                    accent: accent
+                ) {
+                    if !isPlaylist {
+                        gameModel.soloEnvironment = id
+                    } else if gameModel.playlistEnvironments.contains(id) {
+                        gameModel.playlistEnvironments.remove(id)
+                        if gameModel.playlistStart == id { gameModel.playlistStart = nil }
+                    } else {
+                        gameModel.playlistEnvironments.insert(id)
+                    }
+                }
+            }
+        }
     }
 
     private var dailyBody: some View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
             let remaining = DailyChallenge.secondsUntilRollover(from: context.date)
-            let dayKey = DailyChallenge.dayKey(for: context.date)
-            let bestScore = gameModel.personalBests
-                .best(for: .daily(dayKey: dayKey))
-                .bestScore
-            let progress = countdownProgress(remaining)
-
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(spacing: 16) {
-                    ZStack {
-                        Circle()
-                            .stroke(dailyAccent.opacity(0.18), lineWidth: 8)
-                            .frame(width: 86, height: 86)
-                        Circle()
-                            .trim(from: 0, to: progress)
-                            .stroke(
-                                dailyAccent,
-                                style: StrokeStyle(lineWidth: 8, lineCap: .round)
-                            )
-                            .rotationEffect(.degrees(-90))
-                            .frame(width: 86, height: 86)
-                        VStack(spacing: 0) {
-                            Image(systemName: "calendar")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundStyle(dailyAccent)
-                            Text(DailyChallenge.formatCountdown(remaining))
-                                .font(.system(size: 13, weight: .bold, design: .rounded))
-                                .monospacedDigit()
-                                .foregroundStyle(dailyAccent)
-                        }
-                    }
-
-                    VStack(alignment: .leading, spacing: 4) {
+            let best = personalBests.best(for: .daily(dayKey: DailyChallenge.dayKey(for: context.date))).bestScore
+            VStack(alignment: .leading, spacing: 20) {
+                sectionHeading("One day. A shared challenge.", detail: PlayModeKind.daily.subtitle)
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        sectionLabel("TODAY'S RUN")
                         Text(DailyChallenge.displayDate(for: context.date))
-                            .font(.system(size: 22, weight: .semibold, design: .rounded))
-                            .foregroundStyle(dailyAccent)
-                        Text(PlayModeKind.daily.subtitle)
-                            .font(.system(size: 14, weight: .regular, design: .rounded))
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
+                            .font(.system(size: 22, weight: .semibold))
                     }
+                    Spacer()
+                    VStack(alignment: .trailing, spacing: 8) {
+                        sectionLabel("RESETS IN")
+                        Text(DailyChallenge.formatCountdown(remaining))
+                            .font(.system(size: 22, weight: .medium, design: .monospaced))
+                            .monospacedDigit()
+                            .foregroundStyle(accent)
+                    }
+                    .accessibilityElement(children: .combine)
                 }
-
-                dailyBestShareRow(bestScore: bestScore, date: context.date)
+                Divider().overlay(SlipframeUI.hairline)
+                HStack {
+                    VStack(alignment: .leading, spacing: 8) {
+                        sectionLabel("YOUR BEST TODAY")
+                        Text(best > 0 ? best.formatted() : "—")
+                            .font(.system(size: 36, weight: .medium, design: .monospaced))
+                            .monospacedDigit()
+                    }
+                    Spacer()
+                    Button {
+                        guard best > 0, let url = DailyScoreShare.messagesURL(score: best, date: context.date) else { return }
+                        openURL(url)
+                    } label: {
+                        Label("Share best", systemImage: "square.and.arrow.up")
+                            .font(.system(size: 14, weight: .medium))
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.large)
+                    .disabled(best <= 0 || gameModel.isPlaying)
+                    .accessibilityLabel("Share today's best score to Messages")
+                }
+                if best == 0 {
+                    Text("Finish a Daily run to set your first score.")
+                        .font(.system(size: 13))
+                        .foregroundStyle(.secondary)
+                }
             }
+            .padding(22)
+            .background(SlipframeUI.inset, in: RoundedRectangle(cornerRadius: 12))
         }
     }
 
-    /// Fraction of the Eastern-Time day still remaining (1 at midnight, 0 at next midnight).
-    private func countdownProgress(_ remaining: TimeInterval) -> CGFloat {
-        let day: TimeInterval = 24 * 60 * 60
-        return CGFloat(max(0, min(1, remaining / day)))
-    }
-
-    private func dailyBestShareRow(bestScore: Int, date: Date) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text("YOUR BEST TODAY")
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
-                    .tracking(1.2)
-                    .foregroundStyle(dailyAccent.opacity(0.85))
-                Spacer(minLength: 8)
-                Text(bestScore > 0 ? "\(bestScore)" : "—")
-                    .font(.system(size: 26, weight: .bold, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundStyle(bestScore > 0 ? .primary : .secondary)
-            }
-
-            Button {
-                shareDailyBest(score: bestScore, date: date)
-            } label: {
-                HStack(spacing: 10) {
-                    Image(systemName: "message.fill")
+    private var tutorialPrompt: some View {
+        Button {
+            gameModel.startTutorial()
+        } label: {
+            HStack(spacing: 14) {
+                Image(systemName: "figure.walk")
+                    .font(.system(size: 22))
+                    .foregroundStyle(gold)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Your first crossing")
                         .font(.system(size: 16, weight: .semibold))
-                    Text(bestScore > 0 ? "Share to Messages" : "Play Daily to share")
-                        .font(.system(size: 15, weight: .semibold, design: .rounded))
-                    Spacer(minLength: 4)
+                    Text("Learn to dodge, collect, and move through the rifts.")
+                        .font(.system(size: 13))
+                        .foregroundStyle(.secondary)
                 }
-                .foregroundStyle(bestScore > 0 ? dailyAccent : .secondary)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 11)
-                .background {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(dailyAccent.opacity(bestScore > 0 ? 0.16 : 0.08))
-                }
-                .overlay {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .strokeBorder(dailyAccent.opacity(bestScore > 0 ? 0.55 : 0.22), lineWidth: 1)
-                }
+                Spacer(minLength: 0)
+                Text("Learn to play")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(gold)
+                Image(systemName: "arrow.right").foregroundStyle(gold)
             }
-            .buttonStyle(.plain)
-            .disabled(bestScore <= 0 || gameModel.isPlaying)
-            .accessibilityLabel(
-                bestScore > 0
-                ? "Share today’s Daily best score \(bestScore) to Messages"
-                : "Play Daily to unlock Messages share"
-            )
+            .padding(16)
+            .background(gold.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
         }
-        .padding(.top, 4)
+        .buttonStyle(.plain)
+        .hoverEffect(.highlight)
+        .disabled(gameModel.isPlaying)
     }
 
-    private func shareDailyBest(score: Int, date: Date) {
-        guard score > 0, let url = DailyScoreShare.messagesURL(score: score, date: date) else { return }
-        openURL(url)
-    }
-
-    private enum BiomeSelection {
-        case solo
-        case playlist
-    }
-
-    private func biomeGrid(selection: BiomeSelection) -> some View {
-        LazyVGrid(columns: biomeColumns, spacing: 10) {
-            ForEach(EnvironmentID.allCases) { id in
-                let isOn: Bool = {
-                    switch selection {
-                    case .solo: return gameModel.soloEnvironment == id
-                    case .playlist: return gameModel.playlistEnvironments.contains(id)
-                    }
-                }()
-                BiomeCard(
-                    id: id,
-                    isOn: isOn,
-                    selectionStyle: selection == .solo ? .radio : .check,
-                    accent: neon
-                ) {
-                    switch selection {
-                    case .solo:
-                        gameModel.soloEnvironment = id
-                    case .playlist:
-                        if gameModel.playlistEnvironments.contains(id) {
-                            gameModel.playlistEnvironments.remove(id)
-                            if gameModel.playlistStart == id {
-                                gameModel.playlistStart = nil
-                            }
-                        } else {
-                            gameModel.playlistEnvironments.insert(id)
-                        }
-                    }
+    private var footer: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Divider().overlay(SlipframeUI.hairline)
+            HStack {
+                Link("Privacy policy", destination: SlipframeLinks.privacyPolicy)
+                    .frame(minHeight: 44)
+                Spacer()
+                if gameModel.hasCompletedTutorial {
+                    Button("Replay tutorial") { showReplayConfirm.toggle() }
+                        .frame(minHeight: 44)
+                        .disabled(gameModel.isPlaying)
                 }
             }
+            .font(.system(size: 13))
+            .foregroundStyle(.secondary)
+            .buttonStyle(.plain)
+
+            // RealityView attachments cannot present confirmation dialogs.
+            if showReplayConfirm {
+                HStack {
+                    Text("Replay the guided tutorial?")
+                        .font(.system(size: 14))
+                    Spacer()
+                    Button("Cancel") { showReplayConfirm = false }
+                        .buttonStyle(.bordered)
+                    Button("Replay") {
+                        showReplayConfirm = false
+                        gameModel.startTutorial()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(accent)
+                }
+                .controlSize(.large)
+            }
+        }
+    }
+
+    private func sectionLabel(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 10, weight: .medium, design: .monospaced))
+            .tracking(1.2)
+            .foregroundStyle(.secondary)
+    }
+
+    private func sectionHeading(_ title: String, detail: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title).font(.system(size: 21, weight: .semibold))
+            Text(detail)
+                .font(.system(size: 14))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }
 
-/// Simple wrapping chip row without pulling in a layout dependency.
-private struct FlowChips<Content: View>: View {
-    @ViewBuilder var content: () -> Content
+/// Only the artwork changes; the hero's text and geometry stay still.
+private struct BiomeSlideshow: View {
+    var isActive: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var biome = EnvironmentID.allCases.randomElement() ?? .emberRun
+
+    private var shouldAdvance: Bool {
+        isActive && scenePhase == .active
+    }
 
     var body: some View {
-        LazyVGrid(
-            columns: [GridItem(.adaptive(minimum: 96), spacing: 8)],
-            alignment: .leading,
-            spacing: 8
-        ) {
-            content()
+        GeometryReader { proxy in
+            ZStack {
+                Image("Biome_\(biome.rawValue)")
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: proxy.size.width, height: proxy.size.height)
+                    .clipped()
+                    .id(biome)
+                    .transition(.opacity)
+            }
+            .frame(width: proxy.size.width, height: proxy.size.height)
+            .clipped()
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+        .task(id: shouldAdvance) {
+            guard shouldAdvance else { return }
+            // Use a separate shuffled bag; menu animation never consumes the
+            // deterministic gameplay random stream used by Daily challenges.
+            var upcoming = EnvironmentID.allCases.filter { $0 != biome }.shuffled()
+            while !Task.isCancelled {
+                do {
+                    try await Task.sleep(for: .seconds(6))
+                } catch {
+                    return
+                }
+                guard !Task.isCancelled else { return }
+                if upcoming.isEmpty {
+                    upcoming = EnvironmentID.allCases.shuffled()
+                    if upcoming.count > 1, upcoming.first == biome {
+                        upcoming.swapAt(0, 1)
+                    }
+                }
+                guard !upcoming.isEmpty else { return }
+                let next = upcoming.removeFirst()
+                withAnimation(reduceMotion ? nil : .easeInOut(duration: 1)) {
+                    biome = next
+                }
+            }
         }
     }
 }
 
 #Preview {
-    LevelSelectView()
-        .environmentObject(GameModel())
+    let model = GameModel()
+    return LevelSelectView()
+        .environmentObject(model)
+        .environmentObject(model.personalBests)
+        .padding(28)
+        .frame(width: 720)
+        .xenotechPanel(primary: SlipframeUI.accent)
 }

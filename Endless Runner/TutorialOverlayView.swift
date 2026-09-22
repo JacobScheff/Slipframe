@@ -9,9 +9,10 @@ import SwiftUI
 
 struct TutorialOverlayView: View {
     @EnvironmentObject private var gameModel: GameModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private let neon = Color(red: 0.35, green: 0.92, blue: 1.0)
-    private let success = Color(red: 0.45, green: 0.98, blue: 0.72)
+    private let neon = SlipframeUI.accent
+    private let success = Color(red: 0.58, green: 0.88, blue: 0.73)
 
     var body: some View {
         ZStack {
@@ -23,20 +24,25 @@ struct TutorialOverlayView: View {
             }
         }
         .frame(minWidth: 620, minHeight: 160)
-        .animation(.easeInOut(duration: 0.25), value: gameModel.tutorialOverlayTitle)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: gameModel.tutorialOverlayTitle)
         .allowsHitTesting(false)
     }
 
     private var coachingCard: some View {
         VStack(spacing: 14) {
-            Text(gameModel.tutorialOverlayTitle)
-                .font(.system(size: 40, weight: .semibold, design: .rounded))
+            Text("LEARN TO PLAY")
+                .font(.system(size: 12, weight: .medium, design: .monospaced))
+                .tracking(2)
                 .foregroundStyle(neon)
+            Text(gameModel.tutorialOverlayTitle)
+                .font(.system(size: 36, weight: .semibold))
+                .foregroundStyle(.primary)
                 .multilineTextAlignment(.center)
 
             Text(gameModel.tutorialOverlayBody)
-                .font(.system(size: 28, weight: .medium, design: .rounded))
-                .foregroundStyle(.primary.opacity(0.92))
+                .font(.system(size: 25, weight: .regular))
+                .foregroundStyle(.secondary)
+                .lineSpacing(4)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 560)
         }
@@ -47,29 +53,17 @@ struct TutorialOverlayView: View {
     }
 
     private func successBanner(text: String) -> some View {
-        let scale = Double(gameModel.tutorialBannerScale)
+        let scale = reduceMotion ? 1 : Double(gameModel.tutorialBannerScale)
         let opacity = Double(gameModel.tutorialBannerOpacity)
-        let glow = Double(gameModel.tutorialBannerGlow)
-        let lift = Double(gameModel.tutorialBannerExit) * -36
+        let lift = reduceMotion ? 0 : Double(gameModel.tutorialBannerExit) * -36
 
         return Text(text)
-            .font(.system(size: 58, weight: .bold, design: .rounded))
-            .tracking(4 + glow * 1.5)
-            .foregroundStyle(
-                LinearGradient(
-                    colors: [
-                        .white,
-                        success,
-                        neon
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
+            .font(.system(size: 48, weight: .semibold))
+            .tracking(1)
+            .foregroundStyle(success)
             .padding(.horizontal, 48)
             .padding(.vertical, 30)
-            .xenotechPanel(primary: success, secondary: neon, cornerRadius: 22, fillOpacity: 0.36)
-            .shadow(color: success.opacity(0.35 + glow * 0.35), radius: 18 + glow * 16)
+            .xenotechPanel(primary: success, cornerRadius: 22, fillOpacity: 0.36)
             .scaleEffect(scale)
             .offset(y: lift)
             .opacity(opacity)

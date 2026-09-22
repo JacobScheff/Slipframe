@@ -136,7 +136,7 @@ enum RiftModifier: String, CaseIterable, Equatable, Codable {
 
     var effectDescription: String {
         switch self {
-        case .tokenSurge: return "2× tokens"
+        case .tokenSurge: return "2× token value"
         case .aegis: return "Blocks one hit"
         case .overdrive: return "+25% score"
         case .magnet: return "Longer pickup reach"

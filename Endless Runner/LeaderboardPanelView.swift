@@ -18,8 +18,8 @@ struct LeaderboardPanelView: View {
     @State private var metric: LeaderboardMetric = .score
     @State private var audience: LeaderboardAudience = .allPlayers
 
-    private let neon = Color(red: 0.35, green: 0.92, blue: 1.0)
-    private let gold = Color(red: 1.0, green: 0.82, blue: 0.32)
+    private let neon = SlipframeUI.accent
+    private let gold = SlipframeUI.reward
     private let dailyAccent = Color(red: 0.45, green: 0.88, blue: 0.78)
 
     private var boards: [LeaderboardBoard] {
@@ -37,20 +37,20 @@ struct LeaderboardPanelView: View {
         VStack(alignment: .leading, spacing: 16) {
             header
 
-            metricPicker
+            localBestRow
 
-            audiencePicker
+            Divider().opacity(0.35)
+
+            metricPicker
 
             boardPicker
                 .padding(.top, 4)
 
-            Divider().opacity(0.35)
-
-            localBestRow
-
             if case .daily = selectedBoard, metric == .score {
                 dailyMessagesShareButton
             }
+
+            audiencePicker
 
             remoteBlock
         }
@@ -83,87 +83,36 @@ struct LeaderboardPanelView: View {
     }
 
     private var header: some View {
-        HStack(alignment: .center, spacing: 12) {
-            ZStack {
-                Circle()
-                    .fill(gold.opacity(0.18))
-                    .frame(width: 44, height: 44)
-                Image(systemName: "trophy.fill")
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(gold)
-                    .symbolRenderingMode(.hierarchical)
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Leaderboards")
+                .font(.system(size: 23, weight: .semibold))
+            HStack(spacing: 8) {
+                Image(systemName: gameCenter.isAuthenticated ? "person.crop.circle.badge.checkmark" : "person.crop.circle")
+                    .foregroundStyle(neon)
+                    .accessibilityHidden(true)
+                Text(gameCenter.statusMessage)
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            VStack(alignment: .leading, spacing: 2) {
-                Text("SCORES")
-                    .font(.system(size: 12, weight: .bold, design: .rounded))
-                    .tracking(2)
-                    .foregroundStyle(gold.opacity(0.9))
-                Text("Leaderboard")
-                    .font(.system(size: 24, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.primary)
-            }
-            Spacer(minLength: 8)
-            Text(gameCenter.statusMessage)
-                .font(.system(size: 12, weight: .medium, design: .rounded))
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
-                .multilineTextAlignment(.trailing)
-                .frame(maxWidth: 240, alignment: .trailing)
         }
     }
 
-    /// Primary Score / Tokens sections — large, visual, spaced away from filters below.
     private var metricPicker: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 8) {
             ForEach(LeaderboardMetric.allCases) { option in
-                metricSectionButton(option)
+                Button {
+                    metric = option
+                } label: {
+                    Label(option.title, systemImage: metricSymbol(for: option))
+                        .font(.system(size: 15, weight: .semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.horizontal, 12)
+                }
+                .buttonStyle(ConsoleSelectionStyle(selected: metric == option))
+                .accessibilityAddTraits(metric == option ? .isSelected : [])
             }
         }
-    }
-
-    private func metricSectionButton(_ option: LeaderboardMetric) -> some View {
-        let selected = metric == option
-        let color = accent(for: option)
-
-        return Button {
-            metric = option
-        } label: {
-            VStack(spacing: 6) {
-                Image(systemName: metricSymbol(for: option))
-                    .font(.system(size: 22, weight: .semibold))
-                    .foregroundStyle(selected ? color : color.opacity(0.55))
-                    .symbolRenderingMode(.hierarchical)
-
-                Text(option.title.uppercased())
-                    .font(.system(size: 14, weight: .bold, design: .rounded))
-                    .tracking(1.4)
-                    .foregroundStyle(selected ? color : .secondary)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
-            .background {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: selected
-                                ? [color.opacity(0.28), color.opacity(0.1)]
-                                : [Color.white.opacity(0.07), Color.white.opacity(0.03)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .strokeBorder(
-                                selected ? color.opacity(0.85) : Color.white.opacity(0.12),
-                                lineWidth: selected ? 1.6 : 1
-                            )
-                    }
-            }
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(option.title)
-        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     private var audiencePicker: some View {
@@ -181,32 +130,25 @@ struct LeaderboardPanelView: View {
     }
 
     private var boardPicker: some View {
-        LazyVGrid(columns: boardColumns, spacing: 8) {
-            ForEach(boards) { board in
-                let selected = selectedBoard == board
-                Button {
-                    selectedBoard = board
-                } label: {
-                    Text(board.chipTitle)
-                        .font(.system(size: 13, weight: selected ? .bold : .medium, design: .rounded))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 9)
-                        .frame(maxWidth: .infinity)
-                        .background {
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(selected ? gold.opacity(0.22) : Color.white.opacity(0.06))
-                        }
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .strokeBorder(
-                                    selected ? gold.opacity(0.7) : Color.white.opacity(0.12),
-                                    lineWidth: 1
-                                )
-                        }
+        VStack(alignment: .leading, spacing: 10) {
+            Text("LEADERBOARD")
+                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                .tracking(1.2)
+                .foregroundStyle(.secondary)
+            LazyVGrid(columns: boardColumns, spacing: 8) {
+                ForEach(boards) { board in
+                    let selected = selectedBoard == board
+                    Button {
+                        selectedBoard = board
+                    } label: {
+                        Text(board.chipTitle)
+                            .font(.system(size: 13, weight: .medium))
+                            .frame(maxWidth: .infinity)
+                            .padding(.horizontal, 8)
+                    }
+                    .buttonStyle(ConsoleSelectionStyle(selected: selected))
+                    .accessibilityAddTraits(selected ? .isSelected : [])
                 }
-                .buttonStyle(.plain)
             }
         }
     }
@@ -218,18 +160,18 @@ struct LeaderboardPanelView: View {
         return HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("YOUR BEST · \(selectedBoard.title.uppercased())")
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .font(.system(size: 11, weight: .bold, design: .default))
                     .tracking(1.2)
                     .foregroundStyle(accent(for: metric).opacity(0.85))
-                Text(value > 0 ? "\(value)" : "—")
-                    .font(.system(size: 34, weight: .bold, design: .rounded))
+                Text(value > 0 ? value.formatted() : "—")
+                    .font(.system(size: 38, weight: .medium, design: .monospaced))
                     .monospacedDigit()
                     .foregroundStyle(highlightNew ? accent(for: metric) : .primary)
             }
             Spacer()
             if highlightNew {
                 Text("NEW")
-                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .font(.system(size: 12, weight: .bold, design: .default))
                     .tracking(1.1)
                     .foregroundStyle(accent(for: metric))
                     .padding(.horizontal, 8)
@@ -253,7 +195,7 @@ struct LeaderboardPanelView: View {
                 Image(systemName: "message.fill")
                     .font(.system(size: 15, weight: .semibold))
                 Text(value > 0 ? "Share Daily best to Messages" : "Play Daily to share")
-                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .font(.system(size: 14, weight: .semibold, design: .default))
                 Spacer(minLength: 4)
             }
             .foregroundStyle(value > 0 ? dailyAccent : .secondary)
@@ -269,6 +211,7 @@ struct LeaderboardPanelView: View {
             }
         }
         .buttonStyle(.plain)
+        .hoverEffect(.highlight)
         .disabled(value <= 0)
         .accessibilityLabel(
             value > 0
@@ -285,29 +228,29 @@ struct LeaderboardPanelView: View {
                 ? "Sign in to Game Center to see Friends."
                 : "Sign in to Game Center for All Players rankings."
             )
-            .font(.system(size: 14, weight: .regular, design: .rounded))
+            .font(.system(size: 14, weight: .regular, design: .default))
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
         } else if gameCenter.isLoadingRemote {
-            Text("Loading \(audience.title.lowercased())…")
-                .font(.system(size: 14, weight: .medium, design: .rounded))
+            ProgressView("Loading \(audience.title.lowercased())…")
+                .font(.system(size: 14, weight: .medium, design: .default))
                 .foregroundStyle(.secondary)
         } else if let error = gameCenter.remoteErrorMessage, (gameCenter.remoteSnapshot?.entries.isEmpty ?? true) {
             Text(error)
-                .font(.system(size: 13, weight: .regular, design: .rounded))
+                .font(.system(size: 13, weight: .regular, design: .default))
                 .foregroundStyle(.orange.opacity(0.95))
                 .fixedSize(horizontal: false, vertical: true)
         } else if let snapshot = gameCenter.remoteSnapshot {
             VStack(alignment: .leading, spacing: 8) {
                 if let rank = snapshot.localRank, let value = snapshot.localValue {
                     Text("Your rank: #\(rank) · \(value)")
-                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .font(.system(size: 13, weight: .semibold, design: .default))
                         .foregroundStyle(accent(for: metric).opacity(0.9))
                 }
 
                 if snapshot.entries.isEmpty {
                     Text("No scores yet for \(audience.title.lowercased()).")
-                        .font(.system(size: 14, weight: .regular, design: .rounded))
+                        .font(.system(size: 14, weight: .regular, design: .default))
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(snapshot.entries.prefix(8)) { entry in
@@ -316,8 +259,8 @@ struct LeaderboardPanelView: View {
                 }
             }
         } else {
-            Text("Pulling \(audience.title.lowercased()) scores…")
-                .font(.system(size: 14, weight: .medium, design: .rounded))
+            ProgressView("Loading \(audience.title.lowercased()) scores…")
+                .font(.system(size: 14, weight: .medium, design: .default))
                 .foregroundStyle(.secondary)
         }
     }
@@ -335,7 +278,7 @@ struct LeaderboardPanelView: View {
                         .foregroundStyle(medalColor(for: entry.rank))
                 } else {
                     Text("\(entry.rank)")
-                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                        .font(.system(size: 12, weight: .bold, design: .default))
                         .foregroundStyle(.secondary)
                 }
             }
@@ -343,15 +286,23 @@ struct LeaderboardPanelView: View {
                 .font(.system(
                     size: 14,
                     weight: entry.isLocalPlayer ? .bold : .medium,
-                    design: .rounded
+                    design: .default
                 ))
                 .foregroundStyle(entry.isLocalPlayer ? accent : .primary)
                 .lineLimit(1)
             Spacer(minLength: 8)
             Text("\(entry.value)")
-                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                .font(.system(size: 14, weight: .semibold, design: .default))
                 .monospacedDigit()
         }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 12)
+        .background(entry.isLocalPlayer ? accent.opacity(0.08) : Color.clear, in: RoundedRectangle(cornerRadius: 8))
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(SlipframeUI.hairline).frame(height: 1)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Rank \(entry.rank), \(entry.displayName), \(entry.value)\(entry.isLocalPlayer ? ", you" : "")")
     }
 
     private func medalSymbol(for rank: Int) -> String? {
@@ -380,26 +331,21 @@ struct LeaderboardPanelView: View {
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            Text(title)
-                .font(.system(size: 14, weight: selected ? .bold : .medium, design: .rounded))
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .frame(maxWidth: .infinity)
-                .background {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(selected ? accent.opacity(0.22) : Color.white.opacity(0.06))
+            HStack(spacing: 6) {
+                if selected {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(accent)
                 }
-                .overlay {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .strokeBorder(
-                            selected ? accent.opacity(0.7) : Color.white.opacity(0.12),
-                            lineWidth: 1
-                        )
-                }
-                .opacity(enabled ? 1 : 0.45)
+                Text(title)
+                    .font(.system(size: 13, weight: .medium))
+            }
+            .padding(.horizontal, 12)
+            .frame(maxWidth: .infinity)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(ConsoleSelectionStyle(selected: selected))
         .disabled(!enabled)
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     private func accent(for metric: LeaderboardMetric) -> Color {

@@ -34,54 +34,85 @@ enum MenuConsoleTab: String, CaseIterable, Identifiable {
 struct MenuConsoleView: View {
     @EnvironmentObject private var gameModel: GameModel
     @State private var tab: MenuConsoleTab = .play
+    @State private var contentHeight: CGFloat = 360
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private let neon = Color(red: 0.35, green: 0.92, blue: 1.0)
-    private let gold = Color(red: 1.0, green: 0.82, blue: 0.32)
+    private let neon = SlipframeUI.accent
+    private let gold = SlipframeUI.reward
+
+    private var consoleWidth: CGFloat {
+        if tab == .scores { return 800 }
+        if tab == .play, gameModel.playKind == .playlist || gameModel.playKind == .solo { return 800 }
+        return 720
+    }
+
+    /// Keep the world-anchored console within a comfortable viewing envelope.
+    /// Longer guides and rankings can scroll after the panel reaches this limit.
+    private var viewportHeight: CGFloat {
+        min(max(contentHeight, 220), tab == .play ? 660 : 720)
+    }
 
     var body: some View {
-        VStack(spacing: 18) {
+        VStack(spacing: 0) {
             header
+                .padding(.horizontal, 28)
+                .padding(.top, 26)
+                .padding(.bottom, 22)
             tabPicker
-            Divider().opacity(0.28)
+                .padding(.horizontal, 28)
+                .padding(.bottom, 18)
+            Divider().overlay(SlipframeUI.hairline)
 
-            Group {
-                switch tab {
-                case .play:
-                    LevelSelectView()
-                case .scores:
-                    LeaderboardPanelView()
-                case .settings:
-                    settingsBody
+            ScrollView {
+                Group {
+                    switch tab {
+                    case .play:
+                        LevelSelectView()
+                    case .scores:
+                        LeaderboardPanelView()
+                    case .settings:
+                        settingsBody
+                    }
+                }
+                .padding(28)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+                .fixedSize(horizontal: false, vertical: true)
+                .onGeometryChange(for: CGFloat.self) { proxy in
+                    ceil(proxy.size.height)
+                } action: { height in
+                    contentHeight = height
                 }
             }
-            .frame(minHeight: 280, alignment: .top)
+            .frame(height: viewportHeight)
+            .contentShape(Rectangle())
+            .scrollBounceBehavior(.basedOnSize)
+            .scrollIndicators(.visible)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: viewportHeight)
+            .id(tab)
+
+            if tab == .play {
+                launchBar
+            }
         }
-        .padding(.horizontal, 28)
-        .padding(.vertical, 22)
-        .frame(width: 720, alignment: .top)
-        .xenotechPanel(primary: neon, secondary: gold, cornerRadius: 26)
-        .animation(.easeInOut(duration: 0.18), value: tab)
+        .frame(width: consoleWidth, alignment: .top)
+        .xenotechPanel(primary: neon, cornerRadius: 22)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: consoleWidth)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: tab)
     }
 
     private var header: some View {
         HStack(spacing: 14) {
-            RiftGlyph(accent: neon, size: 34)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("SLIPFRAME")
-                    .font(.system(size: 13, weight: .bold, design: .rounded))
-                    .tracking(3.2)
-                    .foregroundStyle(neon.opacity(0.9))
-                Text("Command Console")
-                    .font(.system(size: 26, weight: .bold, design: .rounded))
-                    .foregroundStyle(.primary)
-            }
+            RiftGlyph(accent: neon, size: 32)
+            Text("SLIPFRAME")
+                .font(.system(size: 25, weight: .semibold))
+                .tracking(4)
+                .foregroundStyle(.primary)
             Spacer(minLength: 8)
-            LaneGlyph(accent: neon, lit: gameModel.showsTrack)
         }
     }
 
     private var tabPicker: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 6) {
             ForEach(MenuConsoleTab.allCases) { item in
                 let selected = tab == item
                 Button {
@@ -92,44 +123,59 @@ struct MenuConsoleView: View {
                             .font(.system(size: 16, weight: .semibold))
                             .symbolRenderingMode(.hierarchical)
                         Text(item.title)
-                            .font(.system(size: 16, weight: selected ? .bold : .semibold, design: .rounded))
+                            .font(.system(size: 16, weight: selected ? .semibold : .medium))
                     }
-                    .foregroundStyle(selected ? neon : .secondary)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
-                    .background {
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .fill(
-                                LinearGradient(
-                                    colors: selected
-                                        ? [neon.opacity(0.28), neon.opacity(0.08)]
-                                        : [Color.white.opacity(0.07), Color.white.opacity(0.03)],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                            )
-                    }
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .strokeBorder(
-                                selected ? neon.opacity(0.8) : Color.white.opacity(0.1),
-                                lineWidth: selected ? 1.5 : 1
-                            )
-                    }
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(ConsoleSelectionStyle(selected: selected))
                 .accessibilityLabel(item.title)
                 .accessibilityAddTraits(selected ? .isSelected : [])
             }
         }
     }
 
+    private var launchBar: some View {
+        VStack(spacing: 0) {
+            Divider().overlay(SlipframeUI.hairline)
+            HStack(spacing: 20) {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(gameModel.canStartRun ? "READY TO RUN" : "BUILD YOUR PLAYLIST")
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .tracking(1.2)
+                        .foregroundStyle(gameModel.canStartRun ? neon : gold)
+                    Text(gameModel.canStartRun ? gameModel.resolvedPlayMode.displayLabel : "Select at least one biome above.")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+                Button {
+                    gameModel.startRun()
+                } label: {
+                    Label(gameModel.isGameOver ? "Run again" : "Start run", systemImage: "play.fill")
+                        .font(.system(size: 17, weight: .semibold))
+                        .frame(minWidth: 142, minHeight: 32)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(neon)
+                .controlSize(.large)
+                .disabled(!gameModel.canStartRun || gameModel.isPlaying)
+            }
+            .padding(.horizontal, 28)
+            .padding(.vertical, 20)
+        }
+    }
+
     private var settingsBody: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Text("DISPLAY")
-                .font(.system(size: 12, weight: .bold, design: .rounded))
-                .tracking(1.4)
-                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Display & comfort")
+                    .font(.system(size: 23, weight: .semibold))
+                Text("Keep your view comfortable while you play.")
+                    .font(.system(size: 14))
+                    .foregroundStyle(.secondary)
+            }
 
             HStack(alignment: .center, spacing: 16) {
                 LaneGlyph(accent: neon, lit: gameModel.showsTrack)
@@ -137,9 +183,9 @@ struct MenuConsoleView: View {
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Floor track")
-                        .font(.system(size: 20, weight: .bold, design: .rounded))
-                    Text("Optional neon lanes on the floor. The play area stays the same either way — hide the slab if you want a clearer view of the room.")
-                        .font(.system(size: 14, weight: .regular, design: .rounded))
+                        .font(.system(size: 17, weight: .semibold))
+                    Text("Show the three lanes beneath you. Hiding them keeps the same play area.")
+                        .font(.system(size: 14))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -154,21 +200,18 @@ struct MenuConsoleView: View {
             .padding(16)
             .background {
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(neon.opacity(gameModel.showsTrack ? 0.14 : 0.06))
+                    .fill(SlipframeUI.inset)
             }
             .overlay {
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .strokeBorder(neon.opacity(gameModel.showsTrack ? 0.55 : 0.18), lineWidth: 1)
+                    .strokeBorder(SlipframeUI.hairline, lineWidth: 1)
             }
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("Floor track")
-            .accessibilityValue(gameModel.showsTrack ? "Shown" : "Hidden")
 
             HStack(spacing: 10) {
                 Image(systemName: "figure.walk")
                     .foregroundStyle(gold)
-                Text("Step off the play area during a run and the stream winds down. Step back in and it eases back up to speed.")
-                    .font(.system(size: 14, weight: .regular, design: .rounded))
+                Text("Need a breather? Step outside the play area to slow the stream. Step back in when you’re ready.")
+                    .font(.system(size: 14))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -180,6 +223,37 @@ struct MenuConsoleView: View {
 
 #Preview {
     let model = GameModel()
+    return MenuConsoleView()
+        .environmentObject(model)
+        .environmentObject(model.personalBests)
+        .environmentObject(model.gameCenter)
+}
+
+#Preview("Playlist setup") {
+    let model = GameModel(defaults: UserDefaults(suiteName: "preview.console.playlist"))
+    model.hasCompletedTutorial = true
+    model.playKind = .playlist
+    return MenuConsoleView()
+        .environmentObject(model)
+        .environmentObject(model.personalBests)
+        .environmentObject(model.gameCenter)
+}
+
+#Preview("Empty playlist") {
+    let model = GameModel(defaults: UserDefaults(suiteName: "preview.console.empty"))
+    model.hasCompletedTutorial = true
+    model.playKind = .playlist
+    model.playlistEnvironments = []
+    return MenuConsoleView()
+        .environmentObject(model)
+        .environmentObject(model.personalBests)
+        .environmentObject(model.gameCenter)
+}
+
+#Preview("Daily challenge") {
+    let model = GameModel(defaults: UserDefaults(suiteName: "preview.console.daily"))
+    model.hasCompletedTutorial = true
+    model.playKind = .daily
     return MenuConsoleView()
         .environmentObject(model)
         .environmentObject(model.personalBests)
