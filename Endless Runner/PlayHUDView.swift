@@ -11,16 +11,16 @@ struct PlayHUDView: View {
     @EnvironmentObject private var gameModel: GameModel
     /// Separate from `GameModel` so score/coin ticks do not invalidate RealityView.
     @EnvironmentObject private var stats: RunStats
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private let neon = Color(red: 0.35, green: 0.92, blue: 1.0)
-    private let gold = Color(red: 1.0, green: 0.82, blue: 0.32)
-    private let hazard = Color(red: 1.0, green: 0.35, blue: 0.32)
+    private let neon = SlipframeUI.accent
+    private let gold = SlipframeUI.reward
 
     var body: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: 16) {
             if gameModel.isTutorialRun {
                 Text("TUTORIAL")
-                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .font(.system(size: 13, weight: .medium, design: .monospaced))
                     .tracking(3)
                     .foregroundStyle(neon.opacity(0.85))
             } else {
@@ -34,67 +34,86 @@ struct PlayHUDView: View {
             controls
         }
         .padding(.horizontal, 28)
-        .padding(.vertical, 18)
-        .frame(minWidth: 430)
-        .xenotechPanel(primary: neon, secondary: gold, cornerRadius: 20)
+        .padding(.vertical, 22)
+        .frame(width: 460)
+        .xenotechPanel(primary: neon, cornerRadius: 18)
         // Dissolve center HUD during overdrive / outro — coaching overlay owns the moment.
         .opacity(centerHUDOpacity)
-        .animation(.easeInOut(duration: 0.45), value: gameModel.tutorialOverlayOpacity)
-        .animation(.easeInOut(duration: 0.3), value: gameModel.tutorialBannerText)
-        .animation(.easeInOut(duration: 0.25), value: gameModel.isOffPlayfield)
-        .animation(.easeInOut(duration: 0.35), value: gameModel.isChoosingPortal)
-        .animation(.easeInOut(duration: 0.3), value: gameModel.isGameOverMenuVisible)
+        .allowsHitTesting(centerHUDOpacity > 0)
+        .accessibilityHidden(centerHUDOpacity == 0)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.45), value: gameModel.tutorialOverlayOpacity)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: gameModel.tutorialBannerText)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: gameModel.isOffPlayfield)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.35), value: gameModel.isChoosingPortal)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: gameModel.isGameOverMenuVisible)
     }
 
     private var runReadout: some View {
-        VStack(spacing: 10) {
-            HStack(alignment: .center, spacing: 22) {
-                compactMetric(title: "SCORE", value: "\(stats.score)", accent: neon)
+        VStack(spacing: 16) {
+            if gameModel.isGameOver {
+                HStack {
+                    Text("RUN COMPLETE")
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .tracking(1.6)
+                    Spacer()
+                    if gameModel.lastPersonalBestUpdate?.scoreImproved == true {
+                        Label("Personal best", systemImage: "trophy.fill")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(gold)
+                    }
+                }
+                .foregroundStyle(.secondary)
+            }
+
+            HStack(alignment: .center, spacing: 20) {
+                compactMetric(title: "SCORE", value: stats.score.formatted(), accent: neon)
+                Spacer(minLength: 0)
                 Divider().frame(height: 38).opacity(0.3)
-                compactMetric(title: "TOKENS", value: "\(stats.coinsCollected)", accent: gold)
-
-                if let modifier = stats.modifier {
-                    Divider().frame(height: 38).opacity(0.3)
-                    HStack(spacing: 7) {
-                        RiftModifierIcon(modifier: modifier, accent: gold, size: 17)
-                        Text(activeModifierEffect(for: modifier))
-                            .font(.system(size: 10, weight: .bold, design: .rounded))
-                            .tracking(0.7)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-                            .minimumScaleFactor(0.75)
-                    }
-                    .frame(maxWidth: 150, alignment: .leading)
-                }
+                compactMetric(title: "TOKENS", value: stats.coinsCollected.formatted(), accent: gold)
             }
 
-            HStack(spacing: 10) {
-                Text("SCORE BONUS")
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
-                    .tracking(1.1)
-                    .foregroundStyle(neon)
-                GeometryReader { proxy in
-                    ZStack(alignment: .leading) {
-                        Capsule().fill(Color.white.opacity(0.09))
-                        Capsule()
-                            .fill(
-                                LinearGradient(
-                                    colors: [neon, stats.flow >= 80 ? gold : neon.opacity(0.72)],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
+            if !gameModel.isGameOver {
+                HStack(spacing: 10) {
+                    Text("SCORE BONUS")
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .tracking(1.1)
+                        .foregroundStyle(neon)
+                    GeometryReader { proxy in
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(Color.white.opacity(0.09))
+                            Capsule()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [neon, stats.flow >= 80 ? gold : neon.opacity(0.72)],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
                                 )
-                            )
-                            .frame(width: proxy.size.width * CGFloat(stats.flow) / 100)
+                                .frame(width: proxy.size.width * CGFloat(min(100, max(0, stats.flow))) / 100)
+                        }
                     }
+                    .frame(height: 7)
+                    Text("+\(stats.flow)%")
+                        .font(.system(size: 12, weight: .bold, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 48, alignment: .trailing)
                 }
-                .frame(height: 7)
-                Text("+\(stats.flow)%")
-                    .font(.system(size: 12, weight: .bold, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 48, alignment: .trailing)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Score bonus \(stats.flow) percent")
             }
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Score bonus \(stats.flow) percent")
+
+            if let modifier = stats.modifier, !gameModel.isGameOver {
+                HStack(spacing: 8) {
+                    RiftModifierIcon(modifier: modifier, accent: gold, size: 16)
+                    Text(modifier.displayName)
+                        .font(.system(size: 13, weight: .semibold))
+                    Spacer(minLength: 0)
+                    Text(activeModifierEffect(for: modifier))
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                }
+                .accessibilityElement(children: .combine)
+            }
 
             if gameModel.isGameOver {
                 Divider().opacity(0.3)
@@ -112,15 +131,17 @@ struct PlayHUDView: View {
     private func resultMetric(label: String, value: String, accent: Color) -> some View {
         VStack(spacing: 2) {
             Text(value)
-                .font(.system(size: label == "GRADE" ? 25 : 18, weight: .bold, design: .rounded))
+                .font(.system(size: label == "GRADE" ? 28 : 20, weight: .medium, design: .monospaced))
                 .monospacedDigit()
                 .foregroundStyle(accent)
             Text(label)
-                .font(.system(size: 9, weight: .bold, design: .rounded))
-                .tracking(0.9)
+                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                .tracking(0.3)
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(label), \(value)")
     }
 
     private var performanceGrade: String {
@@ -141,23 +162,28 @@ struct PlayHUDView: View {
     private func compactMetric(title: String, value: String, accent: Color) -> some View {
         VStack(alignment: .leading, spacing: 1) {
             Text(title)
-                .font(.system(size: 10, weight: .bold, design: .rounded))
+                .font(.system(size: 11, weight: .medium, design: .monospaced))
                 .tracking(1.2)
                 .foregroundStyle(accent.opacity(0.85))
             Text(value)
-                .font(.system(size: 30, weight: .bold, design: .rounded))
+                .font(.system(size: title == "SCORE" ? 38 : 28, weight: .medium, design: .monospaced))
                 .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.65)
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(title), \(value)")
     }
 
     private func activeModifierEffect(for modifier: RiftModifier) -> String {
         if modifier == .aegis, stats.shieldCharges == 0 {
-            return "SHIELD SPENT"
+            return "Shield spent"
         }
-        return modifier.effectDescription.uppercased()
+        return modifier.effectDescription
     }
 
     private var centerHUDOpacity: Double {
+        if !gameModel.isPlaying, !gameModel.isGameOver, !gameModel.isTutorialRun { return 0 }
         if gameModel.isChoosingPortal { return 0 }
         if gameModel.isGameOver, !gameModel.isGameOverMenuVisible { return 0 }
         // Keep Skip reachable for the whole tutorial (including auto-start / overdrive).
@@ -173,10 +199,10 @@ struct PlayHUDView: View {
             LaneGlyph(accent: gold, lit: false)
             VStack(alignment: .leading, spacing: 2) {
                 Text("Return to the track")
-                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                    .font(.system(size: 18, weight: .bold, design: .default))
                     .foregroundStyle(gold)
                 Text("Obstacles and music wind down until you step back in.")
-                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                    .font(.system(size: 13, weight: .medium, design: .default))
                     .foregroundStyle(.secondary)
             }
         }
@@ -203,70 +229,26 @@ struct PlayHUDView: View {
                     gameModel.skipTutorial()
                 } label: {
                     Label("Skip Tutorial", systemImage: "forward.end.fill")
-                        .font(.system(size: 20, weight: .semibold, design: .rounded))
+                        .font(.system(size: 20, weight: .semibold, design: .default))
                         .frame(minWidth: 200)
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.large)
             } else {
                 Text("Clearing the track…")
-                    .font(.system(size: 17, weight: .medium, design: .rounded))
+                    .font(.system(size: 17, weight: .medium, design: .default))
                     .foregroundStyle(.secondary)
             }
-        } else if gameModel.isGameOver, gameModel.isGameOverMenuVisible {
-            Button {
-                gameModel.startRun()
-            } label: {
-                Label("Restart", systemImage: "arrow.counterclockwise")
-                    .font(.system(size: 22, weight: .semibold, design: .rounded))
-                    .frame(minWidth: 200)
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(hazard)
-            .controlSize(.large)
-            .disabled(!gameModel.canStartRun)
-        } else if !gameModel.isPlaying {
-            Button {
-                gameModel.startRun()
-            } label: {
-                Label("Start Run", systemImage: "play.fill")
-                    .font(.system(size: 22, weight: .semibold, design: .rounded))
-                    .frame(minWidth: 200)
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(neon)
-            .controlSize(.large)
-            .disabled(!gameModel.canStartRun)
-        }
-    }
-
-    private func metricChip(title: String, value: String, accent: Color) -> some View {
-        VStack(spacing: 4) {
-            Text(title.uppercased())
-                .font(.system(size: 13, weight: .bold, design: .rounded))
-                .tracking(1.4)
-                .foregroundStyle(accent.opacity(0.9))
-            Text(value)
-                .font(.system(size: 48, weight: .bold, design: .rounded))
-                .monospacedDigit()
-                .foregroundStyle(.primary)
-        }
-        .frame(minWidth: 150)
-        .padding(.vertical, 12)
-        .padding(.horizontal, 16)
-        .background {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(accent.opacity(0.1))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .strokeBorder(accent.opacity(0.3), lineWidth: 1)
-                }
         }
     }
 }
 
 #Preview {
     let model = GameModel()
+    model.isPlaying = true
+    model.stats.score = 12480
+    model.stats.coinsCollected = 86
+    model.stats.flow = 72
     return PlayHUDView()
         .environmentObject(model)
         .environmentObject(model.stats)

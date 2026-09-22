@@ -2,14 +2,41 @@
 //  XenotechPanel.swift
 //  Slipframe
 //
-//  Shared "alien instrumentation" panel chrome — tinted glass, a gradient
-//  hairline border, and corner-bracket reticle accents applied uniformly to
-//  every world-anchored SwiftUI surface (HUD, command console, tutorial overlay)
-//  so the whole UI reads as one piece of synthetic tech instead of a plain
-//  rounded card per view.
+//  Shared spatial instrumentation: charcoal glass, restrained rift marks,
+//  and a consistent palette for controls, readouts, and coaching.
 //
 
 import SwiftUI
+
+/// A small material palette: cyan identifies interaction, amber identifies rewards.
+enum SlipframeUI {
+    static let accent = Color(red: 0.48, green: 0.86, blue: 0.90)
+    static let reward = Color(red: 0.95, green: 0.77, blue: 0.46)
+    static let surface = Color(red: 0.045, green: 0.065, blue: 0.08)
+    static let inset = Color.white.opacity(0.045)
+    static let hairline = Color.white.opacity(0.12)
+}
+
+/// Shared gaze target and pressed state for custom selection controls.
+struct ConsoleSelectionStyle: ButtonStyle {
+    var selected: Bool = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .foregroundStyle(selected ? Color.white : Color.white.opacity(0.72))
+            .frame(minHeight: 48)
+            .background {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(Color.white.opacity(configuration.isPressed ? 0.16 : (selected ? 0.10 : 0.025)))
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(selected ? SlipframeUI.accent.opacity(0.65) : .clear, lineWidth: 1)
+            }
+            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .hoverEffect(.highlight)
+    }
+}
 
 /// Four L-shaped accent marks drawn just inside a panel's bounds — the
 /// "targeting reticle" motif that ties every panel back to the game's
@@ -52,11 +79,10 @@ struct XenotechCornerBrackets: Shape {
     }
 }
 
-/// Shared panel chrome: tinted glass fill, gradient hairline border, and
-/// corner-bracket accents in the caller's chosen palette.
+/// Dark glass keeps text legible against every biome and the player's room.
 private struct XenotechPanelModifier: ViewModifier {
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     var primary: Color
-    var secondary: Color
     var cornerRadius: CGFloat
     var fillOpacity: Double
 
@@ -66,7 +92,10 @@ private struct XenotechPanelModifier: ViewModifier {
             .background {
                 shape.fill(
                     LinearGradient(
-                        colors: [Color.black.opacity(fillOpacity + 0.14), primary.opacity(0.07)],
+                        colors: [
+                            SlipframeUI.surface.opacity(reduceTransparency ? 1 : min(0.96, 0.82 + fillOpacity)),
+                            SlipframeUI.surface.opacity(reduceTransparency ? 1 : min(0.96, 0.72 + fillOpacity))
+                        ],
                         startPoint: .top,
                         endPoint: .bottom
                     )
@@ -75,36 +104,43 @@ private struct XenotechPanelModifier: ViewModifier {
             .overlay {
                 shape.strokeBorder(
                     LinearGradient(
-                        colors: [primary.opacity(0.8), secondary.opacity(0.45), primary.opacity(0.25)],
+                        colors: [Color.white.opacity(0.24), Color.white.opacity(0.08)],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     ),
-                    lineWidth: 1.2
+                    lineWidth: 1
                 )
+                .allowsHitTesting(false)
             }
             .overlay {
-                XenotechCornerBrackets(length: max(14, cornerRadius * 0.9))
-                    .stroke(primary.opacity(0.9), lineWidth: 1.6)
+                XenotechCornerBrackets(length: 10, inset: 9)
+                    .stroke(primary.opacity(0.38), lineWidth: 1)
+                    .allowsHitTesting(false)
+            }
+            .overlay(alignment: .top) {
+                Capsule()
+                    .fill(primary.opacity(0.65))
+                    .frame(width: 44, height: 2)
+                    .padding(.top, 1)
+                    .allowsHitTesting(false)
             }
             .clipShape(shape)
             .glassBackgroundEffect(in: shape)
+            .environment(\.colorScheme, .dark)
     }
 }
 
 extension View {
-    /// Applies the shared xenotech panel treatment — tinted glass, gradient
-    /// hairline border, and reticle corner brackets — in the given palette.
+    /// Applies the shared dark glass, neutral hairline, and subtle rift accents.
     /// Every world-anchored panel (HUD, command console, tutorial overlay)
     /// should use this instead of an ad-hoc background.
     func xenotechPanel(
         primary: Color,
-        secondary: Color? = nil,
         cornerRadius: CGFloat = 24,
         fillOpacity: Double = 0.04
     ) -> some View {
         modifier(XenotechPanelModifier(
             primary: primary,
-            secondary: secondary ?? primary,
             cornerRadius: cornerRadius,
             fillOpacity: fillOpacity
         ))
@@ -256,55 +292,51 @@ struct BiomeCard: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 0) {
                 Image("Biome_\(id.rawValue)")
                     .resizable()
                     .scaledToFill()
-                    .frame(height: 82)
+                    .frame(height: 96)
                     .frame(maxWidth: .infinity)
                     .clipped()
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    .saturation(isOn ? 1 : 0.72)
+                    .saturation(isOn ? 1 : 0.8)
                     .accessibilityHidden(true)
 
-                Text(id.displayName)
-                    .font(.system(size: 14, weight: isOn ? .bold : .semibold, design: .rounded))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-
-                Text(id.twistCaption.uppercased())
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
-                    .tracking(0.8)
-                    .foregroundStyle(isOn ? biomeColor : .secondary)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(id.displayName)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.primary)
+                    Text(id.twistCaption)
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                }
+                .padding(12)
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
-            .padding(.horizontal, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .background {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(isOn ? biomeColor.opacity(0.16) : Color.white.opacity(0.05))
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(isOn ? accent.opacity(0.10) : SlipframeUI.inset)
             }
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .strokeBorder(isOn ? biomeColor.opacity(0.8) : Color.white.opacity(0.1), lineWidth: isOn ? 1.6 : 1)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(isOn ? accent.opacity(0.8) : SlipframeUI.hairline, lineWidth: 1)
             }
             .overlay(alignment: .topTrailing) {
-                if isOn {
-                    Image(systemName: selectionStyle == .radio ? "checkmark.circle.fill" : "checkmark")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(accent)
-                        .padding(8)
-                }
+                Image(systemName: isOn ? "checkmark.circle.fill" : (selectionStyle == .radio ? "circle" : "plus.circle"))
+                    .font(.system(size: 20, weight: .medium))
+                    .foregroundStyle(isOn ? accent : Color.white)
+                    .padding(5)
+                    .background(SlipframeUI.surface.opacity(0.92), in: Circle())
+                    .padding(8)
+                    .accessibilityHidden(true)
             }
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(id.displayName)
+        .hoverEffect(.highlight)
+        .accessibilityLabel("\(id.displayName), \(id.twistCaption)")
+        .accessibilityValue(isOn ? "Selected" : "Not selected")
         .accessibilityAddTraits(isOn ? .isSelected : [])
     }
 
-    private var biomeColor: Color {
-        let tint = EnvironmentCatalog.profile(for: id).palette.portalRim
-        return Color(red: Double(tint.r), green: Double(tint.g), blue: Double(tint.b))
-    }
 }
