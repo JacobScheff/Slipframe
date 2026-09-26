@@ -1926,13 +1926,40 @@ final class Endless_RunnerTests: XCTestCase {
         XCTAssertLessThan(abs(position.x - fullSweep.x), 0.16)
     }
 
-    func testFoundryShapeCountPoolsAverageTwoAcrossRisks() {
-        let means = RiftRisk.allCases.map { risk -> Float in
-            let pool = FoundryPatternRules.shapeCountPool(for: risk)
-            XCTAssertTrue(pool.allSatisfy { (1...3).contains($0) })
-            return Float(pool.reduce(0, +)) / Float(pool.count)
+    func testFoundryShapeCountsScaleFromThreeToFourOrFive() {
+        let stable = FoundryPatternRules.shapeCountPool(for: .stable)
+        let charged = FoundryPatternRules.shapeCountPool(for: .charged)
+        let unstable = FoundryPatternRules.shapeCountPool(for: .unstable)
+        for pool in [stable, charged, unstable] {
+            XCTAssertTrue(pool.allSatisfy { (2...5).contains($0) })
         }
-        XCTAssertEqual(means.reduce(0, +) / Float(means.count), 2, accuracy: 0.001)
+        XCTAssertEqual(Float(stable.reduce(0, +)) / Float(stable.count), 3, accuracy: 0.001)
+        XCTAssertEqual(Float(charged.reduce(0, +)) / Float(charged.count), 3.5, accuracy: 0.001)
+        XCTAssertEqual(Float(unstable.reduce(0, +)) / Float(unstable.count), 4.5, accuracy: 0.001)
+        XCTAssertEqual(unstable.filter { $0 >= 4 }.count, unstable.count)
+    }
+
+    func testFoundryLayoutsSupportTwoThroughFiveObjects() {
+        for count in 2...5 {
+            let positions = FoundryPatternRules.targetPositions(count: count)
+            XCTAssertEqual(positions.count, count)
+            XCTAssertEqual(Set(positions.map(\.x)).count, count)
+            XCTAssertTrue(positions.allSatisfy {
+                (-0.85...0.85).contains($0.x) && (1.0...1.5).contains($0.y)
+            })
+            for left in positions.indices {
+                for right in positions.indices where right > left {
+                    XCTAssertGreaterThan(simd_distance(positions[left], positions[right]), 0.45)
+                }
+            }
+        }
+        XCTAssertEqual(FoundryPatternRules.targetPositions(count: 1).count, 2)
+        XCTAssertEqual(FoundryPatternRules.targetPositions(count: 6).count, 5)
+    }
+
+    func testFoundryDoorsUseShorterSpawnGap() {
+        XCTAssertEqual(FoundryPatternRules.spawnGapRange.lowerBound, 14)
+        XCTAssertEqual(FoundryPatternRules.spawnGapRange.upperBound, 16)
     }
 
     func testOrbitGateCyclesPatternsAndRequiresTimedWedge() {

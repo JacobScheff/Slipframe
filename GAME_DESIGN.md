@@ -208,8 +208,9 @@ The eight biomes in the random pool:
 
 ##### Lattice Forge
 
-Slow doors approach along the track at roughly twice the original cadence. Each has
-one to three colored, shape-matched slots, averaging about two shapes per door.
+Slow doors approach every four to six seconds depending on risk. Every door has at
+least two colored, shape-matched slots. Stable averages three shapes, Charged averages
+3.5, and Unstable always has four or five, averaging 4.5.
 Aim a raised hand toward a floating shape and hold briefly to engage the Force.
 Initial selection follows the headset-through-hand sight line. Hand rotation helps
 rank nearby shapes, but missing orientation or a turned palm never blocks pickup.

@@ -123,11 +123,32 @@ enum FoundryForceSelection {
 }
 
 enum FoundryPatternRules {
+    static let spawnGapRange: ClosedRange<Float> = 14...16
+
     static func shapeCountPool(for risk: RiftRisk) -> [Int] {
         switch risk {
-        case .stable: return [1, 2, 2]
-        case .charged: return [1, 2, 2, 3]
-        case .unstable: return [2, 2, 3]
+        case .stable: return [2, 3, 3, 4]
+        case .charged: return [3, 3, 4, 4]
+        case .unstable: return [4, 4, 5, 5]
+        }
+    }
+
+    static func targetPositions(count: Int) -> [SIMD2<Float>] {
+        switch min(5, max(2, count)) {
+        case 2:
+            return [SIMD2(-0.62, 1.12), SIMD2(0.62, 1.46)]
+        case 3:
+            return [SIMD2(-0.78, 1.10), SIMD2(0, 1.48), SIMD2(0.78, 1.10)]
+        case 4:
+            return [
+                SIMD2(-0.72, 1.05), SIMD2(-0.25, 1.48),
+                SIMD2(0.25, 1.05), SIMD2(0.72, 1.48)
+            ]
+        default:
+            return [
+                SIMD2(-0.82, 1.05), SIMD2(-0.42, 1.48), SIMD2(0, 1.05),
+                SIMD2(0.42, 1.48), SIMD2(0.82, 1.05)
+            ]
         }
     }
 }
@@ -289,12 +310,12 @@ final class GameWorld {
     }
 
     private enum FoundryShapeKind: CaseIterable {
-        case sphere, cube, diamond
+        case sphere, cube, diamond, emeraldSphere, roseCube
 
         var assetID: String {
             switch self {
-            case .sphere: return "foundry_shape_sphere"
-            case .cube: return "foundry_shape_cube"
+            case .sphere, .emeraldSphere: return "foundry_shape_sphere"
+            case .cube, .roseCube: return "foundry_shape_cube"
             case .diamond: return "foundry_shape_diamond"
             }
         }
@@ -304,6 +325,22 @@ final class GameWorld {
             case .sphere: return .systemCyan
             case .cube: return .systemOrange
             case .diamond: return .systemPurple
+            case .emeraldSphere: return .systemGreen
+            case .roseCube: return .systemPink
+            }
+        }
+
+        var isRound: Bool {
+            switch self {
+            case .sphere, .emeraldSphere: return true
+            default: return false
+            }
+        }
+
+        var isDiamond: Bool {
+            switch self {
+            case .diamond: return true
+            default: return false
             }
         }
     }
@@ -624,7 +661,6 @@ final class GameWorld {
     private var coins: [CoinItem] = []
     private var halves: [HalfCrystalItem] = []
     private var foundryItems: [FoundryItem] = []
-    private var foundrySpawnCount = 0
     private var orbitItems: [OrbitItem] = []
     private var orbitSpawnCount = 0
     private var heldLeft: HeldHalf?
@@ -879,7 +915,6 @@ final class GameWorld {
         portalMotions.removeAll()
         clearDynamicContent()
         dropHeldHalves()
-        foundrySpawnCount = 0
         orbitSpawnCount = 0
         gameplayRNG = nil
         gameModel?.prefersRoomDimming = false
@@ -1092,7 +1127,6 @@ final class GameWorld {
         rightFoundryPositionWorld = nil
         leftFoundryBasisWorld = nil
         rightFoundryBasisWorld = nil
-        foundrySpawnCount = 0
         orbitSpawnCount = 0
         let mode = gameModel?.resolvedPlayMode ?? .normal
         configureGameplayRNG(for: mode)
@@ -1940,7 +1974,6 @@ final class GameWorld {
             rightFoundryPositionWorld = nil
             leftFoundryBasisWorld = nil
             rightFoundryBasisWorld = nil
-            foundrySpawnCount = 0
             orbitSpawnCount = 0
             if frame.profile.twist != .windShove {
                 resetWind()
@@ -2211,7 +2244,7 @@ final class GameWorld {
         case .summitStep:
             base = nextFloat(in: GameWorld.summitStepSpawnGapMin...GameWorld.summitStepSpawnGapMax)
         case .telekinesis:
-            base = nextFloat(in: 19...21)
+            base = nextFloat(in: FoundryPatternRules.spawnGapRange)
         case .orbitGate:
             base = nextFloat(in: 6.0...7.0)
         case .baseline:
@@ -3110,15 +3143,13 @@ final class GameWorld {
         lastAdjacentDoubleOpenLaneRaw = nil
         let z = patternStreamSpawnZ
         let risk = gameModel?.stats.risk ?? .stable
-        let count = risk == .stable && foundrySpawnCount == 0
-            ? 1 : (nextElement(FoundryPatternRules.shapeCountPool(for: risk)) ?? 2)
+        let count = nextElement(FoundryPatternRules.shapeCountPool(for: risk)) ?? 3
         let speed: Float
         switch risk {
         case .stable: speed = 0.9
         case .charged: speed = 1.08
         case .unstable: speed = 1.28
         }
-        foundrySpawnCount += 1
         let root = Entity()
         root.name = "foundryDoor"
         func makePanel() -> Entity {
@@ -3137,16 +3168,14 @@ final class GameWorld {
         root.addChild(rightPanel)
 
         var available = FoundryShapeKind.allCases
-        let targetXs: [Float] = count == 1 ? [0] : (count == 2 ? [-0.62, 0.62] : [-0.78, 0, 0.78])
+        let targets = FoundryPatternRules.targetPositions(count: count)
         var shapes: [FoundryShape] = []
         for index in 0..<count {
             let kind = nextElement(available) ?? .sphere
             available.removeAll { $0 == kind }
-            let targetX = targetXs[index]
-            let targetY: Float = count == 1 ? 1.24 : (index.isMultiple(of: 2) ? 1.16 : 1.47)
-            let startX: Float = count == 1
-                ? (nextBool() ? -0.76 : 0.76)
-                : targetXs[(index + 1) % count]
+            let targetX = targets[index].x
+            let targetY = targets[index].y
+            let startX = targets[(index + 1) % count].x
             let startY: Float = targetY + (nextBool() ? 0.14 : -0.14)
 
             let slot = makeFoundrySlot(kind: kind)
@@ -3191,9 +3220,9 @@ final class GameWorld {
         let material = SimpleMaterial(color: kind.color, roughness: 0.16, isMetallic: true)
         let model: ModelEntity
         switch kind {
-        case .sphere:
+        case .sphere, .emeraldSphere:
             model = ModelEntity(mesh: .generateSphere(radius: 0.15), materials: [material])
-        case .cube:
+        case .cube, .roseCube:
             model = ModelEntity(mesh: .generateBox(width: 0.27, height: 0.27, depth: 0.27),
                                 materials: [material])
         case .diamond:
@@ -3210,7 +3239,7 @@ final class GameWorld {
         let slot = Entity()
         slot.name = "matchingSlot"
         let material = UnlitMaterial(color: kind.color)
-        if kind == .sphere {
+        if kind.isRound {
             for index in 0..<16 {
                 let angle = Float(index) * Float.pi / 8
                 let bead = ModelEntity(mesh: .generateSphere(radius: 0.026), materials: [material])
@@ -3219,7 +3248,7 @@ final class GameWorld {
             }
         } else {
             for index in 0..<4 {
-                let angle = Float(index) * Float.pi / 2 + (kind == .diamond ? Float.pi / 4 : 0)
+                let angle = Float(index) * Float.pi / 2 + (kind.isDiamond ? Float.pi / 4 : 0)
                 let edge = ModelEntity(mesh: .generateBox(width: 0.31, height: 0.035, depth: 0.035),
                                        materials: [material])
                 edge.position = SIMD3(cos(angle) * 0.16, sin(angle) * 0.16, 0)
