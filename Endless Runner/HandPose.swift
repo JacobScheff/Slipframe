@@ -2,7 +2,7 @@
 //  HandPose.swift
 //  Slipframe
 //
-//  Grab-pose heuristic from ARKit hand joints for Crystal Cave.
+//  Crystal Cave grab poses and Vector Foundry hand orientation.
 //
 
 import ARKit
@@ -10,6 +10,11 @@ import Foundation
 import simd
 
 enum HandPose {
+    struct ForceBasis {
+        var finger: SIMD3<Float>
+        var palm: SIMD3<Float>
+    }
+
     enum Pose: Equatable {
         case fist
         case open
@@ -66,6 +71,23 @@ enum HandPose {
 
     static func isFist(anchor: HandAnchor) -> Bool {
         classify(anchor: anchor) == .fist
+    }
+
+    /// World-space finger and palm directions for relative force steering.
+    /// Joint positions remain stable when the wrist's anchor axes flip during a pose.
+    static func forceBasis(anchor: HandAnchor) -> ForceBasis? {
+        guard anchor.isTracked, let skeleton = anchor.handSkeleton else { return nil }
+        let origin = anchor.originFromAnchorTransform
+        let wrist = worldPosition(origin: origin, joint: skeleton.joint(.wrist))
+        let middle = worldPosition(origin: origin, joint: skeleton.joint(.middleFingerKnuckle))
+        let index = worldPosition(origin: origin, joint: skeleton.joint(.indexFingerKnuckle))
+        let little = worldPosition(origin: origin, joint: skeleton.joint(.littleFingerKnuckle))
+        let finger = middle - wrist
+        let across = index - little
+        guard simd_length(finger) > 0.015, simd_length(across) > 0.015 else { return nil }
+        var palm = simd_normalize(simd_cross(across, finger))
+        if anchor.chirality == .left { palm = -palm }
+        return ForceBasis(finger: simd_normalize(finger), palm: palm)
     }
 
     /// Classifies fist vs open.

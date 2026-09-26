@@ -1798,6 +1798,35 @@ final class Endless_RunnerTests: XCTestCase {
         XCTAssertFalse(foundryModifiers.contains(.some(.closeCall)))
     }
 
+    func testFoundryForceRespondsToTranslationAndHandRotation() {
+        let start = HandPose.ForceBasis(finger: SIMD3(0, 1, 0), palm: SIMD3(0, 0, -1))
+        let turned = HandPose.ForceBasis(finger: SIMD3(0.4, 0.9, 0),
+                                         palm: SIMD3(0.3, 0.1, -0.95))
+        let origin = SIMD2<Float>(0, 1.2)
+        let translated = FoundryForceSteering.target(
+            grabShape: origin, handDelta: SIMD2(0.2, 0.1),
+            startBasis: start, currentBasis: start
+        )
+        XCTAssertEqual(translated.x, 0.5, accuracy: 0.001)
+        XCTAssertEqual(translated.y, 1.45, accuracy: 0.001)
+
+        let rotated = FoundryForceSteering.target(
+            grabShape: origin, handDelta: .zero,
+            startBasis: start, currentBasis: turned
+        )
+        XCTAssertGreaterThan(rotated.x, 0.35)
+        XCTAssertGreaterThan(rotated.y, origin.y)
+    }
+
+    func testOrbitGateCyclesPatternsAndRequiresTimedWedge() {
+        XCTAssertEqual((0..<6).map { OrbitGateGeometry.patternIndex(spawnCount: $0) },
+                       [0, 0, 1, 2, 0, 1])
+        XCTAssertLessThan(OrbitGateGeometry.timedGapClearance(localX: 0, localY: 0), 0)
+        XCTAssertGreaterThan(OrbitGateGeometry.timedGapClearance(localX: 0.6, localY: 0), 0)
+        XCTAssertLessThan(OrbitGateGeometry.timedGapClearance(localX: -0.6, localY: 0), 0)
+        XCTAssertLessThan(OrbitGateGeometry.timedGapClearance(localX: 0.6, localY: 0.5), 0)
+    }
+
     // MARK: - Authored art, cosmetic variation and portable animation
 
     func testSceneryVariationIsRepeatableAndSeeded() {
