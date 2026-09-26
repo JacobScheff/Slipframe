@@ -749,6 +749,17 @@ final class Endless_RunnerTests: XCTestCase {
         XCTAssertTrue(director.hasReachedNormalMusicEnd)
     }
 
+    func testFoundryStopsSpawningEarlyEnoughForSlowDoors() {
+        let director = EnvironmentDirector()
+        director.beginRun(mode: .normal)
+        director.forceEnvironment(.vectorFoundry)
+        let drainStart = director.currentSwitchInterval - 16
+
+        XCTAssertFalse(director.update(deltaTime: drainStart - 0.01).requestsJunction)
+        XCTAssertTrue(director.update(deltaTime: 0.02).requestsJunction)
+        XCTAssertFalse(director.hasReachedNormalMusicEnd)
+    }
+
     func testJunctionOffersDistinctBiomesWithIndependentContracts() {
         var rng = SeededGenerator(seed: 0x51_1F_AA)
         let options = RiftJunctionRules.makeOptions(excluding: .emberRun, rng: &rng)
@@ -1781,8 +1792,8 @@ final class Endless_RunnerTests: XCTestCase {
         XCTAssertFalse(BiomeAssetID.required.contains("environment_orbitGate"))
         XCTAssertEqual(EnvironmentID.allCases.count, BiomeAssetID.authoredBiomes.count + 2)
         let foundryModifiers = RiftJunctionRules.modifierPool(for: .vectorFoundry)
-        XCTAssertEqual(foundryModifiers.count, 4)
-        XCTAssertFalse(foundryModifiers.contains(.some(.aegis)))
+        XCTAssertEqual(foundryModifiers.count, 5)
+        XCTAssertTrue(foundryModifiers.contains(.some(.aegis)))
         XCTAssertFalse(foundryModifiers.contains(.some(.magnet)))
         XCTAssertFalse(foundryModifiers.contains(.some(.closeCall)))
     }

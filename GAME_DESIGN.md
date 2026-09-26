@@ -138,8 +138,9 @@ motion. Other modes keep their existing automatic biome rules.
 **Portal modifiers**
 
 Each portal independently has an equal chance of rolling any compatible modifier or no modifier.
-Vector Foundry offers Token Surge, Overdrive, and Bonus Bank because its remote
-cells have no wall hits or touch pickups. Other biomes keep the full modifier pool.
+Vector Foundry offers Token Surge, Aegis, Overdrive, and Bonus Bank. Its door can
+hit the player, while Magnet and Close Call have no useful Foundry interaction.
+Other biomes keep the full modifier pool.
 No modifier is shown by the absence of a lower portal glyph.
 
 - **Token Surge:** three-token depth chains and doubled token value; increases Crystal
@@ -207,19 +208,22 @@ The eight biomes in the random pool:
 
 ##### Vector Foundry
 
-Cells and target hoops travel forward together. An open palm facing a cell highlights
-it; a closed hand holds it remotely. Relative hand tilt applies lateral and vertical
-force, so the cell accelerates and coasts instead of attaching rigidly to the hand.
-Reopening the hand releases it. Cells bob, pulse, and rotate gently while airborne.
-Guiding a cell through its hoop before the pair reaches the player awards tokens and
-score; a miss drains some score bonus.
+Slow doors approach along the track. Each has one to three colored, shape-matched
+slots. Aim through a raised hand at a floating shape for a brief moment to engage
+the Force, then move the hand slowly to guide it into its slot. Fast hand sweeps
+do not latch, and a quick move releases the shape so it floats in place. Shapes
+ease toward the hand's movement and bob and rotate gently rather than sticking
+rigidly to it. Aligned shapes float into their slots; filling every slot opens the
+door. Reaching a closed door is a hit.
+Risk raises door speed and the possible shape count; all doors remain slower than
+the normal obstacle stream.
 
 ##### Orbit Gate
 
-Wide gates advance through the usual fixed corridor. Their full-height safe aperture
-slides between lanes and locks before contact so the final dodge is readable. The
-first two gates hold the gap in the center to teach the shape; later gates move it.
-The head must pass through the gap, while the hands are free to move.
+Each beat contains three depth-separated 3D hoops. They tilt and spin independently
+around different, slightly randomized axes while advancing along the corridor.
+The first two beats center the hoops; later beats shift their centers modestly.
+The head must pass through each rotating opening. Hands remain free to move.
 
 ##### Summit Step
 

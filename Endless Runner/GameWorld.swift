@@ -159,61 +159,106 @@ final class GameWorld {
         var timeSinceGrab: Float = 0
     }
 
-    private final class FoundryItem {
+    private enum FoundryShapeKind: CaseIterable {
+        case sphere, cube, diamond
+
+        var color: UIColor {
+            switch self {
+            case .sphere: return .systemCyan
+            case .cube: return .systemOrange
+            case .diamond: return .systemPurple
+            }
+        }
+    }
+
+    private final class FoundryShape {
         let body: Entity
         let core: Entity
-        let target: Entity
+        let slot: Entity
         let targetX: Float
         let targetY: Float
         let phase: Float
         var x: Float
         var y: Float
-        var z: Float
+        var target = SIMD2<Float>.zero
         var velocity = SIMD2<Float>.zero
         var heldBy: HandAnchor.Chirality?
-        var grabAim = SIMD3<Float>.zero
+        var grabHand = SIMD2<Float>.zero
+        var lastHand = SIMD3<Float>.zero
+        var grabShape = SIMD2<Float>.zero
         var trackingLossSeconds: Float = 0
+        var inserting = false
+        var insertionProgress: Float = 0
         var resolved = false
         var lightingWeight: Float = -1
-        var targetLightingWeight: Float = -1
 
-        init(body: Entity, core: Entity, target: Entity, x: Float, y: Float,
-             z: Float, targetX: Float, targetY: Float, phase: Float) {
+        init(body: Entity, core: Entity, slot: Entity,
+             x: Float, y: Float, targetX: Float, targetY: Float, phase: Float) {
             self.body = body
             self.core = core
-            self.target = target
+            self.slot = slot
             self.x = x
             self.y = y
-            self.z = z
+            self.target = SIMD2(x, y)
             self.targetX = targetX
             self.targetY = targetY
             self.phase = phase
         }
     }
 
-    private final class OrbitItem {
+    private final class FoundryItem {
         let root: Entity
-        let left: Entity
-        let right: Entity
-        let marker: Entity
+        let leftPanel: Entity
+        let rightPanel: Entity
+        let shapes: [FoundryShape]
+        let speed: Float
         var z: Float
         var previousZ: Float
-        var phase: Float
-        let moving: Bool
-        var gapX: Float = 0
+        var opening: Float = 0
         var resolved = false
         var lightingWeight: Float = -1
 
-        init(root: Entity, left: Entity, right: Entity, marker: Entity,
-             z: Float, phase: Float, moving: Bool) {
+        init(root: Entity, leftPanel: Entity, rightPanel: Entity,
+             shapes: [FoundryShape], z: Float, speed: Float) {
             self.root = root
-            self.left = left
-            self.right = right
-            self.marker = marker
+            self.leftPanel = leftPanel
+            self.rightPanel = rightPanel
+            self.shapes = shapes
             self.z = z
             self.previousZ = z
+            self.speed = speed
+        }
+    }
+
+    private final class OrbitRing {
+        let entity: Entity
+        let offsetZ: Float
+        let axis: SIMD3<Float>
+        let phase: Float
+        let spin: Float
+        var previousHeadPlaneZ: Float?
+        var resolved = false
+
+        init(entity: Entity, offsetZ: Float,
+             axis: SIMD3<Float>, phase: Float, spin: Float) {
+            self.entity = entity
+            self.offsetZ = offsetZ
+            self.axis = axis
             self.phase = phase
-            self.moving = moving
+            self.spin = spin
+        }
+    }
+
+    private final class OrbitItem {
+        let root: Entity
+        let rings: [OrbitRing]
+        var z: Float
+        var lightingWeight: Float = -1
+
+        init(root: Entity, rings: [OrbitRing], z: Float) {
+            self.root = root
+            self.rings = rings
+            self.z = z
         }
     }
 
@@ -378,10 +423,10 @@ final class GameWorld {
     private static let coinTumbleSpeed: Float = 1.15
     /// Crystal half airborne spin (Crystal Cave pickups).
     private static let crystalHalfSpinSpeed: Float = 2.4
-    private static let foundryTargetY: Float = 1.3
-    private static let foundryResolveZ: Float = -0.35
-    private static let foundryAimDot: Float = 0.72
-    private static let orbitGapHalfWidth: Float = 0.46
+    private static let foundryShapeDepth: Float = 0.72
+    private static let foundryAimDwell: Float = 0.18
+    private static let foundryMaxSpeed: Float = 0.55
+    private static let orbitOpeningRadius: Float = 0.67
 
     /// Playfield origin: floor at y=0, stand line at z=0, track extends along −Z.
     let root = Entity()
@@ -437,12 +482,12 @@ final class GameWorld {
     private var orbitSpawnCount = 0
     private var heldLeft: HeldHalf?
     private var heldRight: HeldHalf?
-    private var leftHandAimWorld: SIMD3<Float>?
-    private var rightHandAimWorld: SIMD3<Float>?
-    private var leftIsFist = false
-    private var rightIsFist = false
-    private var previousLeftFist = false
-    private var previousRightFist = false
+    private var leftFoundryHover: FoundryShape?
+    private var rightFoundryHover: FoundryShape?
+    private var leftFoundryHoverSeconds: Float = 0
+    private var rightFoundryHoverSeconds: Float = 0
+    private var leftFoundryPreviousGrip: SIMD3<Float>?
+    private var rightFoundryPreviousGrip: SIMD3<Float>?
 
     private var speed: Float = GameWorld.runSpeed
     /// 1 while the player is on the play volume; eases to 0 when they step off.
@@ -661,10 +706,12 @@ final class GameWorld {
         rightHandGripWorld = nil
         leftIsOpen = false
         rightIsOpen = false
-        leftIsFist = false
-        rightIsFist = false
-        leftHandAimWorld = nil
-        rightHandAimWorld = nil
+        leftFoundryHover = nil
+        rightFoundryHover = nil
+        leftFoundryHoverSeconds = 0
+        rightFoundryHoverSeconds = 0
+        leftFoundryPreviousGrip = nil
+        rightFoundryPreviousGrip = nil
         updateSubscription = nil
         isPlayfieldLocked = false
         didSnapWithWorldTracking = false
@@ -681,8 +728,6 @@ final class GameWorld {
         portalMotions.removeAll()
         clearDynamicContent()
         dropHeldHalves()
-        previousLeftFist = false
-        previousRightFist = false
         foundrySpawnCount = 0
         orbitSpawnCount = 0
         gameplayRNG = nil
@@ -888,8 +933,12 @@ final class GameWorld {
         clearJunction()
         clearDynamicContent()
         dropHeldHalves()
-        previousLeftFist = false
-        previousRightFist = false
+        leftFoundryHover = nil
+        rightFoundryHover = nil
+        leftFoundryHoverSeconds = 0
+        rightFoundryHoverSeconds = 0
+        leftFoundryPreviousGrip = nil
+        rightFoundryPreviousGrip = nil
         foundrySpawnCount = 0
         orbitSpawnCount = 0
         let mode = gameModel?.resolvedPlayMode ?? .normal
@@ -1340,8 +1389,8 @@ final class GameWorld {
             half.entity.removeFromParent()
         }
         for item in foundryItems {
-            item.body.removeFromParent()
-            item.target.removeFromParent()
+            item.root.removeFromParent()
+            for shape in item.shapes { shape.body.removeFromParent() }
         }
         for item in orbitItems {
             item.root.removeFromParent()
@@ -1468,14 +1517,10 @@ final class GameWorld {
                             leftHandContactsWorld = []
                             leftHandGripWorld = nil
                             leftIsOpen = false
-                            leftIsFist = false
-                            leftHandAimWorld = nil
                         case .right:
                             rightHandContactsWorld = []
                             rightHandGripWorld = nil
                             rightIsOpen = false
-                            rightIsFist = false
-                            rightHandAimWorld = nil
                         @unknown default: break
                         }
                         continue
@@ -1483,20 +1528,15 @@ final class GameWorld {
                     let contacts = Self.contactPoints(from: anchor)
                     let grip = Self.gripPoint(from: anchor)
                     let pose = HandPose.classify(anchor: anchor)
-                    let aim = HandPose.palmDirection(anchor: anchor)
                     switch anchor.chirality {
                     case .left:
                         leftHandContactsWorld = contacts
                         leftHandGripWorld = grip
                         leftIsOpen = pose == .open
-                        leftIsFist = pose == .fist
-                        leftHandAimWorld = aim
                     case .right:
                         rightHandContactsWorld = contacts
                         rightHandGripWorld = grip
                         rightIsOpen = pose == .open
-                        rightIsFist = pose == .fist
-                        rightHandAimWorld = aim
                     @unknown default:
                         break
                     }
@@ -1727,7 +1767,15 @@ final class GameWorld {
             activeSpawnProfile = frame.profile
             updateBiomeHint()
             dropHeldHalves()
-            for item in foundryItems { item.heldBy = nil }
+            for item in foundryItems {
+                for shape in item.shapes { shape.heldBy = nil }
+            }
+            leftFoundryHover = nil
+            rightFoundryHover = nil
+            leftFoundryHoverSeconds = 0
+            rightFoundryHoverSeconds = 0
+            leftFoundryPreviousGrip = nil
+            rightFoundryPreviousGrip = nil
             foundrySpawnCount = 0
             orbitSpawnCount = 0
             if frame.profile.twist != .windShove {
@@ -1999,9 +2047,9 @@ final class GameWorld {
         case .summitStep:
             base = nextFloat(in: GameWorld.summitStepSpawnGapMin...GameWorld.summitStepSpawnGapMax)
         case .telekinesis:
-            base = nextFloat(in: 3.4...4.1)
+            base = nextFloat(in: 38...42)
         case .orbitGate:
-            base = nextFloat(in: 3.5...4.3)
+            base = nextFloat(in: 6.0...7.0)
         case .baseline:
             base = nextFloat(in: GameWorld.emberSpawnGapMin...GameWorld.emberSpawnGapMax)
         default:
@@ -2131,152 +2179,183 @@ final class GameWorld {
                 lastWeight: &half.lastLightingWeight
             )
         }
-        for item in foundryItems where !item.resolved {
-            item.z += travel
+        for item in foundryItems {
+            item.previousZ = item.z
+            item.z += travel * item.speed / Self.runSpeed
         }
         for item in orbitItems {
-            item.previousZ = item.z
             item.z += travel
         }
     }
 
-    private func aimInPlayfield(gripWorld: SIMD3<Float>?, aimWorld: SIMD3<Float>?)
-        -> (origin: SIMD3<Float>, direction: SIMD3<Float>)? {
-        guard let gripWorld, let aimWorld else { return nil }
-        let origin = root.convert(position: gripWorld, from: nil)
-        var direction = root.convert(position: gripWorld + aimWorld, from: nil) - origin
-        guard length(direction) > 0.001 else { return nil }
-        direction = normalize(direction)
-        // A tracked palm normal can flip under partial occlusion. Keep the aim
-        // pointed down the visible corridor for both hand orientations.
-        if direction.z > 0 { direction = -direction }
-        return (origin, direction)
-    }
-
-    private func aimedFoundryItem(from origin: SIMD3<Float>, direction: SIMD3<Float>) -> FoundryItem? {
-        var best: FoundryItem?
-        var bestScore = Self.foundryAimDot
-        for item in foundryItems where !item.resolved && item.heldBy == nil && item.z < -0.7 {
-            let toward = SIMD3(item.x, item.y, item.z) - origin
-            guard length(toward) > 0.1 else { continue }
-            let score = simd_dot(normalize(toward), direction)
-            if score > bestScore {
-                bestScore = score
-                best = item
+    /// Aim through the raised hand, like a sight line from the headset. Palm pose
+    /// never gates the force, so both open and closed hands work identically.
+    private func aimedFoundryShape(hand: SIMD3<Float>) -> FoundryShape? {
+        let head = playfieldHeadPosition()
+        let ray = hand - head
+        guard ray.z < -0.12, length(ray) > 0.15 else { return nil }
+        let direction = normalize(ray)
+        var best: FoundryShape?
+        var bestScore: Float = 0.995
+        for door in foundryItems where door.z < head.z - 0.65 && door.opening == 0 {
+            for shape in door.shapes where !shape.resolved && !shape.inserting && shape.heldBy == nil {
+                let toward = SIMD3(shape.x, shape.y, door.z + Self.foundryShapeDepth) - head
+                guard toward.z < -0.4 else { continue }
+                let score = simd_dot(normalize(toward), direction)
+                if score > bestScore {
+                    best = shape
+                    bestScore = score
+                }
             }
         }
         return best
     }
 
-    private func controlFoundryHand(_ hand: HandAnchor.Chirality, fist: Bool, open: Bool,
-                                     beganFist: Bool, grip: SIMD3<Float>?, aim: SIMD3<Float>?,
-                                     deltaTime: Float) {
-        let ray = aimInPlayfield(gripWorld: grip, aimWorld: aim)
-        if let held = foundryItems.first(where: { $0.heldBy == hand && !$0.resolved }) {
-            if open {
-                held.heldBy = nil
-            } else if let ray {
-                held.trackingLossSeconds = 0
-                if fist {
-                    let tilt = ray.direction - held.grabAim
-                    held.velocity += SIMD2(tilt.x * 9, tilt.y * 8) * deltaTime
-                }
-            } else {
+    private func releaseFoundryShape(_ shape: FoundryShape) {
+        shape.heldBy = nil
+        shape.velocity = .zero
+        shape.target = SIMD2(shape.x, shape.y)
+    }
+
+    private func controlFoundryHand(_ hand: HandAnchor.Chirality,
+                                    gripWorld: SIMD3<Float>?, deltaTime: Float) {
+        let grip = gripWorld.map { root.convert(position: $0, from: nil) }
+        if let held = foundryItems.flatMap(\.shapes).first(where: { $0.heldBy == hand && !$0.resolved }) {
+            guard let grip else {
                 held.trackingLossSeconds += deltaTime
-                if held.trackingLossSeconds > 0.2 { held.heldBy = nil }
+                if held.trackingLossSeconds > 0.2 { releaseFoundryShape(held) }
+                return
             }
-        } else if beganFist, let ray,
-                  let target = aimedFoundryItem(from: ray.origin, direction: ray.direction) {
-            target.heldBy = hand
-            target.grabAim = ray.direction
-            target.trackingLossSeconds = 0
+            held.trackingLossSeconds = 0
+            let handXY = SIMD2(grip.x, grip.y)
+            let handSpeed = length(grip - held.lastHand) / max(0.016, deltaTime)
+            if handSpeed > 1.7 {
+                releaseFoundryShape(held)
+                return
+            }
+            held.lastHand = grip
+            let displacement = (handXY - held.grabHand) * 1.8
+            held.target = SIMD2(
+                min(1.12, max(-1.12, held.grabShape.x + displacement.x)),
+                min(1.9, max(0.62, held.grabShape.y + displacement.y))
+            )
+            return
         }
+
+        let candidate = grip.flatMap { aimedFoundryShape(hand: $0) }
+        if hand == .left {
+            let swept = grip.flatMap { current in
+                leftFoundryPreviousGrip.map { length(current - $0) / max(0.016, deltaTime) > 1.7 }
+            } ?? false
+            leftFoundryPreviousGrip = grip
+            leftFoundryHoverSeconds = !swept && candidate === leftFoundryHover
+                ? leftFoundryHoverSeconds + deltaTime : 0
+            leftFoundryHover = candidate
+            guard let candidate, let grip,
+                  leftFoundryHoverSeconds >= Self.foundryAimDwell else { return }
+            latchFoundryShape(candidate, hand: hand, grip: grip)
+            leftFoundryHover = nil
+            leftFoundryHoverSeconds = 0
+        } else {
+            let swept = grip.flatMap { current in
+                rightFoundryPreviousGrip.map { length(current - $0) / max(0.016, deltaTime) > 1.7 }
+            } ?? false
+            rightFoundryPreviousGrip = grip
+            rightFoundryHoverSeconds = !swept && candidate === rightFoundryHover
+                ? rightFoundryHoverSeconds + deltaTime : 0
+            rightFoundryHover = candidate
+            guard let candidate, let grip,
+                  rightFoundryHoverSeconds >= Self.foundryAimDwell else { return }
+            latchFoundryShape(candidate, hand: hand, grip: grip)
+            rightFoundryHover = nil
+            rightFoundryHoverSeconds = 0
+        }
+    }
+
+    private func latchFoundryShape(_ shape: FoundryShape,
+                                   hand: HandAnchor.Chirality, grip: SIMD3<Float>) {
+        shape.heldBy = hand
+        shape.grabHand = SIMD2(grip.x, grip.y)
+        shape.lastHand = grip
+        shape.grabShape = SIMD2(shape.x, shape.y)
+        shape.target = shape.grabShape
+        shape.velocity = .zero
     }
 
     private func updateFoundry(deltaTime: Float, gameModel: GameModel) {
-        let leftStarted = leftIsFist && !previousLeftFist
-        let rightStarted = rightIsFist && !previousRightFist
-        previousLeftFist = leftIsFist
-        previousRightFist = rightIsFist
         if activeSpawnProfile.twist == .telekinesis {
-            controlFoundryHand(.left, fist: leftIsFist, open: leftIsOpen, beganFist: leftStarted,
-                               grip: leftHandGripWorld, aim: leftHandAimWorld, deltaTime: deltaTime)
-            controlFoundryHand(.right, fist: rightIsFist, open: rightIsOpen, beganFist: rightStarted,
-                               grip: rightHandGripWorld, aim: rightHandAimWorld, deltaTime: deltaTime)
+            controlFoundryHand(.left, gripWorld: leftHandGripWorld, deltaTime: deltaTime)
+            controlFoundryHand(.right, gripWorld: rightHandGripWorld, deltaTime: deltaTime)
         }
-        let leftRay = leftIsOpen ? aimInPlayfield(gripWorld: leftHandGripWorld, aimWorld: leftHandAimWorld) : nil
-        let rightRay = rightIsOpen ? aimInPlayfield(gripWorld: rightHandGripWorld, aimWorld: rightHandAimWorld) : nil
-        let leftHover = leftRay.flatMap { aimedFoundryItem(from: $0.origin, direction: $0.direction) }
-        let rightHover = rightRay.flatMap { aimedFoundryItem(from: $0.origin, direction: $0.direction) }
-        for item in foundryItems where !item.resolved {
-            // Force changes velocity rather than attaching the cell to a hand.
-            item.velocity = item.velocity * max(0, 1 - deltaTime * 1.25)
-            let speed = length(item.velocity)
-            if speed > 1.9 { item.velocity = item.velocity * (1.9 / speed) }
-            item.x = min(1.1, max(-1.1, item.x + item.velocity.x * deltaTime))
-            item.y = min(1.8, max(0.8, item.y + item.velocity.y * deltaTime))
-            let t = elapsedTime + item.phase
-            let bob = 0.035 * sin(t * 2.1)
-            item.body.position = SIMD3(item.x + 0.012 * sin(t * 1.4),
-                                       item.y - Self.portalHeight * 0.5 + bob,
-                                       item.z - portalZ)
-            item.target.position.z = item.z - portalZ
-            let glow = item.heldBy != nil || item === leftHover || item === rightHover
-            let pulse: Float = 1 + 0.025 * sin(t * 2.8)
-            item.core.scale = SIMD3(repeating: pulse * (glow ? 1.16 : 1))
-            item.core.orientation = simd_quatf(angle: 0.075 * sin(t * 0.85), axis: SIMD3(0, 1, 0))
-                * simd_quatf(angle: 0.045 * sin(t * 0.63), axis: SIMD3(0, 0, 1))
-            setPickupLightingWeight(entity: item.body, playfieldZ: item.z,
-                                    lastWeight: &item.lightingWeight)
-            setPickupLightingWeight(entity: item.target, playfieldZ: item.z,
-                                    lastWeight: &item.targetLightingWeight)
-            if item.z >= Self.foundryResolveZ {
-                item.resolved = true
-                item.heldBy = nil
-                if abs(item.x - item.targetX) <= 0.29 && abs(item.y - item.targetY) <= 0.22 {
-                    visualFX.spawnCoinBurst(at: SIMD3(item.targetX, item.targetY, item.z))
-                    GameSFX.shared.playCoinCollect()
-                    gameModel.collectCoin(count: 3)
-                    gameModel.addScore(12)
-                } else {
-                    gameModel.decayFlow(10)
-                }
-                item.body.isEnabled = false
-                item.target.isEnabled = false
-            }
-        }
-    }
-
-    private func layoutOrbitGate(_ item: OrbitItem) {
-        let edge: Float = 1.6
-        let gap = Self.orbitGapHalfWidth
-        let leftWidth = max(0.05, item.gapX - gap + edge)
-        let rightWidth = max(0.05, edge - item.gapX - gap)
-        item.left.scale = SIMD3(leftWidth, 1, 1)
-        item.right.scale = SIMD3(rightWidth, 1, 1)
-        item.left.position.x = -edge + leftWidth * 0.5
-        item.right.position.x = edge - rightWidth * 0.5
-        item.marker.position.x = item.gapX
-    }
-
-    private func updateOrbitGates(deltaTime: Float, gameModel: GameModel) {
         let head = playfieldHeadPosition()
-        for item in orbitItems {
-            if item.moving && !item.resolved && item.z < -2.8 {
-                item.phase += deltaTime * 1.12
-                item.gapX = 0.70 * sin(item.phase)
+        for door in foundryItems {
+            door.root.position.z = door.z - portalZ
+            setPickupLightingWeight(entity: door.root, playfieldZ: door.z,
+                                    lastWeight: &door.lightingWeight)
+
+            for shape in door.shapes where !shape.resolved {
+                if shape.inserting {
+                    shape.insertionProgress = min(1, shape.insertionProgress + deltaTime * 2)
+                    let progress = shape.insertionProgress
+                    shape.body.position = SIMD3(
+                        shape.targetX,
+                        shape.targetY - Self.portalHeight * 0.5,
+                        door.z + Self.foundryShapeDepth * (1 - progress) + 0.13 * progress - portalZ
+                    )
+                    shape.core.scale = SIMD3(repeating: 1 - 0.2 * progress)
+                    if progress >= 1 {
+                        shape.resolved = true
+                        shape.body.isEnabled = false
+                        shape.slot.scale = SIMD3(repeating: 1.22)
+                        visualFX.spawnCoinBurst(at: SIMD3(shape.targetX, shape.targetY, door.z))
+                        GameSFX.shared.playCoinCollect()
+                        gameModel.collectCoin()
+                        gameModel.addScore(8)
+                    }
+                    continue
+                }
+                let toward = shape.target - SIMD2(shape.x, shape.y)
+                shape.velocity += toward * min(1, deltaTime * 2.2)
+                shape.velocity *= max(0, 1 - deltaTime * 1.8)
+                let movementSpeed = length(shape.velocity)
+                if movementSpeed > Self.foundryMaxSpeed {
+                    shape.velocity *= Self.foundryMaxSpeed / movementSpeed
+                }
+                shape.x += shape.velocity.x * deltaTime
+                shape.y += shape.velocity.y * deltaTime
+                let t = elapsedTime + shape.phase
+                shape.body.position = SIMD3(shape.x + 0.012 * sin(t * 1.4),
+                                            shape.y - Self.portalHeight * 0.5 + 0.03 * sin(t * 1.9),
+                                            door.z + Self.foundryShapeDepth - portalZ)
+                let highlighted = shape.heldBy != nil || shape === leftFoundryHover
+                    || shape === rightFoundryHover
+                shape.core.scale = SIMD3(repeating: (1 + 0.025 * sin(t * 2.6))
+                                                * (highlighted ? 1.16 : 1))
+                shape.core.orientation = simd_quatf(angle: 0.06 * sin(t * 0.8), axis: SIMD3(0, 1, 0))
+                    * simd_quatf(angle: 0.04 * sin(t * 0.7), axis: SIMD3(0, 0, 1))
+                setPickupLightingWeight(entity: shape.body,
+                                        playfieldZ: door.z + Self.foundryShapeDepth,
+                                        lastWeight: &shape.lightingWeight)
+                if abs(shape.x - shape.targetX) < 0.16 && abs(shape.y - shape.targetY) < 0.16 {
+                    shape.inserting = true
+                    shape.heldBy = nil
+                    shape.velocity = .zero
+                }
             }
-            item.root.position.z = item.z - portalZ
-            item.marker.orientation = simd_quatf(angle: elapsedTime * 0.28,
-                                                   axis: SIMD3(0, 0, 1))
-            layoutOrbitGate(item)
-            setPickupLightingWeight(entity: item.root, playfieldZ: item.z,
-                                    lastWeight: &item.lightingWeight)
-            guard !item.resolved,
-                  item.z >= head.z - 0.18 && item.previousZ <= head.z + 0.18 else { continue }
-            if abs(head.x - item.gapX) > Self.orbitGapHalfWidth - 0.07 {
-                item.resolved = true
-                visualFX.spawnHitFlash(near: SIMD3(head.x, head.y, item.z))
+
+            let unlocked = door.shapes.allSatisfy(\.resolved)
+            if unlocked { door.opening = min(1, door.opening + deltaTime * 1.25) }
+            door.leftPanel.position.x = -0.79 - door.opening * 1.55
+            door.rightPanel.position.x = 0.79 + door.opening * 1.55
+            if unlocked {
+                for shape in door.shapes { shape.slot.isEnabled = false }
+            }
+
+            guard !door.resolved,
+                  door.z >= head.z - 0.16 && door.previousZ <= head.z + 0.16 else { continue }
+            door.resolved = true
+            if !unlocked {
+                visualFX.spawnHitFlash(near: SIMD3(head.x, head.y, door.z))
                 if gameModel.absorbHitIfPossible() {
                     GameSFX.shared.playShieldBreak()
                 } else if !gameModel.isTutorialRun {
@@ -2284,15 +2363,47 @@ final class GameWorld {
                     gameModel.endRun()
                     return
                 }
-            } else if item.z >= head.z + 0.18 {
-                item.resolved = true
-                let edgeClearance = Self.orbitGapHalfWidth - 0.07 - abs(head.x - item.gapX)
-                let nearMissRange = gameModel.stats.modifier?.nearMissRange ?? 0.2
-                if edgeClearance <= nearMissRange {
+            } else {
+                gameModel.addFlow(8)
+            }
+        }
+    }
+
+    private func updateOrbitGates(deltaTime: Float, gameModel: GameModel) {
+        _ = deltaTime
+        let head = playfieldHeadPosition()
+        for item in orbitItems {
+            item.root.position.z = item.z - portalZ
+            setPickupLightingWeight(entity: item.root, playfieldZ: item.z,
+                                    lastWeight: &item.lightingWeight)
+            for ring in item.rings {
+                let tilt = 0.48 * sin(elapsedTime * ring.spin + ring.phase)
+                ring.entity.orientation = simd_quatf(angle: tilt, axis: ring.axis)
+                    * simd_quatf(angle: elapsedTime * ring.spin * 0.55,
+                                 axis: SIMD3(0, 0, 1))
+                let ringZ = item.z + ring.offsetZ
+                let localHead = ring.entity.convert(position: head, from: root)
+                let previousPlaneZ = ring.previousHeadPlaneZ
+                ring.previousHeadPlaneZ = localHead.z
+                guard !ring.resolved, let previousPlaneZ,
+                      previousPlaneZ >= 0 && localHead.z <= 0 else { continue }
+                ring.resolved = true
+                let radial = length(SIMD2(localHead.x, localHead.y))
+                if radial > Self.orbitOpeningRadius {
+                    visualFX.spawnHitFlash(near: SIMD3(head.x, head.y, ringZ))
+                    if gameModel.absorbHitIfPossible() {
+                        GameSFX.shared.playShieldBreak()
+                    } else if !gameModel.isTutorialRun {
+                        GameSFX.shared.playWallHit()
+                        gameModel.endRun()
+                        return
+                    }
+                } else if Self.orbitOpeningRadius - radial
+                            < (gameModel.stats.modifier?.nearMissRange ?? 0.2) {
                     gameModel.registerNearMiss()
                     GameSFX.shared.playNearMiss()
                 } else {
-                    gameModel.addFlow(5)
+                    gameModel.addFlow(2)
                 }
             }
         }
@@ -2643,13 +2754,14 @@ final class GameWorld {
         let hint: String?
         switch activeSpawnProfile.twist {
         case .telekinesis:
-            hint = "Face a cell with an open hand · close to hold · tilt to guide it into the ring"
+            hint = "Raise a hand and aim through it · move slowly into the matching slot"
         case .orbitGate:
-            hint = "Follow the moving opening · it settles before the gate reaches you"
+            hint = "Move your head through all three rotating rings"
         default:
             hint = nil
         }
-        biomeHintRemaining = hint == nil ? 0 : 7
+        biomeHintRemaining = hint == nil ? 0
+            : (activeSpawnProfile.twist == .telekinesis ? 15 : 7)
         if gameModel?.biomeHint != hint { gameModel?.biomeHint = hint }
     }
 
@@ -2803,86 +2915,159 @@ final class GameWorld {
 
     private func spawnFoundryPattern() {
         lastAdjacentDoubleOpenLaneRaw = nil
-        let startLane = nextElement(Lane.allCases) ?? .center
-        let targetLane: Lane
-        switch startLane {
-        case .center: targetLane = nextBool() ? .left : .right
-        case .left, .right: targetLane = .center
-        }
         let z = patternStreamSpawnZ
-        let phase = nextFloat(in: 0...(Float.pi * 2))
-        let targetY: Float = foundrySpawnCount < 2
-            ? Self.foundryTargetY
-            : (nextBool() ? 0.98 : 1.64)
-        foundrySpawnCount += 1
-        let body = Entity()
-        body.name = "foundryCell"
-        let core = Entity()
-        core.name = "floatingCore"
-        core.addChild(ModelEntity(
-            mesh: .generateBox(width: 0.27, height: 0.27, depth: 0.27),
-            materials: [SimpleMaterial(color: .systemTeal, roughness: 0.18, isMetallic: true)]
-        ))
-        let light = ModelEntity(mesh: .generateSphere(radius: 0.07),
-                                materials: [UnlitMaterial(color: .systemMint)])
-        light.position.z = 0.17
-        core.addChild(light)
-        body.addChild(core)
-        attachPickupToPortalStream(body, playfieldX: startLane.x,
-                                   playfieldY: Self.foundryTargetY, playfieldZ: z)
-
-        let target = Entity()
-        target.name = "foundryTarget"
-        for index in 0..<12 {
-            let angle = Float(index) * Float.pi / 6
-            let bead = ModelEntity(mesh: .generateSphere(radius: 0.027),
-                                   materials: [UnlitMaterial(color: .systemMint)])
-            bead.position = SIMD3(cos(angle) * 0.27, sin(angle) * 0.27, 0)
-            target.addChild(bead)
+        let risk = gameModel?.stats.risk ?? .stable
+        let count: Int
+        switch risk {
+        case .stable: count = foundrySpawnCount < 2 ? 1 : (nextBool() ? 1 : 2)
+        case .charged: count = nextBool() ? 1 : 2
+        case .unstable: count = nextBool() ? 2 : 3
         }
-        attachPickupToPortalStream(target, playfieldX: targetLane.x,
-                                   playfieldY: targetY, playfieldZ: z)
-        foundryItems.append(FoundryItem(body: body, core: core, target: target,
-                                        x: startLane.x, y: Self.foundryTargetY, z: z,
-                                        targetX: targetLane.x, targetY: targetY,
-                                        phase: phase))
+        let speed: Float
+        switch risk {
+        case .stable: speed = 0.9
+        case .charged: speed = 1.08
+        case .unstable: speed = 1.28
+        }
+        foundrySpawnCount += 1
+        let root = Entity()
+        root.name = "foundryDoor"
+        let panelMaterial = SimpleMaterial(color: .darkGray, roughness: 0.28, isMetallic: true)
+        let leftPanel = ModelEntity(mesh: .generateBox(width: 1.57, height: 2.35, depth: 0.16),
+                                    materials: [panelMaterial])
+        let rightPanel = ModelEntity(mesh: .generateBox(width: 1.57, height: 2.35, depth: 0.16),
+                                     materials: [panelMaterial])
+        leftPanel.position.x = -0.79
+        rightPanel.position.x = 0.79
+        root.addChild(leftPanel)
+        root.addChild(rightPanel)
+
+        var available = FoundryShapeKind.allCases
+        let targetXs: [Float] = count == 1 ? [0] : (count == 2 ? [-0.62, 0.62] : [-0.78, 0, 0.78])
+        var shapes: [FoundryShape] = []
+        for index in 0..<count {
+            let kind = nextElement(available) ?? .sphere
+            available.removeAll { $0 == kind }
+            let targetX = targetXs[index]
+            let targetY: Float = count == 1 ? 1.24 : (index.isMultiple(of: 2) ? 1.16 : 1.47)
+            let startX: Float = count == 1
+                ? (nextBool() ? -0.76 : 0.76)
+                : targetXs[(index + 1) % count]
+            let startY: Float = targetY + (nextBool() ? 0.14 : -0.14)
+
+            let slot = makeFoundrySlot(kind: kind)
+            slot.position = SIMD3(targetX, targetY - 1.18, 0.13)
+            root.addChild(slot)
+            let body = Entity()
+            body.name = "forceShape"
+            let core = Entity()
+            core.name = "floatingCore"
+            core.addChild(makeFoundryCore(kind: kind))
+            body.addChild(core)
+            attachPickupToPortalStream(body, playfieldX: startX, playfieldY: startY,
+                                       playfieldZ: z + Self.foundryShapeDepth)
+            shapes.append(FoundryShape(body: body, core: core, slot: slot,
+                                       x: startX, y: startY, targetX: targetX, targetY: targetY,
+                                       phase: nextFloat(in: 0...(Float.pi * 2))))
+        }
+        attachPickupToPortalStream(root, playfieldX: 0, playfieldY: 1.18, playfieldZ: z)
+        foundryItems.append(FoundryItem(root: root, leftPanel: leftPanel,
+                                        rightPanel: rightPanel, shapes: shapes,
+                                        z: z, speed: speed))
+    }
+
+    private func makeFoundryCore(kind: FoundryShapeKind) -> Entity {
+        let entity = Entity()
+        let material = SimpleMaterial(color: kind.color, roughness: 0.16, isMetallic: true)
+        let model: ModelEntity
+        switch kind {
+        case .sphere:
+            model = ModelEntity(mesh: .generateSphere(radius: 0.15), materials: [material])
+        case .cube:
+            model = ModelEntity(mesh: .generateBox(width: 0.27, height: 0.27, depth: 0.27),
+                                materials: [material])
+        case .diamond:
+            model = ModelEntity(mesh: .generateBox(width: 0.25, height: 0.25, depth: 0.25),
+                                materials: [material])
+            model.orientation = simd_quatf(angle: Float.pi / 4, axis: SIMD3(0, 0, 1))
+                * simd_quatf(angle: 0.35, axis: SIMD3(1, 0, 0))
+        }
+        entity.addChild(model)
+        return entity
+    }
+
+    private func makeFoundrySlot(kind: FoundryShapeKind) -> Entity {
+        let slot = Entity()
+        slot.name = "matchingSlot"
+        let material = UnlitMaterial(color: kind.color)
+        if kind == .sphere {
+            for index in 0..<16 {
+                let angle = Float(index) * Float.pi / 8
+                let bead = ModelEntity(mesh: .generateSphere(radius: 0.026), materials: [material])
+                bead.position = SIMD3(cos(angle) * 0.22, sin(angle) * 0.22, 0)
+                slot.addChild(bead)
+            }
+        } else {
+            for index in 0..<4 {
+                let angle = Float(index) * Float.pi / 2 + (kind == .diamond ? Float.pi / 4 : 0)
+                let edge = ModelEntity(mesh: .generateBox(width: 0.31, height: 0.035, depth: 0.035),
+                                       materials: [material])
+                edge.position = SIMD3(cos(angle) * 0.16, sin(angle) * 0.16, 0)
+                edge.orientation = simd_quatf(angle: angle + Float.pi / 2,
+                                               axis: SIMD3(0, 0, 1))
+                slot.addChild(edge)
+            }
+        }
+        return slot
     }
 
     private func spawnOrbitGatePattern() {
         lastAdjacentDoubleOpenLaneRaw = nil
         let z = patternStreamSpawnZ
         let root = Entity()
-        root.name = "orbitGate"
-        let panelMaterial = SimpleMaterial(color: UIColor.systemPink,
-                                           roughness: 0.32, isMetallic: true)
-        let left = ModelEntity(mesh: .generateBox(width: 1, height: 1.9, depth: 0.18),
-                               materials: [panelMaterial])
-        let right = ModelEntity(mesh: .generateBox(width: 1, height: 1.9, depth: 0.18),
-                                materials: [panelMaterial])
-        root.addChild(left)
-        root.addChild(right)
-        let marker = Entity()
-        marker.name = "orbitOpening"
-        for index in 0..<16 {
-            let angle = Float(index) * Float.pi / 8
-            let dot = ModelEntity(mesh: .generateSphere(radius: 0.025),
-                                  materials: [UnlitMaterial(color: .systemYellow)])
-            dot.position = SIMD3(cos(angle) * 0.47, sin(angle) * 0.47, 0.13)
-            marker.addChild(dot)
+        root.name = "threeOrbitRings"
+        let axes: [SIMD3<Float>] = [
+            normalize(SIMD3(1, 0.18, 0)),
+            normalize(SIMD3(0.15, 1, 0)),
+            normalize(SIMD3(0.8, -0.65, 0))
+        ]
+        let colors: [UIColor] = [.systemPink, .systemYellow, .systemCyan]
+        let shift = nextBool() ? Float(1) : Float(-1)
+        var rings: [OrbitRing] = []
+        for index in 0..<3 {
+            let ring = Entity()
+            ring.name = "rotatingRing\(index + 1)"
+            let centerX: Float = orbitSpawnCount < 2 ? 0 : shift * [0.0, 0.40, 0.75][index]
+            let centerY: Float = 1.46 + [0.0, 0.12, -0.10][index]
+            let offsetZ = Float(index - 1) * 0.88
+            ring.position = SIMD3(centerX, centerY - 1.46, offsetZ)
+            let material = SimpleMaterial(color: colors[index], roughness: 0.22, isMetallic: true)
+            for segment in 0..<24 {
+                let angle = Float(segment) * Float.pi / 12
+                let bar = ModelEntity(mesh: .generateBox(width: 0.22, height: 0.14, depth: 0.14),
+                                      materials: [material])
+                bar.position = SIMD3(cos(angle) * 0.80, sin(angle) * 0.80, 0)
+                bar.orientation = simd_quatf(angle: angle + Float.pi / 2,
+                                              axis: SIMD3(0, 0, 1))
+                ring.addChild(bar)
+                if segment.isMultiple(of: 6) {
+                    let marker = ModelEntity(mesh: .generateSphere(radius: 0.085),
+                                             materials: [UnlitMaterial(color: colors[index])])
+                    marker.position = SIMD3(cos(angle) * 0.80, sin(angle) * 0.80, 0.10)
+                    ring.addChild(marker)
+                }
+            }
+            root.addChild(ring)
+            rings.append(OrbitRing(entity: ring, offsetZ: offsetZ,
+                                   axis: axes[(index + orbitSpawnCount) % 3],
+                                   phase: nextFloat(in: 0...(Float.pi * 2)),
+                                   spin: nextFloat(in: 0.65...1.05)))
         }
-        root.addChild(marker)
-        attachPickupToPortalStream(root, playfieldX: 0, playfieldY: 0.95, playfieldZ: z)
-        let moving = orbitSpawnCount >= 2
+        attachPickupToPortalStream(root, playfieldX: 0, playfieldY: 1.46, playfieldZ: z)
         orbitSpawnCount += 1
-        let item = OrbitItem(root: root, left: left, right: right, marker: marker,
-                             z: z, phase: nextFloat(in: 0...(Float.pi * 2)), moving: moving)
-        item.gapX = moving ? 0.70 * sin(item.phase) : 0
-        orbitItems.append(item)
-        layoutOrbitGate(item)
-        // A center-lane token follows the gate, clear of the moving panels.
-        // Token Surge and Magnet therefore retain useful rewards in this biome.
+        orbitItems.append(OrbitItem(root: root, rings: rings, z: z))
         if nextUnitFloat() < collectibleChance {
-            spawnCoin(in: .center, streamOffset: -1.2)
+            spawnCoin(in: .center, streamOffset: -2.5)
         }
     }
 
@@ -3576,9 +3761,9 @@ final class GameWorld {
 
     private func pruneEntities() {
         foundryItems.removeAll { item in
-            if item.resolved || item.z > GameWorld.despawnZ {
-                item.body.removeFromParent()
-                item.target.removeFromParent()
+            if item.z > GameWorld.despawnZ {
+                item.root.removeFromParent()
+                for shape in item.shapes { shape.body.removeFromParent() }
                 return true
             }
             return false

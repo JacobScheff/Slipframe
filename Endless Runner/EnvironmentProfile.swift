@@ -85,7 +85,7 @@ enum EnvironmentTwist: Equatable {
 }
 
 /// Player-chosen challenge contract for one Normal-mode biome visit.
-/// Risk changes pattern density / complexity and rewards, never stream speed.
+/// Risk changes pattern density / complexity and rewards; the base stream stays fixed.
 enum RiftRisk: String, CaseIterable, Equatable, Hashable, Codable {
     case stable
     case charged
@@ -194,9 +194,10 @@ enum RiftJunctionRules {
 
     static func modifierPool(for environment: EnvironmentID) -> [RiftModifier?] {
         if environment == .vectorFoundry {
-            // Foundry has no wall collision or touch pickups. Every offered modifier
-            // must still change the visit's scoring or bonus behavior.
-            return [nil, .some(.tokenSurge), .some(.overdrive), .some(.bonusBank)]
+            // The door can hit the player, but Magnet and Close Call have no useful
+            // Foundry interaction.
+            return [nil, .some(.tokenSurge), .some(.aegis),
+                    .some(.overdrive), .some(.bonusBank)]
         }
         return [nil] + RiftModifier.allCases.map { Optional($0) }
     }
