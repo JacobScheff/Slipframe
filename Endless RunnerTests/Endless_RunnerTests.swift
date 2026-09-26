@@ -1798,27 +1798,61 @@ final class Endless_RunnerTests: XCTestCase {
         XCTAssertFalse(foundryModifiers.contains(.some(.closeCall)))
     }
 
-    func testFoundryRotationAimsOnlyAtAcquisition() {
+    func testFoundryAcquisitionSurvivesMissingOrTurnedHandOrientation() {
         let head = SIMD3<Float>(0, 1.2, 0)
         let wrist = SIMD3<Float>(0, 1.2, -0.4)
+        let target = SIMD3<Float>(0, 1.2, -3)
         let straight = HandPose.ForceBasis(finger: SIMD3(0, 1, 0), palm: SIMD3(0, 0, -1))
-        let turned = HandPose.ForceBasis(finger: SIMD3(0, 1, 0),
-                                         palm: simd_normalize(SIMD3(0.6, 0, -0.8)))
-        let initialAim = FoundryForceSelection.direction(head: head, hand: wrist, basis: straight)!
-        let rotatedAim = FoundryForceSelection.direction(head: head, hand: wrist, basis: turned)!
-        XCTAssertEqual(initialAim.x, 0, accuracy: 0.001)
-        XCTAssertGreaterThan(rotatedAim.x, 0.3)
-        XCTAssertNil(FoundryForceSelection.direction(head: head, hand: wrist, basis: nil))
+        let away = HandPose.ForceBasis(finger: SIMD3(0, 1, 0), palm: SIMD3(0, 0, 1))
+        let sideways = HandPose.ForceBasis(finger: SIMD3(0, 1, 0), palm: SIMD3(1, 0, 0))
+        let samples: [HandPose.ForceBasis?] = [straight, nil, away, nil, sideways]
+        for basis in samples {
+            let score = FoundryForceSelection.score(head: head, hand: wrist, target: target, basis: basis)
+            XCTAssertNotNil(score)
+            let assignment = FoundryForceSelection.assign(left: [score], right: [nil])
+            XCTAssertEqual(assignment.left, 0)
+            XCTAssertNil(assignment.right)
+        }
 
         var lock = FoundryForceLock(hand: wrist, shape: SIMD2(0, 1.2))
-        // Even when pointing backward (no acquisition ray), the existing lock follows position.
-        let away = HandPose.ForceBasis(finger: SIMD3(0, 1, 0), palm: SIMD3(0, 0, 1))
-        XCTAssertNil(FoundryForceSelection.direction(head: head, hand: wrist, basis: away))
+        // Orientation is optional at acquisition and unused once the shape is held.
         XCTAssertTrue(lock.update(hand: wrist, deltaTime: 1.0 / 90))
         XCTAssertEqual(lock.target, SIMD2(0, 1.2))
         XCTAssertTrue(lock.update(hand: wrist + SIMD3(0.2, 0.1, 0), deltaTime: 1.0 / 90))
         XCTAssertEqual(lock.target.x, 0.5, accuracy: 0.001)
         XCTAssertEqual(lock.target.y, 1.45, accuracy: 0.001)
+    }
+
+    func testFoundryRotationRanksNearbyShapesWithoutRejectingThem() throws {
+        let head = SIMD3<Float>(0, 1.2, 0)
+        let wrist = SIMD3<Float>(0, 1.2, -0.4)
+        let turned = HandPose.ForceBasis(finger: SIMD3(0, 1, 0),
+                                         palm: simd_normalize(SIMD3(0.6, 0, -0.8)))
+        let leftTarget = SIMD3<Float>(-0.4, 1.2, -3)
+        let rightTarget = SIMD3<Float>(0.4, 1.2, -3)
+        let left = try XCTUnwrap(FoundryForceSelection.score(
+            head: head, hand: wrist, target: leftTarget, basis: turned))
+        let right = try XCTUnwrap(FoundryForceSelection.score(
+            head: head, hand: wrist, target: rightTarget, basis: turned))
+        XCTAssertGreaterThan(right, left)
+        XCTAssertEqual(FoundryForceSelection.assign(left: [left, right], right: [nil, nil]).left, 1)
+        XCTAssertNotNil(FoundryForceSelection.score(head: head, hand: wrist, target: leftTarget, basis: nil))
+        XCTAssertNotNil(FoundryForceSelection.score(head: head, hand: wrist, target: rightTarget, basis: nil))
+        XCTAssertNil(FoundryForceSelection.score(
+            head: head, hand: wrist, target: SIMD3(3, 1.2, -1), basis: turned))
+    }
+
+    func testFoundryBothHandsCanAcquireWithoutKnuckleTracking() {
+        let head = SIMD3<Float>(0, 1.6, 0)
+        let targets = [SIMD3<Float>(-0.75, 1.2, -3), SIMD3<Float>(0.75, 1.2, -3)]
+        let leftHand = head + (targets[0] - head) * 0.15
+        let rightHand = head + (targets[1] - head) * 0.15
+        let assignment = FoundryForceSelection.assign(
+            left: targets.map { FoundryForceSelection.score(head: head, hand: leftHand, target: $0, basis: nil) },
+            right: targets.map { FoundryForceSelection.score(head: head, hand: rightHand, target: $0, basis: nil) }
+        )
+        XCTAssertEqual(assignment.left, 0)
+        XCTAssertEqual(assignment.right, 1)
     }
 
     func testFoundryLockSurvivesFastMovementAndBriefOcclusion() {

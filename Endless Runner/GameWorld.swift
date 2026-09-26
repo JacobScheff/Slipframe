@@ -76,16 +76,24 @@ struct FoundryForceLock {
 enum FoundryForceSelection {
     static let aimDot: Float = 0.94
 
-    static func direction(head: SIMD3<Float>, hand: SIMD3<Float>,
-                          basis: HandPose.ForceBasis?) -> SIMD3<Float>? {
+    static func score(head: SIMD3<Float>, hand: SIMD3<Float>, target: SIMD3<Float>,
+                      basis: HandPose.ForceBasis?) -> Float? {
         let ray = hand - head
-        guard ray.z < -0.12, simd_length(ray) > 0.15, let basis else { return nil }
+        let toward = target - head
+        guard ray.z < -0.12, simd_length(ray) > 0.15, toward.z < -0.4 else { return nil }
         let sight = simd_normalize(ray)
-        // Support both pointing fingers and an outstretched palm for initial acquisition.
-        let aim = simd_dot(basis.finger, sight) > simd_dot(basis.palm, sight)
-            ? basis.finger : basis.palm
-        guard simd_dot(aim, sight) > 0.15 else { return nil }
-        return simd_normalize(sight * 0.35 + aim * 0.65)
+        // Eligibility uses the original headset-through-hand sight line. Joint occlusion
+        // or a turned palm must never prevent a tracked hand from acquiring a shape.
+        let sightScore = simd_dot(sight, simd_normalize(toward))
+        guard sightScore > aimDot else { return nil }
+        guard let basis else { return sightScore }
+        let fromHand = target - hand
+        guard simd_length(fromHand) > 0.001 else { return sightScore }
+        let direction = simd_normalize(fromHand)
+        let alignment = max(simd_dot(basis.finger, direction), simd_dot(basis.palm, direction))
+        guard alignment.isFinite else { return sightScore }
+        // Rotation is a small ranking preference between eligible shapes, not a gate.
+        return sightScore + min(1, max(0, alignment)) * 0.025
     }
 
     /// Assign distinct available shapes together so update order cannot favor one hand.
@@ -2357,24 +2365,22 @@ final class GameWorld {
                 item.shapes.contains { $0.heldBy == hand && !$0.resolved }
             }), let position else { return unavailable }
             let grip = root.convert(position: position, from: nil)
-            guard let direction = FoundryForceSelection.direction(
-                head: head, hand: grip,
-                basis: foundryBasisInPlayfield(basis, gripWorld: position)
-            ) else { return unavailable }
+            let localBasis = foundryBasisInPlayfield(basis, gripWorld: position)
             return shapes.map { shape -> Float? in
                 guard !shape.resolved, !shape.inserting, shape.heldBy == nil else { return nil }
-                let toward = SIMD3(shape.x, shape.y, door.z + Self.foundryShapeDepth) - grip
-                guard toward.z < -0.4 else { return nil }
-                let score = simd_dot(normalize(toward), direction)
-                guard score > FoundryForceSelection.aimDot else { return nil }
+                guard let score = FoundryForceSelection.score(
+                    head: head, hand: grip,
+                    target: SIMD3(shape.x, shape.y, door.z + Self.foundryShapeDepth),
+                    basis: localBasis
+                ) else { return nil }
                 // Small hysteresis keeps a nearly tied target from resetting the dwell.
                 return score + (shape === hover ? 0.008 : 0)
             }
         }
         let assignment = FoundryForceSelection.assign(
-            left: scores(hand: .left, position: leftFoundryPositionWorld,
+            left: scores(hand: .left, position: leftHandGripWorld ?? leftFoundryPositionWorld,
                          basis: leftFoundryBasisWorld, hover: leftFoundryHover),
-            right: scores(hand: .right, position: rightFoundryPositionWorld,
+            right: scores(hand: .right, position: rightHandGripWorld ?? rightFoundryPositionWorld,
                           basis: rightFoundryBasisWorld, hover: rightFoundryHover)
         )
         return (assignment.left.map { shapes[$0] }, assignment.right.map { shapes[$0] })

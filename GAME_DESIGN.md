@@ -211,7 +211,8 @@ The eight biomes in the random pool:
 Slow doors approach along the track at roughly twice the original cadence. Each has
 one to three colored, shape-matched slots, averaging about two shapes per door.
 Aim a raised hand toward a floating shape and hold briefly to engage the Force.
-Initial selection blends the sight line with the pointing-finger or palm direction.
+Initial selection follows the headset-through-hand sight line. Hand rotation helps
+rank nearby shapes, but missing orientation or a turned palm never blocks pickup.
 A glowing ring marks the engaged shape. Once locked, wrist translation moves it;
 rotation, finger curling, and fast sweeps do not release it. Each hand independently
 holds its own shape, with simultaneous selection assigning distinct targets.
