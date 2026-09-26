@@ -208,23 +208,25 @@ The eight biomes in the random pool:
 
 ##### Vector Foundry
 
-Slow doors approach along the track. Each has one to three colored, shape-matched
-slots. Aim roughly through a raised hand at a floating shape and hold briefly to
+Slow doors approach along the track at roughly twice the original cadence. Each has
+one to three colored, shape-matched slots, averaging about two shapes per door.
+Aim roughly through a raised hand at a floating shape and hold briefly to
 engage the Force. A glowing ring marks the engaged shape. Moving the hand shifts it
 directly; rotating the hand also steers it. Fast hand sweeps do not latch, and a
 quick move releases the shape so it floats in place. Shapes ease toward the target
-and bob and rotate gently rather than sticking rigidly to the hand. Aligned shapes
-float into their slots; filling every slot opens the door. Reaching a closed door
-is a hit.
-Risk raises door speed and the possible shape count; all doors remain slower than
-the normal obstacle stream.
+and bob, drift, and rotate gently rather than sticking rigidly to the hand. Hand
+translation stays responsive across the whole door; wrist tilt adds a smaller nudge.
+Aligned shapes float into their slots; filling every slot opens the door. Reaching
+a closed door is a hit. Risk raises door speed and the possible shape count; all
+doors remain slower than the normal obstacle stream.
 
 ##### Orbit Gate
 
 The first two beats teach three depth-separated 3D hoops. Later beats cycle among
 those triples, a flat rotating shutter with a timed wedge opening, and pairs of
 strongly tilted hoops rotating on different side axes. Their phases, tilt axes,
-directions, and modest center shifts vary. The head must pass through each opening;
+directions, and modest center shifts vary. The flat shutter sits slightly lower so
+the wedge's highest point remains reachable. The head must pass through each opening;
 hands remain free to move.
 
 ##### Summit Step

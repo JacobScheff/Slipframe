@@ -19,19 +19,46 @@ import SwiftUI
 import UIKit
 
 enum FoundryForceSteering {
+    static let maxSpeed: Float = 1.9
+
     static func target(grabShape: SIMD2<Float>, handDelta: SIMD2<Float>,
                        startBasis: HandPose.ForceBasis?,
                        currentBasis: HandPose.ForceBasis?) -> SIMD2<Float> {
         var tilt = SIMD2<Float>.zero
         if let start = startBasis, let current = currentBasis {
-            tilt.x = (current.finger.x - start.finger.x) * 0.65
+            let x = (current.finger.x - start.finger.x) * 0.65
                 + (current.palm.x - start.palm.x) * 0.5
-            tilt.y = (current.finger.y - start.finger.y) * 0.5
+            let y = (current.finger.y - start.finger.y) * 0.5
                 + (current.palm.y - start.palm.y) * 0.65
+            // Rotation adds a nudge; it cannot cancel a full hand translation.
+            tilt = SIMD2(min(0.28, max(-0.28, x)), min(0.28, max(-0.28, y)))
         }
         let requested = grabShape + handDelta * 2.5 + tilt
-        return SIMD2(min(1.12, max(-1.12, requested.x)),
-                     min(1.9, max(0.62, requested.y)))
+        return SIMD2(min(1.55, max(-1.55, requested.x)),
+                     min(2.05, max(0.52, requested.y)))
+    }
+
+    static func advance(position: SIMD2<Float>, velocity: SIMD2<Float>,
+                        target: SIMD2<Float>, deltaTime: Float)
+        -> (position: SIMD2<Float>, velocity: SIMD2<Float>) {
+        var desiredVelocity = (target - position) * 7.5
+        let desiredSpeed = simd_length(desiredVelocity)
+        if desiredSpeed > maxSpeed { desiredVelocity *= maxSpeed / desiredSpeed }
+        var nextVelocity = velocity
+            + (desiredVelocity - velocity) * min(1, deltaTime * 15)
+        let speed = simd_length(nextVelocity)
+        if speed > maxSpeed { nextVelocity *= maxSpeed / speed }
+        return (position + nextVelocity * deltaTime, nextVelocity)
+    }
+}
+
+enum FoundryPatternRules {
+    static func shapeCountPool(for risk: RiftRisk) -> [Int] {
+        switch risk {
+        case .stable: return [1, 2, 2]
+        case .charged: return [1, 2, 2, 3]
+        case .unstable: return [2, 2, 3]
+        }
     }
 }
 
@@ -473,7 +500,6 @@ final class GameWorld {
     private static let foundryShapeDepth: Float = 0.72
     private static let foundryAimDwell: Float = 0.28
     private static let foundryAimDot: Float = 0.975
-    private static let foundryMaxSpeed: Float = 1.35
     private static let orbitOpeningRadius: Float = 0.67
 
     /// Playfield origin: floor at y=0, stand line at z=0, track extends along −Z.
@@ -2108,7 +2134,7 @@ final class GameWorld {
         case .summitStep:
             base = nextFloat(in: GameWorld.summitStepSpawnGapMin...GameWorld.summitStepSpawnGapMax)
         case .telekinesis:
-            base = nextFloat(in: 38...42)
+            base = nextFloat(in: 19...21)
         case .orbitGate:
             base = nextFloat(in: 6.0...7.0)
         case .baseline:
@@ -2258,15 +2284,19 @@ final class GameWorld {
         let direction = normalize(ray)
         var best: FoundryShape?
         var bestScore = Self.foundryAimDot
-        for door in foundryItems where door.z < head.z - 0.65 && door.opening == 0 {
-            for shape in door.shapes where !shape.resolved && !shape.inserting && shape.heldBy == nil {
-                let toward = SIMD3(shape.x, shape.y, door.z + Self.foundryShapeDepth) - head
-                guard toward.z < -0.4 else { continue }
-                let score = simd_dot(normalize(toward), direction)
-                if score > bestScore {
-                    best = shape
-                    bestScore = score
-                }
+        // A faster cadence can put two doors in view. Finish the nearer puzzle
+        // before force selection can jump to a shape behind it.
+        guard let door = foundryItems.first(where: {
+            $0.z < head.z - 0.65 && $0.opening == 0
+                && $0.shapes.contains(where: { !$0.resolved && !$0.inserting })
+        }) else { return nil }
+        for shape in door.shapes where !shape.resolved && !shape.inserting && shape.heldBy == nil {
+            let toward = SIMD3(shape.x, shape.y, door.z + Self.foundryShapeDepth) - head
+            guard toward.z < -0.4 else { continue }
+            let score = simd_dot(normalize(toward), direction)
+            if score > bestScore {
+                best = shape
+                bestScore = score
             }
         }
         return best
@@ -2396,30 +2426,25 @@ final class GameWorld {
                     }
                     continue
                 }
-                let toward = shape.target - SIMD2(shape.x, shape.y)
-                var desiredVelocity = toward * 5.5
-                let desiredSpeed = length(desiredVelocity)
-                if desiredSpeed > Self.foundryMaxSpeed {
-                    desiredVelocity *= Self.foundryMaxSpeed / desiredSpeed
-                }
-                shape.velocity += (desiredVelocity - shape.velocity) * min(1, deltaTime * 11)
-                let movementSpeed = length(shape.velocity)
-                if movementSpeed > Self.foundryMaxSpeed {
-                    shape.velocity *= Self.foundryMaxSpeed / movementSpeed
-                }
-                shape.x += shape.velocity.x * deltaTime
-                shape.y += shape.velocity.y * deltaTime
+                let motion = FoundryForceSteering.advance(
+                    position: SIMD2(shape.x, shape.y), velocity: shape.velocity,
+                    target: shape.target, deltaTime: deltaTime
+                )
+                shape.x = motion.position.x
+                shape.y = motion.position.y
+                shape.velocity = motion.velocity
                 let t = elapsedTime + shape.phase
-                shape.body.position = SIMD3(shape.x + 0.012 * sin(t * 1.4),
-                                            shape.y - Self.portalHeight * 0.5 + 0.03 * sin(t * 1.9),
-                                            door.z + Self.foundryShapeDepth - portalZ)
+                shape.body.position = SIMD3(shape.x + 0.018 * sin(t * 1.4),
+                                            shape.y - Self.portalHeight * 0.5 + 0.04 * sin(t * 1.9),
+                                            door.z + Self.foundryShapeDepth - portalZ
+                                                + 0.025 * sin(t * 1.1))
                 shape.core.scale = SIMD3(repeating: 1 + 0.025 * sin(t * 2.6))
                 shape.glow.isEnabled = shape.heldBy != nil
                 if shape.glow.isEnabled {
                     shape.glow.components.set(OpacityComponent(opacity: 0.65 + 0.25 * sin(t * 4)))
                 }
-                shape.core.orientation = simd_quatf(angle: 0.06 * sin(t * 0.8), axis: SIMD3(0, 1, 0))
-                    * simd_quatf(angle: 0.04 * sin(t * 0.7), axis: SIMD3(0, 0, 1))
+                shape.core.orientation = simd_quatf(angle: 0.08 * sin(t * 0.8), axis: SIMD3(0, 1, 0))
+                    * simd_quatf(angle: 0.05 * sin(t * 0.7), axis: SIMD3(0, 0, 1))
                 setPickupLightingWeight(entity: shape.body,
                                         playfieldZ: door.z + Self.foundryShapeDepth,
                                         lastWeight: &shape.lightingWeight)
@@ -3022,12 +3047,8 @@ final class GameWorld {
         lastAdjacentDoubleOpenLaneRaw = nil
         let z = patternStreamSpawnZ
         let risk = gameModel?.stats.risk ?? .stable
-        let count: Int
-        switch risk {
-        case .stable: count = foundrySpawnCount < 2 ? 1 : (nextBool() ? 1 : 2)
-        case .charged: count = nextBool() ? 1 : 2
-        case .unstable: count = nextBool() ? 2 : 3
-        }
+        let count = risk == .stable && foundrySpawnCount == 0
+            ? 1 : (nextElement(FoundryPatternRules.shapeCountPool(for: risk)) ?? 2)
         let speed: Float
         switch risk {
         case .stable: speed = 0.9
@@ -3154,7 +3175,7 @@ final class GameWorld {
         var rings: [OrbitRing] = []
         if pattern == 1 {
             let ring = makeTimedOrbitRing()
-            ring.position = SIMD3(0, 0, 0)
+            ring.position = SIMD3(0, -0.12, 0)
             root.addChild(ring)
             rings.append(OrbitRing(entity: ring, offsetZ: 0, style: .timedGap,
                                    axis: SIMD3(0, 0, 1),

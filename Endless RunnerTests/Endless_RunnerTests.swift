@@ -1814,8 +1814,47 @@ final class Endless_RunnerTests: XCTestCase {
             grabShape: origin, handDelta: .zero,
             startBasis: start, currentBasis: turned
         )
-        XCTAssertGreaterThan(rotated.x, 0.35)
+        XCTAssertEqual(rotated.x, 0.28, accuracy: 0.001)
         XCTAssertGreaterThan(rotated.y, origin.y)
+
+        let opposing = HandPose.ForceBasis(finger: SIMD3(-0.4, 0.9, 0),
+                                           palm: SIMD3(-0.3, 0.1, -0.95))
+        let near = FoundryForceSteering.target(
+            grabShape: SIMD2(-0.76, 1.2), handDelta: SIMD2(0.2, 0),
+            startBasis: start, currentBasis: opposing
+        )
+        let far = FoundryForceSteering.target(
+            grabShape: SIMD2(-0.76, 1.2), handDelta: SIMD2(0.4, 0),
+            startBasis: start, currentBasis: opposing
+        )
+        XCTAssertEqual(far.x - near.x, 0.5, accuracy: 0.001)
+        let fullSweep = FoundryForceSteering.target(
+            grabShape: SIMD2(-0.76, 1.2), handDelta: SIMD2(0.9, 0),
+            startBasis: start, currentBasis: start
+        )
+        XCTAssertGreaterThan(fullSweep.x, 1.12)
+
+        var position = SIMD2<Float>(-0.76, 1.2)
+        var velocity = SIMD2<Float>.zero
+        for _ in 0..<45 {
+            let step = FoundryForceSteering.advance(
+                position: position, velocity: velocity,
+                target: SIMD2(0.76, 1.2), deltaTime: 1.0 / 90
+            )
+            position = step.position
+            velocity = step.velocity
+        }
+        XCTAssertGreaterThan(position.x, 0.0)
+        XCTAssertLessThanOrEqual(simd_length(velocity), FoundryForceSteering.maxSpeed + 0.001)
+    }
+
+    func testFoundryShapeCountPoolsAverageTwoAcrossRisks() {
+        let means = RiftRisk.allCases.map { risk -> Float in
+            let pool = FoundryPatternRules.shapeCountPool(for: risk)
+            XCTAssertTrue(pool.allSatisfy { (1...3).contains($0) })
+            return Float(pool.reduce(0, +)) / Float(pool.count)
+        }
+        XCTAssertEqual(means.reduce(0, +) / Float(means.count), 2, accuracy: 0.001)
     }
 
     func testOrbitGateCyclesPatternsAndRequiresTimedWedge() {
