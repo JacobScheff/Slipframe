@@ -56,6 +56,7 @@ final class GameModel: ObservableObject {
 
     /// True while the headset is outside the logical play rectangle during a run.
     @Published var isOffPlayfield: Bool = false
+    @Published var biomeHint: String? = nil
 
     /// True while a guided tutorial run is active (soft hits, no score).
     @Published private(set) var isTutorialRun: Bool = false
@@ -180,6 +181,7 @@ final class GameModel: ObservableObject {
         isTutorialRun = false
         prefersRoomDimming = false
         isOffPlayfield = false
+        biomeHint = nil
         clearTutorialOverlay()
         pendingMenuReveal = revealMenu
         if markCompleted {
@@ -200,6 +202,7 @@ final class GameModel: ObservableObject {
         isChoosingPortal = false
         prefersRoomDimming = false
         isOffPlayfield = false
+        biomeHint = nil
         // Keep `isTutorialRun` true so HUD/panels stay in tutorial-skip mode until
         // `finalizeTutorialSkip()` runs after walls/coins dissolve.
     }
@@ -212,6 +215,7 @@ final class GameModel: ObservableObject {
         isPlaying = false
         prefersRoomDimming = false
         isOffPlayfield = false
+        biomeHint = nil
         hasCompletedTutorial = true
         pendingMenuReveal = true
         clearTutorialOverlay()
@@ -299,6 +303,7 @@ final class GameModel: ObservableObject {
         isChoosingPortal = false
         prefersRoomDimming = false
         isOffPlayfield = false
+        biomeHint = nil
         recordPersonalBestsIfNeeded()
     }
 
@@ -366,6 +371,7 @@ final class GameModel: ObservableObject {
         isTutorialRun = tutorial
         prefersRoomDimming = false
         isOffPlayfield = false
+        biomeHint = nil
         lastPersonalBestUpdate = nil
         pendingMenuReveal = false
         clearTutorialOverlay()

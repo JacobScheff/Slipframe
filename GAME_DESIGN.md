@@ -137,7 +137,10 @@ motion. Other modes keep their existing automatic biome rules.
 
 **Portal modifiers**
 
-Each portal independently has an equal chance of rolling any modifier or no modifier.
+Each portal independently has an equal chance of rolling any compatible modifier or no modifier.
+Lattice Forge offers Token Surge, Aegis, Overdrive, and Bonus Bank. Its door can
+hit the player, while Magnet and Close Call have no useful Foundry interaction.
+Other biomes keep the full modifier pool.
 No modifier is shown by the absence of a lower portal glyph.
 
 - **Token Surge:** three-token depth chains and doubled token value; increases Crystal
@@ -192,7 +195,7 @@ Each environment has:
 
 #### Environments (roster)
 
-The six biomes in the random pool:
+The eight biomes in the random pool:
 
 1. Summit Step
 2. Low Crawl
@@ -200,6 +203,36 @@ The six biomes in the random pool:
 4. Ember Run
 5. Storm Pass
 6. Crystal Cave
+7. Lattice Forge (Crystal Cave music temporarily)
+8. Gyre Gate (Storm Pass music temporarily)
+
+##### Lattice Forge
+
+Slow doors approach every four to six seconds depending on risk. Every door has at
+least two colored, shape-matched slots. Stable averages three shapes, Charged averages
+3.5, and Unstable always has four or five, averaging 4.5.
+Aim a raised hand toward a floating shape and hold briefly to engage the Force.
+Initial selection follows the headset-through-hand sight line. Hand rotation helps
+rank nearby shapes, but missing orientation or a turned palm never blocks pickup.
+A glowing ring marks the engaged shape. Once locked, wrist translation moves it;
+rotation, finger curling, and fast sweeps do not release it. Each hand independently
+holds its own shape, with simultaneous selection assigning distinct targets.
+Tracking can disappear for up to two seconds before releasing a shape. Recovery
+rebases the wrist position to avoid a jump. Shapes ease toward the target and bob,
+drift, and rotate gently. Objects move five times the wrist distance, so a roughly
+30 cm hand movement covers the outer slots. Faster follow motion keeps them responsive.
+Aligned shapes float into their slots; filling every slot opens the door. Reaching
+a closed door is a hit. Risk raises door speed and the possible shape count; all
+doors remain slower than the normal obstacle stream.
+
+##### Gyre Gate
+
+The first two beats teach three depth-separated 3D hoops. Later beats cycle among
+those triples, a flat rotating shutter with a timed wedge opening, and pairs of
+strongly tilted hoops rotating on different side axes. Their phases, tilt axes,
+directions, and modest center shifts vary. The flat shutter sits slightly lower so
+the wedge's highest point remains reachable. The head must pass through each opening;
+hands remain free to move.
 
 ##### Summit Step
 

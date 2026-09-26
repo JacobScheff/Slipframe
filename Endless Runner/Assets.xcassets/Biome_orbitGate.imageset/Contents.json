@@ -1,9 +1,8 @@
 {
   "images": [
     {
-      "filename": "slipframe-icon-back.png",
-      "idiom": "vision",
-      "scale": "2x"
+      "filename": "orbitGate.png",
+      "idiom": "universal"
     }
   ],
   "info": {

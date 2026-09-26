@@ -1,6 +1,6 @@
 # Slipframe — Blender asset pipeline
 
-The game now uses **77 authored USDZ assets** instead of building its artwork from Swift primitives. The editable source is `Art/Blender/Slipframe_ArtSource.blend`; the original user scene and verification sphere are preserved. The `Slipframe_ArtLibrary` scene organizes individual assets into collections. No manual saving or scene switching is required during MCP authoring.
+The game now uses **119 authored USDZ assets** instead of building its artwork from Swift primitives. The editable source is `Art/Blender/Slipframe_ArtSource.blend`; the original user scene and verification sphere are preserved. The `Slipframe_ArtLibrary` scene organizes individual assets into collections. No manual saving or scene switching is required during MCP authoring.
 
 ## Visual direction
 
@@ -10,10 +10,12 @@ The game now uses **77 authored USDZ assets** instead of building its artwork fr
 - **Low Crawl:** deep service housings, cooling vanes, overhead ribs and clearly marked duck clearance.
 - **Storm Pass:** armored turbine machinery, wind-swept gantries, sparse rain and a slowly turning distant rotor.
 - **Crystal Cave:** layered mineral rock, teal/rose/violet crystal growths and gently suspended crystals.
+- **Lattice Forge:** ancient black-ceramic fabrication machinery, turquoise energy channels, magnetic shape keys and a half-built rift ring.
+- **Gyre Gate:** violet orbital pylons, segmented alignment hoops, a timed iris and an eclipsed celestial machine.
 
 Both portal types use layered mechanical frames, inset luminous channels, fasteners, clamps and separately animated energy accents. Main and choice apertures are real RealityKit portals; choice portals show the destination's three-dimensional environment. The editor's portal-kit render is an asset review, not an in-game screenshot.
 
-Shared track sections, rails, floor inserts, endcaps, the start pad, tokens, crystal halves, charged variants, the merged crystal, wind ribbon, effect shards and modifier glyphs are also authored assets. Six Blender renders supply the biome-selection cards; controls, labels and accessibility remain native SwiftUI.
+Shared track sections, rails, floor inserts, endcaps, the start pad, tokens, crystal halves, charged variants, the merged crystal, wind ribbon, effect shards and modifier glyphs are also authored assets. Eight Blender renders supply the biome-selection cards; controls, labels and accessibility remain native SwiftUI.
 
 The obsolete runtime mesh/texture authoring files, `ProceduralGeometry.swift` and `ProceduralTextures.swift`, were removed from the app and Xcode target. Their previous versions remain recoverable from Git.
 
@@ -22,7 +24,7 @@ The obsolete runtime mesh/texture authoring files, `ProceduralGeometry.swift` an
 - `Art/Blender/Slipframe_ArtSource.blend`: editable source, with packed texture images.
 - `Art/Blender/Textures/`: six portable baked base-color textures.
 - `Endless Runner/ArtAssets/`: self-contained USDZ files plus `manifest.json`.
-- `Art/Previews/`: wall lineup, portal kit and six environment review renders.
+- `Art/Previews/`: wall lineup, portal kit and eight environment review renders.
 - `Endless Runner/Assets.xcassets/Biome_*.imageset/`: shipped menu thumbnails.
 - `BiomeAssetCatalog.swift`: asynchronous prototype loading, cloning, role-based tinting and motion bindings.
 - `GameVisuals.swift` / `GameVisualsObstacles.swift`: assembly and lightweight animation, not mesh-authoring code.
@@ -56,7 +58,7 @@ Five biomes now have three decorative prop silhouettes each (the original plus `
 
 The September 21 recording exposed unreadable rock faces under the portal's isolated lighting. Background meshes now use private copies of their materials with four directional emission levels, with stronger warm/cool separation for Summit. This fill travels through USD Preview Surface without adding runtime lights or changing shared portal/obstacle materials.
 
-All six environments replace their flat backdrop boxes with inward-facing, opaque sky domes with baked gradients. Three separated skyline layers, continued roads that blend into the terrain, and distant biome structures hide the old 27 m stage ending. No translucent fog is used. Source environment racks are spaced 350 m apart to keep their sky domes separate.
+All eight environments use inward-facing, opaque sky domes. Three separated skyline layers, continued roads and distant biome structures hide the old 27 m stage ending. No translucent fog is used. Source environment racks are spaced 350 m apart to keep their sky domes separate.
 
 `refine_backgrounds.py` incrementally applies this pass once, preserving existing scene art except the backdrop boxes. Its guard prevents accidental reapplication. `refresh_distance()` rebuilds only the horizon/road additions, and `export()` updates only background/prop packages and their manifest records. Portal assets, hazard assets, collision, and teleportation logic are unchanged.
 
@@ -80,7 +82,7 @@ Apple references: [USD entity loading](https://developer.apple.com/documentation
 
 ## Editing and exporting
 
-`vary_game_objects.py` is a guarded one-time pass that replaces wall variants 1/2 with distinct front assemblies and adds two variants each for duck gates, jump gates, tokens and all four crystal-half states. Spawn selection hashes the separate cosmetic seed; all authored wall/hazard bounds remain exact, and pickup variants retain the original asset envelope. The runtime preload list explicitly enumerates all 91 packages (never random selection during enumeration). `render_object_variations.py` renders the actual source variants side by side and creates the `ObjectVariationReview` scene.
+`vary_game_objects.py` is a guarded one-time pass that replaces wall variants 1/2 with distinct front assemblies and adds two variants each for duck gates, jump gates, tokens and all four crystal-half states. Spawn selection hashes the separate cosmetic seed; all authored wall/hazard bounds remain exact, and pickup variants retain the original asset envelope. The runtime preload list explicitly enumerates all 119 packages (never random selection during enumeration). `render_object_variations.py` renders the actual source variants side by side and creates the `ObjectVariationReview` scene.
 
 Ghost Glass walls, props and elevated scenery now use near-invisible materials: ordinary bodies at 0.012 opacity, spectral walls at 0.004 at runtime, and faint edges no higher than 0.035. The floor and sky retain their existing appearance. Runtime handling applies transparent PBR materials to all ghost wall/prop parts and does not overwrite the edges with opaque unlit materials. The exporter explicitly preserves `SF_NearInvisible_*` opacity in USD Preview Surface because the tested Blender 5.2 exporter otherwise wrote opacity 1 for the blended material. Package validation checks the resulting opacity and ghost material bindings. This is a Blender/USD check; final RealityKit rendering still needs device verification.
 
@@ -106,11 +108,11 @@ blender --background Art/Blender/Slipframe_ArtSource.blend --python Tools/Blende
 
 Validated on Windows with Blender 5.2:
 
-- All 91 packages open, contain their texture dependencies, use aligned uncompressed USDZ members, and have identity transforms / Y-up meter units.
+- All 119 packages open, contain their texture dependencies, use aligned uncompressed USDZ members, and have identity transforms / Y-up meter units.
 - Mesh points and triangle indices are valid; aperture normals face the player.
 - All 18 wall variants and both special hazards preserve their nominal envelopes.
 - Decorative variation stays outside the playable corridor at its extreme settings.
-- Total library after the object-variation pass: 170,237 triangles and approximately 31.99 MiB of USDZ packages. Each environment remains below 25,000 triangles (15,629–23,592). This is the whole library, not one frame's draw count.
+- Total library with Lattice Forge and Gyre Gate: 215,617 triangles and approximately 36.31 MiB of USDZ packages. Each environment remains below 25,000 triangles. This is the whole library, not one frame's draw count.
 - Blender review renders were inspected and refined.
 - All 35 app/test Swift files passed the syntax-only parser; `git diff --check` passed.
 

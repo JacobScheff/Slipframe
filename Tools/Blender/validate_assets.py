@@ -12,11 +12,15 @@ from pxr import Gf, Usd, UsdGeom, UsdShade, Sdf
 
 ROOT = Path(__file__).resolve().parents[2]
 ART = ROOT / 'Endless Runner' / 'ArtAssets'
-BIOMES = ['emberRun', 'summitStep', 'ghostGlass', 'lowCrawl', 'stormPass', 'crystalCave']
+BIOMES = ['emberRun', 'summitStep', 'ghostGlass', 'lowCrawl', 'stormPass', 'crystalCave',
+          'vectorFoundry', 'orbitGate']
 SHARED = '''rift_frame rift_aperture rift_energy junction_frame junction_aperture
 track_segment rail_segment track_endcap start_pad token crystal_azure crystal_azure_charged
 crystal_coral crystal_coral_charged crystal_combined fx_shard gust_ribbon glyph_risk glyph_aegis
 glyph_overdrive glyph_precision glyph_lock glyph_magnet hazard_duck hazard_jump'''.split()
+SHARED += '''foundry_door_panel foundry_shape_sphere foundry_shape_cube foundry_shape_diamond
+orbit_hoop_segment orbit_marker orbit_shutter_blade orbit_shutter_band orbit_shutter_rim
+orbit_shutter_hub'''.split()
 
 
 def check():
@@ -127,19 +131,23 @@ def check():
         # Every new silhouette is contained by the original envelope, so the
         # following extreme rotation/scale test also bounds all the variants.
         box = bounds['prop_' + biome]
+        variant_boxes = [box]
         for variant in [1, 2]:
             other = bounds[f'prop_{biome}_{variant}']
-            assert all(a >= b-1e-5 for a, b in zip(other.GetMin(), box.GetMin())), (biome, variant)
-            assert all(a <= b+1e-5 for a, b in zip(other.GetMax(), box.GetMax())), (biome, variant)
+            if biome not in ['vectorFoundry', 'orbitGate']:
+                assert all(a >= b-1e-5 for a, b in zip(other.GetMin(), box.GetMin())), (biome, variant)
+                assert all(a <= b+1e-5 for a, b in zip(other.GetMax(), box.GetMax())), (biome, variant)
+            variant_boxes.append(other)
         natural = biome in ['emberRun', 'summitStep', 'crystalCave']
-        for yaw, lean in itertools.product([-0.24, 0, .24] if natural else [-.08, 0, .08], [-.045, 0, .045] if natural else [0]):
-            scale = 1.12 if natural else 1.05
-            rotation = Gf.Rotation(Gf.Vec3d(0, 1, 0), math.degrees(yaw))
-            tilt = Gf.Rotation(Gf.Vec3d(0, 0, 1), math.degrees(lean))
-            for corner in itertools.product(*zip(box.GetMin(), box.GetMax())):
-                point = Gf.Vec3d(corner[0] * scale, corner[1] * scale * (1.08 if natural else 1), corner[2] * scale)
-                point = rotation.TransformDir(tilt.TransformDir(point))
-                clearance = min(clearance, 3.05 - abs(point[0]))
+        for variant_box in variant_boxes:
+            for yaw, lean in itertools.product([-0.24, 0, .24] if natural else [-.08, 0, .08], [-.045, 0, .045] if natural else [0]):
+                scale = 1.12 if natural else 1.05
+                rotation = Gf.Rotation(Gf.Vec3d(0, 1, 0), math.degrees(yaw))
+                tilt = Gf.Rotation(Gf.Vec3d(0, 0, 1), math.degrees(lean))
+                for corner in itertools.product(*zip(variant_box.GetMin(), variant_box.GetMax())):
+                    point = Gf.Vec3d(corner[0] * scale, corner[1] * scale * (1.08 if natural else 1), corner[2] * scale)
+                    point = rotation.TransformDir(tilt.TransformDir(point))
+                    clearance = min(clearance, 3.05 - abs(point[0]))
     assert clearance > 1.85, ('scenery could enter the playable corridor', clearance)
     summary = dict(assets=len(records), triangles=sum(a['triangles'] for a in records.values()),
                    packageMiB=round(sum(a['bytes'] for a in records.values()) / 2**20, 2),

@@ -193,8 +193,10 @@ final class EnvironmentDirector {
         } else if case .normal = playMode {
             // Once queued, Normal must remain here until the physical choice calls
             // `chooseNormalEnvironment`. Never fall through to automatic rotation.
+            // The slowest door can take over 14 seconds from a distant portal.
+            let drainLead = currentID == .vectorFoundry ? Float(16) : Self.normalDrainLeadSeconds
             if !isAwaitingNormalChoice,
-               elapsedInEnvironment >= max(0, currentSwitchInterval - Self.normalDrainLeadSeconds) {
+               elapsedInEnvironment >= max(0, currentSwitchInterval - drainLead) {
                 isAwaitingNormalChoice = true
                 requestsJunction = true
             }

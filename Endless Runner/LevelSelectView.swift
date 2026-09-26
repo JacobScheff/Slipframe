@@ -95,7 +95,7 @@ struct LevelSelectView: View {
                     endPoint: .trailing
                 )
                 VStack(alignment: .leading, spacing: 10) {
-                    sectionLabel("SIX BIOMES. YOUR PATH.")
+                    sectionLabel("EIGHT BIOMES. YOUR PATH.")
                     Text("Into the rift.")
                         .font(.system(size: 30, weight: .semibold))
                     Text("Dodge. Reach. Find your flow.\nChoose your next world at each crossing.")

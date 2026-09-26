@@ -352,8 +352,9 @@ final class Endless_RunnerTests: XCTestCase {
             GameCenterLeaderboardID.identifier(metric: .coins, board: .daily(dayKey: "2099-01-01")),
             "coins.daily"
         )
-        XCTAssertEqual(GameCenterLeaderboardID.allConfiguredIDs.count, 16)
-        XCTAssertTrue(Set(GameCenterLeaderboardID.allConfiguredIDs).count == 16)
+        let expectedBoardIDs = 2 * (EnvironmentID.allCases.count + 2)
+        XCTAssertEqual(GameCenterLeaderboardID.allConfiguredIDs.count, expectedBoardIDs)
+        XCTAssertEqual(Set(GameCenterLeaderboardID.allConfiguredIDs).count, expectedBoardIDs)
     }
 
     func testEndRunSubmitsScoreAndCoinsToGameCenterExceptPlaylist() {
@@ -748,6 +749,17 @@ final class Endless_RunnerTests: XCTestCase {
         XCTAssertTrue(director.hasReachedNormalMusicEnd)
     }
 
+    func testFoundryStopsSpawningEarlyEnoughForSlowDoors() {
+        let director = EnvironmentDirector()
+        director.beginRun(mode: .normal)
+        director.forceEnvironment(.vectorFoundry)
+        let drainStart = director.currentSwitchInterval - 16
+
+        XCTAssertFalse(director.update(deltaTime: drainStart - 0.01).requestsJunction)
+        XCTAssertTrue(director.update(deltaTime: 0.02).requestsJunction)
+        XCTAssertFalse(director.hasReachedNormalMusicEnd)
+    }
+
     func testJunctionOffersDistinctBiomesWithIndependentContracts() {
         var rng = SeededGenerator(seed: 0x51_1F_AA)
         let options = RiftJunctionRules.makeOptions(excluding: .emberRun, rng: &rng)
@@ -778,15 +790,17 @@ final class Endless_RunnerTests: XCTestCase {
         let keys = ["none"] + RiftModifier.allCases.map(\.rawValue)
         var counts = Dictionary(uniqueKeysWithValues: keys.map { ($0, 0) })
         let junctions = 7_000
+        var sampledAuthoredOptions = 0
 
         for _ in 0..<junctions {
             let options = RiftJunctionRules.makeOptions(excluding: .emberRun, rng: &rng)
-            for option in options {
+            for option in options where BiomeAssetID.authoredBiomes.contains(option.environment) {
                 counts[option.modifier?.rawValue ?? "none", default: 0] += 1
+                sampledAuthoredOptions += 1
             }
         }
 
-        let expected = Double(junctions * 3) / Double(keys.count)
+        let expected = Double(sampledAuthoredOptions) / Double(keys.count)
         for key in keys {
             let actual = Double(counts[key, default: 0])
             XCTAssertEqual(actual, expected, accuracy: expected * 0.08, key)
@@ -1769,6 +1783,194 @@ final class Endless_RunnerTests: XCTestCase {
         }
     }
 
+    func testNewBiomeProfilesAndPlaceholderResources() {
+        XCTAssertEqual(EnvironmentCatalog.profile(for: .vectorFoundry).twist, .telekinesis)
+        XCTAssertEqual(EnvironmentCatalog.profile(for: .orbitGate).twist, .orbitGate)
+        XCTAssertEqual(EnvironmentID.vectorFoundry.musicCue, EnvironmentID.crystalCave.musicCue)
+        XCTAssertEqual(EnvironmentID.orbitGate.musicCue, EnvironmentID.stormPass.musicCue)
+        XCTAssertTrue(BiomeAssetID.required.contains("environment_vectorFoundry"))
+        XCTAssertTrue(BiomeAssetID.required.contains("environment_orbitGate"))
+        XCTAssertEqual(EnvironmentID.allCases.count, BiomeAssetID.authoredBiomes.count)
+        let foundryModifiers = RiftJunctionRules.modifierPool(for: .vectorFoundry)
+        XCTAssertEqual(foundryModifiers.count, 5)
+        XCTAssertTrue(foundryModifiers.contains(.some(.aegis)))
+        XCTAssertFalse(foundryModifiers.contains(.some(.magnet)))
+        XCTAssertFalse(foundryModifiers.contains(.some(.closeCall)))
+    }
+
+    func testFoundryAcquisitionSurvivesMissingOrTurnedHandOrientation() {
+        let head = SIMD3<Float>(0, 1.2, 0)
+        let wrist = SIMD3<Float>(0, 1.2, -0.4)
+        let target = SIMD3<Float>(0, 1.2, -3)
+        let straight = HandPose.ForceBasis(finger: SIMD3(0, 1, 0), palm: SIMD3(0, 0, -1))
+        let away = HandPose.ForceBasis(finger: SIMD3(0, 1, 0), palm: SIMD3(0, 0, 1))
+        let sideways = HandPose.ForceBasis(finger: SIMD3(0, 1, 0), palm: SIMD3(1, 0, 0))
+        let samples: [HandPose.ForceBasis?] = [straight, nil, away, nil, sideways]
+        for basis in samples {
+            let score = FoundryForceSelection.score(head: head, hand: wrist, target: target, basis: basis)
+            XCTAssertNotNil(score)
+            let assignment = FoundryForceSelection.assign(left: [score], right: [nil])
+            XCTAssertEqual(assignment.left, 0)
+            XCTAssertNil(assignment.right)
+        }
+
+        var lock = FoundryForceLock(hand: wrist, shape: SIMD2(0, 1.2))
+        // Orientation is optional at acquisition and unused once the shape is held.
+        XCTAssertTrue(lock.update(hand: wrist, deltaTime: 1.0 / 90))
+        XCTAssertEqual(lock.target, SIMD2(0, 1.2))
+        XCTAssertTrue(lock.update(hand: wrist + SIMD3(0.1, 0.05, 0), deltaTime: 1.0 / 90))
+        XCTAssertEqual(lock.target.x, 0.5, accuracy: 0.001)
+        XCTAssertEqual(lock.target.y, 1.45, accuracy: 0.001)
+    }
+
+    func testFoundryRotationRanksNearbyShapesWithoutRejectingThem() throws {
+        let head = SIMD3<Float>(0, 1.2, 0)
+        let wrist = SIMD3<Float>(0, 1.2, -0.4)
+        let turned = HandPose.ForceBasis(finger: SIMD3(0, 1, 0),
+                                         palm: simd_normalize(SIMD3(0.6, 0, -0.8)))
+        let leftTarget = SIMD3<Float>(-0.4, 1.2, -3)
+        let rightTarget = SIMD3<Float>(0.4, 1.2, -3)
+        let left = try XCTUnwrap(FoundryForceSelection.score(
+            head: head, hand: wrist, target: leftTarget, basis: turned))
+        let right = try XCTUnwrap(FoundryForceSelection.score(
+            head: head, hand: wrist, target: rightTarget, basis: turned))
+        XCTAssertGreaterThan(right, left)
+        XCTAssertEqual(FoundryForceSelection.assign(left: [left, right], right: [nil, nil]).left, 1)
+        XCTAssertNotNil(FoundryForceSelection.score(head: head, hand: wrist, target: leftTarget, basis: nil))
+        XCTAssertNotNil(FoundryForceSelection.score(head: head, hand: wrist, target: rightTarget, basis: nil))
+        XCTAssertNil(FoundryForceSelection.score(
+            head: head, hand: wrist, target: SIMD3(3, 1.2, -1), basis: turned))
+    }
+
+    func testFoundryBothHandsCanAcquireWithoutKnuckleTracking() {
+        let head = SIMD3<Float>(0, 1.6, 0)
+        let targets = [SIMD3<Float>(-0.75, 1.2, -3), SIMD3<Float>(0.75, 1.2, -3)]
+        let leftHand = head + (targets[0] - head) * 0.15
+        let rightHand = head + (targets[1] - head) * 0.15
+        let assignment = FoundryForceSelection.assign(
+            left: targets.map { FoundryForceSelection.score(head: head, hand: leftHand, target: $0, basis: nil) },
+            right: targets.map { FoundryForceSelection.score(head: head, hand: rightHand, target: $0, basis: nil) }
+        )
+        XCTAssertEqual(assignment.left, 0)
+        XCTAssertEqual(assignment.right, 1)
+    }
+
+    func testFoundryLockSurvivesFastMovementAndBriefOcclusion() {
+        var lock = FoundryForceLock(hand: SIMD3(0, 1.2, -0.4), shape: SIMD2(0, 1.2))
+        XCTAssertTrue(lock.update(hand: SIMD3(0.2, 1.2, -0.4), deltaTime: 1.0 / 90))
+        XCTAssertEqual(lock.target.x, 1, accuracy: 0.001)
+        for _ in 0..<90 {
+            XCTAssertTrue(lock.update(hand: nil, deltaTime: 1.0 / 90))
+        }
+        let beforeRecovery = lock.target
+        XCTAssertTrue(lock.update(hand: SIMD3(-0.5, 1.4, -0.2), deltaTime: 1.0 / 90))
+        XCTAssertEqual(lock.target, beforeRecovery)
+        XCTAssertTrue(lock.update(hand: SIMD3(-0.55, 1.4, -0.2), deltaTime: 1.0 / 90))
+        XCTAssertEqual(lock.target.x, 0.75, accuracy: 0.001)
+        XCTAssertTrue(lock.update(hand: nil, deltaTime: 1.9))
+        XCTAssertFalse(lock.update(hand: nil, deltaTime: 0.2))
+    }
+
+    func testFoundryHandsAcquireDistinctShapesWithoutUpdateOrderBias() {
+        let contested = FoundryForceSelection.assign(left: [0.98, 0.97], right: [0.99, nil])
+        XCTAssertEqual(contested.left, 1)
+        XCTAssertEqual(contested.right, 0)
+        let mirrored = FoundryForceSelection.assign(left: [0.99, nil], right: [0.98, 0.97])
+        XCTAssertEqual(mirrored.left, 0)
+        XCTAssertEqual(mirrored.right, 1)
+        let oneShape = FoundryForceSelection.assign(left: [0.96], right: [0.99])
+        XCTAssertNil(oneShape.left)
+        XCTAssertEqual(oneShape.right, 0)
+        // An owned shape is unavailable to the other hand; its owner cannot acquire a second.
+        let leftHolding = FoundryForceSelection.assign(left: [nil, nil], right: [nil, 0.98])
+        XCTAssertNil(leftHolding.left)
+        XCTAssertEqual(leftHolding.right, 1)
+    }
+
+    func testFoundryHandsMoveIndependentlyAndLoseTrackingIndependently() {
+        var left = FoundryForceLock(hand: SIMD3(-0.2, 1.2, -0.4), shape: SIMD2(-0.5, 1.2))
+        var right = FoundryForceLock(hand: SIMD3(0.2, 1.2, -0.4), shape: SIMD2(0.5, 1.2))
+        XCTAssertTrue(left.update(hand: SIMD3(-0.05, 1.25, -0.4), deltaTime: 1.0 / 90))
+        XCTAssertTrue(right.update(hand: SIMD3(0.05, 1.15, -0.4), deltaTime: 1.0 / 90))
+        XCTAssertEqual(left.target.x, 0.25, accuracy: 0.001)
+        XCTAssertEqual(right.target.x, -0.25, accuracy: 0.001)
+        XCTAssertEqual(left.target.y, 1.45, accuracy: 0.001)
+        XCTAssertEqual(right.target.y, 0.95, accuracy: 0.001)
+        XCTAssertFalse(left.update(hand: nil, deltaTime: 2.1))
+        XCTAssertTrue(right.update(hand: SIMD3(0.1, 1.15, -0.4), deltaTime: 1.0 / 90))
+        XCTAssertEqual(right.target.x, 0, accuracy: 0.001)
+    }
+
+    func testFoundryTranslationIsBoundedAndMotionEasesTowardTarget() {
+        let fullSweep = FoundryForceSteering.target(
+            grabShape: SIMD2(-0.76, 1.2), handDelta: SIMD2(0.304, 0)
+        )
+        XCTAssertEqual(fullSweep.x, 0.76, accuracy: 0.001)
+        XCTAssertEqual(FoundryForceSteering.target(grabShape: .zero, handDelta: SIMD2(10, 10)),
+                       SIMD2(1.55, 2.05))
+        XCTAssertEqual(FoundryForceSteering.target(grabShape: .zero, handDelta: SIMD2(-10, -10)),
+                       SIMD2(-1.55, 0.52))
+
+        var position = SIMD2<Float>(-0.76, 1.2)
+        var velocity = SIMD2<Float>.zero
+        for _ in 0..<45 {
+            let step = FoundryForceSteering.advance(
+                position: position, velocity: velocity,
+                target: SIMD2(0.76, 1.2), deltaTime: 1.0 / 90
+            )
+            position = step.position
+            velocity = step.velocity
+            XCTAssertLessThanOrEqual(simd_length(velocity), FoundryForceSteering.maxSpeed + 0.001)
+        }
+        // Reach the slot's alignment tolerance within half a second without extra hand travel.
+        XCTAssertLessThan(abs(position.x - fullSweep.x), 0.16)
+    }
+
+    func testFoundryShapeCountsScaleFromThreeToFourOrFive() {
+        let stable = FoundryPatternRules.shapeCountPool(for: .stable)
+        let charged = FoundryPatternRules.shapeCountPool(for: .charged)
+        let unstable = FoundryPatternRules.shapeCountPool(for: .unstable)
+        for pool in [stable, charged, unstable] {
+            XCTAssertTrue(pool.allSatisfy { (2...5).contains($0) })
+        }
+        XCTAssertEqual(Float(stable.reduce(0, +)) / Float(stable.count), 3, accuracy: 0.001)
+        XCTAssertEqual(Float(charged.reduce(0, +)) / Float(charged.count), 3.5, accuracy: 0.001)
+        XCTAssertEqual(Float(unstable.reduce(0, +)) / Float(unstable.count), 4.5, accuracy: 0.001)
+        XCTAssertEqual(unstable.filter { $0 >= 4 }.count, unstable.count)
+    }
+
+    func testFoundryLayoutsSupportTwoThroughFiveObjects() {
+        for count in 2...5 {
+            let positions = FoundryPatternRules.targetPositions(count: count)
+            XCTAssertEqual(positions.count, count)
+            XCTAssertEqual(Set(positions.map(\.x)).count, count)
+            XCTAssertTrue(positions.allSatisfy {
+                (-0.85...0.85).contains($0.x) && (1.0...1.5).contains($0.y)
+            })
+            for left in positions.indices {
+                for right in positions.indices where right > left {
+                    XCTAssertGreaterThan(simd_distance(positions[left], positions[right]), 0.45)
+                }
+            }
+        }
+        XCTAssertEqual(FoundryPatternRules.targetPositions(count: 1).count, 2)
+        XCTAssertEqual(FoundryPatternRules.targetPositions(count: 6).count, 5)
+    }
+
+    func testFoundryDoorsUseShorterSpawnGap() {
+        XCTAssertEqual(FoundryPatternRules.spawnGapRange.lowerBound, 14)
+        XCTAssertEqual(FoundryPatternRules.spawnGapRange.upperBound, 16)
+    }
+
+    func testOrbitGateCyclesPatternsAndRequiresTimedWedge() {
+        XCTAssertEqual((0..<6).map { OrbitGateGeometry.patternIndex(spawnCount: $0) },
+                       [0, 0, 1, 2, 0, 1])
+        XCTAssertLessThan(OrbitGateGeometry.timedGapClearance(localX: 0, localY: 0), 0)
+        XCTAssertGreaterThan(OrbitGateGeometry.timedGapClearance(localX: 0.6, localY: 0), 0)
+        XCTAssertLessThan(OrbitGateGeometry.timedGapClearance(localX: -0.6, localY: 0), 0)
+        XCTAssertLessThan(OrbitGateGeometry.timedGapClearance(localX: 0.6, localY: 0.5), 0)
+    }
+
     // MARK: - Authored art, cosmetic variation and portable animation
 
     func testSceneryVariationIsRepeatableAndSeeded() {
@@ -1850,7 +2052,7 @@ final class Endless_RunnerTests: XCTestCase {
     }
 
     func testEveryAuthoredAssetIsBundledAndLoads() async throws {
-        XCTAssertEqual(BiomeAssetID.required.count, 91)
+        XCTAssertEqual(BiomeAssetID.required.count, 119)
         XCTAssertEqual(Set(BiomeAssetID.required).count, BiomeAssetID.required.count)
         await BiomeAssetCatalog.preload()
         XCTAssertTrue(BiomeAssetCatalog.missingAssets.isEmpty, "Missing: \(BiomeAssetCatalog.missingAssets)")
