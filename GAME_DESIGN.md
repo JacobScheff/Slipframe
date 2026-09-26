@@ -210,12 +210,14 @@ The eight biomes in the random pool:
 
 Slow doors approach along the track at roughly twice the original cadence. Each has
 one to three colored, shape-matched slots, averaging about two shapes per door.
-Aim roughly through a raised hand at a floating shape and hold briefly to
-engage the Force. A glowing ring marks the engaged shape. Moving the hand shifts it
-directly; rotating the hand also steers it. Fast hand sweeps do not latch, and a
-quick move releases the shape so it floats in place. Shapes ease toward the target
-and bob, drift, and rotate gently rather than sticking rigidly to the hand. Hand
-translation stays responsive across the whole door; wrist tilt adds a smaller nudge.
+Aim a raised hand toward a floating shape and hold briefly to engage the Force.
+Initial selection blends the sight line with the pointing-finger or palm direction.
+A glowing ring marks the engaged shape. Once locked, wrist translation moves it;
+rotation, finger curling, and fast sweeps do not release it. Each hand independently
+holds its own shape, with simultaneous selection assigning distinct targets.
+Tracking can disappear for up to two seconds before releasing a shape. Recovery
+rebases the wrist position to avoid a jump. Shapes ease toward the target and bob,
+drift, and rotate gently. Translation stays responsive across the whole door.
 Aligned shapes float into their slots; filling every slot opens the door. Reaching
 a closed door is a hit. Risk raises door speed and the possible shape count; all
 doors remain slower than the normal obstacle stream.

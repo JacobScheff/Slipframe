@@ -73,10 +73,24 @@ enum HandPose {
         classify(anchor: anchor) == .fist
     }
 
-    /// World-space finger and palm directions for relative force steering.
+    /// Wrist position is stable as the fingers curl or the palm rotates.
+    static func forcePosition(anchor: HandAnchor) -> SIMD3<Float>? {
+        guard anchor.isTracked else { return nil }
+        if let wrist = anchor.handSkeleton?.joint(.wrist), wrist.isTracked {
+            return worldPosition(origin: anchor.originFromAnchorTransform, joint: wrist)
+        }
+        let origin = anchor.originFromAnchorTransform.columns.3
+        return SIMD3(origin.x, origin.y, origin.z)
+    }
+
+    /// World-space finger and palm directions for initial force acquisition.
     /// Joint positions remain stable when the wrist's anchor axes flip during a pose.
     static func forceBasis(anchor: HandAnchor) -> ForceBasis? {
         guard anchor.isTracked, let skeleton = anchor.handSkeleton else { return nil }
+        let basisJoints: [HandSkeleton.JointName] = [
+            .wrist, .middleFingerKnuckle, .indexFingerKnuckle, .littleFingerKnuckle
+        ]
+        guard basisJoints.allSatisfy({ skeleton.joint($0).isTracked }) else { return nil }
         let origin = anchor.originFromAnchorTransform
         let wrist = worldPosition(origin: origin, joint: skeleton.joint(.wrist))
         let middle = worldPosition(origin: origin, joint: skeleton.joint(.middleFingerKnuckle))
@@ -85,7 +99,9 @@ enum HandPose {
         let finger = middle - wrist
         let across = index - little
         guard simd_length(finger) > 0.015, simd_length(across) > 0.015 else { return nil }
-        var palm = simd_normalize(simd_cross(across, finger))
+        let normal = simd_cross(simd_normalize(across), simd_normalize(finger))
+        guard simd_length(normal) > 0.1 else { return nil }
+        var palm = simd_normalize(normal)
         if anchor.chirality == .left { palm = -palm }
         return ForceBasis(finger: simd_normalize(finger), palm: palm)
     }

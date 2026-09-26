@@ -1798,41 +1798,84 @@ final class Endless_RunnerTests: XCTestCase {
         XCTAssertFalse(foundryModifiers.contains(.some(.closeCall)))
     }
 
-    func testFoundryForceRespondsToTranslationAndHandRotation() {
-        let start = HandPose.ForceBasis(finger: SIMD3(0, 1, 0), palm: SIMD3(0, 0, -1))
-        let turned = HandPose.ForceBasis(finger: SIMD3(0.4, 0.9, 0),
-                                         palm: SIMD3(0.3, 0.1, -0.95))
-        let origin = SIMD2<Float>(0, 1.2)
-        let translated = FoundryForceSteering.target(
-            grabShape: origin, handDelta: SIMD2(0.2, 0.1),
-            startBasis: start, currentBasis: start
-        )
-        XCTAssertEqual(translated.x, 0.5, accuracy: 0.001)
-        XCTAssertEqual(translated.y, 1.45, accuracy: 0.001)
+    func testFoundryRotationAimsOnlyAtAcquisition() {
+        let head = SIMD3<Float>(0, 1.2, 0)
+        let wrist = SIMD3<Float>(0, 1.2, -0.4)
+        let straight = HandPose.ForceBasis(finger: SIMD3(0, 1, 0), palm: SIMD3(0, 0, -1))
+        let turned = HandPose.ForceBasis(finger: SIMD3(0, 1, 0),
+                                         palm: simd_normalize(SIMD3(0.6, 0, -0.8)))
+        let initialAim = FoundryForceSelection.direction(head: head, hand: wrist, basis: straight)!
+        let rotatedAim = FoundryForceSelection.direction(head: head, hand: wrist, basis: turned)!
+        XCTAssertEqual(initialAim.x, 0, accuracy: 0.001)
+        XCTAssertGreaterThan(rotatedAim.x, 0.3)
+        XCTAssertNil(FoundryForceSelection.direction(head: head, hand: wrist, basis: nil))
 
-        let rotated = FoundryForceSteering.target(
-            grabShape: origin, handDelta: .zero,
-            startBasis: start, currentBasis: turned
-        )
-        XCTAssertEqual(rotated.x, 0.28, accuracy: 0.001)
-        XCTAssertGreaterThan(rotated.y, origin.y)
+        var lock = FoundryForceLock(hand: wrist, shape: SIMD2(0, 1.2))
+        // Even when pointing backward (no acquisition ray), the existing lock follows position.
+        let away = HandPose.ForceBasis(finger: SIMD3(0, 1, 0), palm: SIMD3(0, 0, 1))
+        XCTAssertNil(FoundryForceSelection.direction(head: head, hand: wrist, basis: away))
+        XCTAssertTrue(lock.update(hand: wrist, deltaTime: 1.0 / 90))
+        XCTAssertEqual(lock.target, SIMD2(0, 1.2))
+        XCTAssertTrue(lock.update(hand: wrist + SIMD3(0.2, 0.1, 0), deltaTime: 1.0 / 90))
+        XCTAssertEqual(lock.target.x, 0.5, accuracy: 0.001)
+        XCTAssertEqual(lock.target.y, 1.45, accuracy: 0.001)
+    }
 
-        let opposing = HandPose.ForceBasis(finger: SIMD3(-0.4, 0.9, 0),
-                                           palm: SIMD3(-0.3, 0.1, -0.95))
-        let near = FoundryForceSteering.target(
-            grabShape: SIMD2(-0.76, 1.2), handDelta: SIMD2(0.2, 0),
-            startBasis: start, currentBasis: opposing
-        )
-        let far = FoundryForceSteering.target(
-            grabShape: SIMD2(-0.76, 1.2), handDelta: SIMD2(0.4, 0),
-            startBasis: start, currentBasis: opposing
-        )
-        XCTAssertEqual(far.x - near.x, 0.5, accuracy: 0.001)
+    func testFoundryLockSurvivesFastMovementAndBriefOcclusion() {
+        var lock = FoundryForceLock(hand: SIMD3(0, 1.2, -0.4), shape: SIMD2(0, 1.2))
+        XCTAssertTrue(lock.update(hand: SIMD3(0.4, 1.2, -0.4), deltaTime: 1.0 / 90))
+        XCTAssertEqual(lock.target.x, 1, accuracy: 0.001)
+        for _ in 0..<90 {
+            XCTAssertTrue(lock.update(hand: nil, deltaTime: 1.0 / 90))
+        }
+        let beforeRecovery = lock.target
+        XCTAssertTrue(lock.update(hand: SIMD3(-0.5, 1.4, -0.2), deltaTime: 1.0 / 90))
+        XCTAssertEqual(lock.target, beforeRecovery)
+        XCTAssertTrue(lock.update(hand: SIMD3(-0.6, 1.4, -0.2), deltaTime: 1.0 / 90))
+        XCTAssertEqual(lock.target.x, 0.75, accuracy: 0.001)
+        XCTAssertTrue(lock.update(hand: nil, deltaTime: 1.9))
+        XCTAssertFalse(lock.update(hand: nil, deltaTime: 0.2))
+    }
+
+    func testFoundryHandsAcquireDistinctShapesWithoutUpdateOrderBias() {
+        let contested = FoundryForceSelection.assign(left: [0.98, 0.97], right: [0.99, nil])
+        XCTAssertEqual(contested.left, 1)
+        XCTAssertEqual(contested.right, 0)
+        let mirrored = FoundryForceSelection.assign(left: [0.99, nil], right: [0.98, 0.97])
+        XCTAssertEqual(mirrored.left, 0)
+        XCTAssertEqual(mirrored.right, 1)
+        let oneShape = FoundryForceSelection.assign(left: [0.96], right: [0.99])
+        XCTAssertNil(oneShape.left)
+        XCTAssertEqual(oneShape.right, 0)
+        // An owned shape is unavailable to the other hand; its owner cannot acquire a second.
+        let leftHolding = FoundryForceSelection.assign(left: [nil, nil], right: [nil, 0.98])
+        XCTAssertNil(leftHolding.left)
+        XCTAssertEqual(leftHolding.right, 1)
+    }
+
+    func testFoundryHandsMoveIndependentlyAndLoseTrackingIndependently() {
+        var left = FoundryForceLock(hand: SIMD3(-0.2, 1.2, -0.4), shape: SIMD2(-0.5, 1.2))
+        var right = FoundryForceLock(hand: SIMD3(0.2, 1.2, -0.4), shape: SIMD2(0.5, 1.2))
+        XCTAssertTrue(left.update(hand: SIMD3(0.1, 1.3, -0.4), deltaTime: 1.0 / 90))
+        XCTAssertTrue(right.update(hand: SIMD3(-0.1, 1.1, -0.4), deltaTime: 1.0 / 90))
+        XCTAssertEqual(left.target.x, 0.25, accuracy: 0.001)
+        XCTAssertEqual(right.target.x, -0.25, accuracy: 0.001)
+        XCTAssertEqual(left.target.y, 1.45, accuracy: 0.001)
+        XCTAssertEqual(right.target.y, 0.95, accuracy: 0.001)
+        XCTAssertFalse(left.update(hand: nil, deltaTime: 2.1))
+        XCTAssertTrue(right.update(hand: SIMD3(0, 1.1, -0.4), deltaTime: 1.0 / 90))
+        XCTAssertEqual(right.target.x, 0, accuracy: 0.001)
+    }
+
+    func testFoundryTranslationIsBoundedAndMotionEasesTowardTarget() {
         let fullSweep = FoundryForceSteering.target(
-            grabShape: SIMD2(-0.76, 1.2), handDelta: SIMD2(0.9, 0),
-            startBasis: start, currentBasis: start
+            grabShape: SIMD2(-0.76, 1.2), handDelta: SIMD2(0.9, 0)
         )
         XCTAssertGreaterThan(fullSweep.x, 1.12)
+        XCTAssertEqual(FoundryForceSteering.target(grabShape: .zero, handDelta: SIMD2(10, 10)),
+                       SIMD2(1.55, 2.05))
+        XCTAssertEqual(FoundryForceSteering.target(grabShape: .zero, handDelta: SIMD2(-10, -10)),
+                       SIMD2(-1.55, 0.52))
 
         var position = SIMD2<Float>(-0.76, 1.2)
         var velocity = SIMD2<Float>.zero

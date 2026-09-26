@@ -21,19 +21,8 @@ import UIKit
 enum FoundryForceSteering {
     static let maxSpeed: Float = 1.9
 
-    static func target(grabShape: SIMD2<Float>, handDelta: SIMD2<Float>,
-                       startBasis: HandPose.ForceBasis?,
-                       currentBasis: HandPose.ForceBasis?) -> SIMD2<Float> {
-        var tilt = SIMD2<Float>.zero
-        if let start = startBasis, let current = currentBasis {
-            let x = (current.finger.x - start.finger.x) * 0.65
-                + (current.palm.x - start.palm.x) * 0.5
-            let y = (current.finger.y - start.finger.y) * 0.5
-                + (current.palm.y - start.palm.y) * 0.65
-            // Rotation adds a nudge; it cannot cancel a full hand translation.
-            tilt = SIMD2(min(0.28, max(-0.28, x)), min(0.28, max(-0.28, y)))
-        }
-        let requested = grabShape + handDelta * 2.5 + tilt
+    static func target(grabShape: SIMD2<Float>, handDelta: SIMD2<Float>) -> SIMD2<Float> {
+        let requested = grabShape + handDelta * 2.5
         return SIMD2(min(1.55, max(-1.55, requested.x)),
                      min(2.05, max(0.52, requested.y)))
     }
@@ -49,6 +38,77 @@ enum FoundryForceSteering {
         let speed = simd_length(nextVelocity)
         if speed > maxSpeed { nextVelocity *= maxSpeed / speed }
         return (position + nextVelocity * deltaTime, nextVelocity)
+    }
+}
+
+/// Once acquired, a lock depends only on wrist position, never on hand orientation.
+struct FoundryForceLock {
+    static let trackingLossGrace: Float = 2.0
+    private var grabHand: SIMD2<Float>
+    private var grabShape: SIMD2<Float>
+    private(set) var target: SIMD2<Float>
+    private(set) var trackingLossSeconds: Float = 0
+
+    init(hand: SIMD3<Float>, shape: SIMD2<Float>) {
+        grabHand = SIMD2(hand.x, hand.y)
+        grabShape = shape
+        target = shape
+    }
+
+    /// False only after sustained loss. Fast movement and wrist rotation never release.
+    mutating func update(hand: SIMD3<Float>?, deltaTime: Float) -> Bool {
+        guard let hand else {
+            trackingLossSeconds += deltaTime
+            return trackingLossSeconds <= Self.trackingLossGrace
+        }
+        let handXY = SIMD2(hand.x, hand.y)
+        if trackingLossSeconds > 0 {
+            // Rebase after occlusion so a corrected tracking pose cannot jump the object.
+            grabHand = handXY
+            grabShape = target
+        }
+        trackingLossSeconds = 0
+        target = FoundryForceSteering.target(grabShape: grabShape, handDelta: handXY - grabHand)
+        return true
+    }
+}
+
+enum FoundryForceSelection {
+    static let aimDot: Float = 0.94
+
+    static func direction(head: SIMD3<Float>, hand: SIMD3<Float>,
+                          basis: HandPose.ForceBasis?) -> SIMD3<Float>? {
+        let ray = hand - head
+        guard ray.z < -0.12, simd_length(ray) > 0.15, let basis else { return nil }
+        let sight = simd_normalize(ray)
+        // Support both pointing fingers and an outstretched palm for initial acquisition.
+        let aim = simd_dot(basis.finger, sight) > simd_dot(basis.palm, sight)
+            ? basis.finger : basis.palm
+        guard simd_dot(aim, sight) > 0.15 else { return nil }
+        return simd_normalize(sight * 0.35 + aim * 0.65)
+    }
+
+    /// Assign distinct available shapes together so update order cannot favor one hand.
+    /// Nil scores mean unavailable, already owned, or outside that hand's acquisition cone.
+    static func assign(left: [Float?], right: [Float?]) -> (left: Int?, right: Int?) {
+        let leftOptions: [Int?] = [nil] + left.indices.filter { left[$0] != nil }.map { Optional($0) }
+        let rightOptions: [Int?] = [nil] + right.indices.filter { right[$0] != nil }.map { Optional($0) }
+        var best: (left: Int?, right: Int?) = (nil, nil)
+        var bestCount = 0
+        var bestScore: Float = -1
+        for l in leftOptions {
+            for r in rightOptions {
+                if let l, let r, l == r { continue }
+                let count = (l == nil ? 0 : 1) + (r == nil ? 0 : 1)
+                let score = (l.flatMap { left[$0] } ?? 0) + (r.flatMap { right[$0] } ?? 0)
+                if count > bestCount || (count == bestCount && score > bestScore) {
+                    best = (l, r)
+                    bestCount = count
+                    bestScore = score
+                }
+            }
+        }
+        return best
     }
 }
 
@@ -251,11 +311,7 @@ final class GameWorld {
         var target = SIMD2<Float>.zero
         var velocity = SIMD2<Float>.zero
         var heldBy: HandAnchor.Chirality?
-        var grabHand = SIMD2<Float>.zero
-        var lastHand = SIMD3<Float>.zero
-        var grabShape = SIMD2<Float>.zero
-        var grabBasis: HandPose.ForceBasis?
-        var trackingLossSeconds: Float = 0
+        var forceLock: FoundryForceLock?
         var inserting = false
         var insertionProgress: Float = 0
         var resolved = false
@@ -507,7 +563,6 @@ final class GameWorld {
     private static let crystalHalfSpinSpeed: Float = 2.4
     private static let foundryShapeDepth: Float = 0.72
     private static let foundryAimDwell: Float = 0.28
-    private static let foundryAimDot: Float = 0.975
     private static let orbitOpeningRadius: Float = 0.67
 
     /// Playfield origin: floor at y=0, stand line at z=0, track extends along −Z.
@@ -568,8 +623,8 @@ final class GameWorld {
     private var rightFoundryHover: FoundryShape?
     private var leftFoundryHoverSeconds: Float = 0
     private var rightFoundryHoverSeconds: Float = 0
-    private var leftFoundryPreviousGrip: SIMD3<Float>?
-    private var rightFoundryPreviousGrip: SIMD3<Float>?
+    private var leftFoundryPositionWorld: SIMD3<Float>?
+    private var rightFoundryPositionWorld: SIMD3<Float>?
     private var leftFoundryBasisWorld: HandPose.ForceBasis?
     private var rightFoundryBasisWorld: HandPose.ForceBasis?
 
@@ -794,8 +849,8 @@ final class GameWorld {
         rightFoundryHover = nil
         leftFoundryHoverSeconds = 0
         rightFoundryHoverSeconds = 0
-        leftFoundryPreviousGrip = nil
-        rightFoundryPreviousGrip = nil
+        leftFoundryPositionWorld = nil
+        rightFoundryPositionWorld = nil
         leftFoundryBasisWorld = nil
         rightFoundryBasisWorld = nil
         updateSubscription = nil
@@ -1023,8 +1078,8 @@ final class GameWorld {
         rightFoundryHover = nil
         leftFoundryHoverSeconds = 0
         rightFoundryHoverSeconds = 0
-        leftFoundryPreviousGrip = nil
-        rightFoundryPreviousGrip = nil
+        leftFoundryPositionWorld = nil
+        rightFoundryPositionWorld = nil
         leftFoundryBasisWorld = nil
         rightFoundryBasisWorld = nil
         foundrySpawnCount = 0
@@ -1605,11 +1660,13 @@ final class GameWorld {
                             leftHandContactsWorld = []
                             leftHandGripWorld = nil
                             leftIsOpen = false
+                            leftFoundryPositionWorld = nil
                             leftFoundryBasisWorld = nil
                         case .right:
                             rightHandContactsWorld = []
                             rightHandGripWorld = nil
                             rightIsOpen = false
+                            rightFoundryPositionWorld = nil
                             rightFoundryBasisWorld = nil
                         @unknown default: break
                         }
@@ -1624,11 +1681,13 @@ final class GameWorld {
                         leftHandContactsWorld = contacts
                         leftHandGripWorld = grip
                         leftIsOpen = pose == .open
+                        leftFoundryPositionWorld = HandPose.forcePosition(anchor: anchor)
                         leftFoundryBasisWorld = forceBasis
                     case .right:
                         rightHandContactsWorld = contacts
                         rightHandGripWorld = grip
                         rightIsOpen = pose == .open
+                        rightFoundryPositionWorld = HandPose.forcePosition(anchor: anchor)
                         rightFoundryBasisWorld = forceBasis
                     @unknown default:
                         break
@@ -1867,8 +1926,8 @@ final class GameWorld {
             rightFoundryHover = nil
             leftFoundryHoverSeconds = 0
             rightFoundryHoverSeconds = 0
-            leftFoundryPreviousGrip = nil
-            rightFoundryPreviousGrip = nil
+            leftFoundryPositionWorld = nil
+            rightFoundryPositionWorld = nil
             leftFoundryBasisWorld = nil
             rightFoundryBasisWorld = nil
             foundrySpawnCount = 0
@@ -2283,35 +2342,47 @@ final class GameWorld {
         }
     }
 
-    /// Aim through the raised hand, like a sight line from the headset. Palm pose
-    /// never gates the force, so both open and closed hands work identically.
-    private func aimedFoundryShape(hand: SIMD3<Float>) -> FoundryShape? {
+    private func foundryCandidates() -> (left: FoundryShape?, right: FoundryShape?) {
         let head = playfieldHeadPosition()
-        let ray = hand - head
-        guard ray.z < -0.12, length(ray) > 0.15 else { return nil }
-        let direction = normalize(ray)
-        var best: FoundryShape?
-        var bestScore = Self.foundryAimDot
-        // A faster cadence can put two doors in view. Finish the nearer puzzle
-        // before force selection can jump to a shape behind it.
+        // Finish the nearer puzzle before acquiring shapes behind it.
         guard let door = foundryItems.first(where: {
             $0.z < head.z - 0.65 && $0.opening == 0
                 && $0.shapes.contains(where: { !$0.resolved && !$0.inserting })
-        }) else { return nil }
-        for shape in door.shapes where !shape.resolved && !shape.inserting && shape.heldBy == nil {
-            let toward = SIMD3(shape.x, shape.y, door.z + Self.foundryShapeDepth) - head
-            guard toward.z < -0.4 else { continue }
-            let score = simd_dot(normalize(toward), direction)
-            if score > bestScore {
-                best = shape
-                bestScore = score
+        }) else { return (nil, nil) }
+        let shapes = door.shapes
+        func scores(hand: HandAnchor.Chirality, position: SIMD3<Float>?,
+                    basis: HandPose.ForceBasis?, hover: FoundryShape?) -> [Float?] {
+            let unavailable = [Float?](repeating: nil, count: shapes.count)
+            guard !foundryItems.contains(where: { item in
+                item.shapes.contains { $0.heldBy == hand && !$0.resolved }
+            }), let position else { return unavailable }
+            let grip = root.convert(position: position, from: nil)
+            guard let direction = FoundryForceSelection.direction(
+                head: head, hand: grip,
+                basis: foundryBasisInPlayfield(basis, gripWorld: position)
+            ) else { return unavailable }
+            return shapes.map { shape -> Float? in
+                guard !shape.resolved, !shape.inserting, shape.heldBy == nil else { return nil }
+                let toward = SIMD3(shape.x, shape.y, door.z + Self.foundryShapeDepth) - grip
+                guard toward.z < -0.4 else { return nil }
+                let score = simd_dot(normalize(toward), direction)
+                guard score > FoundryForceSelection.aimDot else { return nil }
+                // Small hysteresis keeps a nearly tied target from resetting the dwell.
+                return score + (shape === hover ? 0.008 : 0)
             }
         }
-        return best
+        let assignment = FoundryForceSelection.assign(
+            left: scores(hand: .left, position: leftFoundryPositionWorld,
+                         basis: leftFoundryBasisWorld, hover: leftFoundryHover),
+            right: scores(hand: .right, position: rightFoundryPositionWorld,
+                          basis: rightFoundryBasisWorld, hover: rightFoundryHover)
+        )
+        return (assignment.left.map { shapes[$0] }, assignment.right.map { shapes[$0] })
     }
 
     private func releaseFoundryShape(_ shape: FoundryShape) {
         shape.heldBy = nil
+        shape.forceLock = nil
         shape.velocity = .zero
         shape.target = SIMD2(shape.x, shape.y)
         shape.glow.isEnabled = false
@@ -2328,83 +2399,58 @@ final class GameWorld {
     }
 
     private func controlFoundryHand(_ hand: HandAnchor.Chirality,
-                                    gripWorld: SIMD3<Float>?,
-                                    basisWorld: HandPose.ForceBasis?, deltaTime: Float) {
-        let grip = gripWorld.map { root.convert(position: $0, from: nil) }
-        let basis = foundryBasisInPlayfield(basisWorld, gripWorld: gripWorld)
-        if let held = foundryItems.flatMap(\.shapes).first(where: { $0.heldBy == hand && !$0.resolved }) {
-            guard let grip else {
-                held.trackingLossSeconds += deltaTime
-                if held.trackingLossSeconds > 0.2 { releaseFoundryShape(held) }
-                return
-            }
-            held.trackingLossSeconds = 0
-            let handXY = SIMD2(grip.x, grip.y)
-            let handSpeed = length(grip - held.lastHand) / max(0.016, deltaTime)
-            if handSpeed > 3.2 {
+                                    positionWorld: SIMD3<Float>?, candidate: FoundryShape?,
+                                    deltaTime: Float) {
+        let grip = positionWorld.map { root.convert(position: $0, from: nil) }
+        if let held = foundryItems.flatMap(\.shapes).first(where: { $0.heldBy == hand && !$0.resolved }),
+           var lock = held.forceLock {
+            guard lock.update(hand: grip, deltaTime: deltaTime) else {
                 releaseFoundryShape(held)
                 return
             }
-            held.lastHand = grip
-            if held.grabBasis == nil { held.grabBasis = basis }
-            held.target = FoundryForceSteering.target(
-                grabShape: held.grabShape,
-                handDelta: handXY - held.grabHand,
-                startBasis: held.grabBasis,
-                currentBasis: basis
-            )
+            held.forceLock = lock
+            held.target = lock.target
             return
         }
 
-        let candidate = grip.flatMap { aimedFoundryShape(hand: $0) }
         if hand == .left {
-            let swept = grip.flatMap { current in
-                leftFoundryPreviousGrip.map { length(current - $0) / max(0.016, deltaTime) > 1.7 }
-            } ?? false
-            leftFoundryPreviousGrip = grip
-            leftFoundryHoverSeconds = !swept && candidate === leftFoundryHover
+            leftFoundryHoverSeconds = candidate === leftFoundryHover
                 ? leftFoundryHoverSeconds + deltaTime : 0
             leftFoundryHover = candidate
             guard let candidate, let grip,
                   leftFoundryHoverSeconds >= Self.foundryAimDwell else { return }
-            latchFoundryShape(candidate, hand: hand, grip: grip, basis: basis)
+            latchFoundryShape(candidate, hand: hand, grip: grip)
             leftFoundryHover = nil
             leftFoundryHoverSeconds = 0
         } else {
-            let swept = grip.flatMap { current in
-                rightFoundryPreviousGrip.map { length(current - $0) / max(0.016, deltaTime) > 1.7 }
-            } ?? false
-            rightFoundryPreviousGrip = grip
-            rightFoundryHoverSeconds = !swept && candidate === rightFoundryHover
+            rightFoundryHoverSeconds = candidate === rightFoundryHover
                 ? rightFoundryHoverSeconds + deltaTime : 0
             rightFoundryHover = candidate
             guard let candidate, let grip,
                   rightFoundryHoverSeconds >= Self.foundryAimDwell else { return }
-            latchFoundryShape(candidate, hand: hand, grip: grip, basis: basis)
+            latchFoundryShape(candidate, hand: hand, grip: grip)
             rightFoundryHover = nil
             rightFoundryHoverSeconds = 0
         }
     }
 
     private func latchFoundryShape(_ shape: FoundryShape,
-                                   hand: HandAnchor.Chirality, grip: SIMD3<Float>,
-                                   basis: HandPose.ForceBasis?) {
+                                   hand: HandAnchor.Chirality, grip: SIMD3<Float>) {
+        guard shape.heldBy == nil, !shape.resolved, !shape.inserting else { return }
         shape.heldBy = hand
-        shape.grabHand = SIMD2(grip.x, grip.y)
-        shape.lastHand = grip
-        shape.grabShape = SIMD2(shape.x, shape.y)
-        shape.grabBasis = basis
-        shape.target = shape.grabShape
+        shape.forceLock = FoundryForceLock(hand: grip, shape: SIMD2(shape.x, shape.y))
+        shape.target = SIMD2(shape.x, shape.y)
         shape.velocity = .zero
         shape.glow.isEnabled = true
     }
 
     private func updateFoundry(deltaTime: Float, gameModel: GameModel) {
         if activeSpawnProfile.twist == .telekinesis {
-            controlFoundryHand(.left, gripWorld: leftHandGripWorld,
-                               basisWorld: leftFoundryBasisWorld, deltaTime: deltaTime)
-            controlFoundryHand(.right, gripWorld: rightHandGripWorld,
-                               basisWorld: rightFoundryBasisWorld, deltaTime: deltaTime)
+            let candidates = foundryCandidates()
+            controlFoundryHand(.left, positionWorld: leftFoundryPositionWorld,
+                               candidate: candidates.left, deltaTime: deltaTime)
+            controlFoundryHand(.right, positionWorld: rightFoundryPositionWorld,
+                               candidate: candidates.right, deltaTime: deltaTime)
         }
         let head = playfieldHeadPosition()
         for door in foundryItems {
@@ -2459,6 +2505,7 @@ final class GameWorld {
                 if abs(shape.x - shape.targetX) < 0.16 && abs(shape.y - shape.targetY) < 0.16 {
                     shape.inserting = true
                     shape.heldBy = nil
+                    shape.forceLock = nil
                     shape.velocity = .zero
                     shape.glow.isEnabled = false
                 }
@@ -2892,7 +2939,7 @@ final class GameWorld {
         let hint: String?
         switch activeSpawnProfile.twist {
         case .telekinesis:
-            hint = "Hold a hand near a shape to glow · move or tilt it to guide"
+            hint = "Aim either hand to lock a shape · move each hand to guide"
         case .orbitGate:
             hint = "Pass through hoops · watch for the timed opening in flat rings"
         default:
