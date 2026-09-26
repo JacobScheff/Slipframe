@@ -1818,7 +1818,7 @@ final class Endless_RunnerTests: XCTestCase {
         // Orientation is optional at acquisition and unused once the shape is held.
         XCTAssertTrue(lock.update(hand: wrist, deltaTime: 1.0 / 90))
         XCTAssertEqual(lock.target, SIMD2(0, 1.2))
-        XCTAssertTrue(lock.update(hand: wrist + SIMD3(0.2, 0.1, 0), deltaTime: 1.0 / 90))
+        XCTAssertTrue(lock.update(hand: wrist + SIMD3(0.1, 0.05, 0), deltaTime: 1.0 / 90))
         XCTAssertEqual(lock.target.x, 0.5, accuracy: 0.001)
         XCTAssertEqual(lock.target.y, 1.45, accuracy: 0.001)
     }
@@ -1857,7 +1857,7 @@ final class Endless_RunnerTests: XCTestCase {
 
     func testFoundryLockSurvivesFastMovementAndBriefOcclusion() {
         var lock = FoundryForceLock(hand: SIMD3(0, 1.2, -0.4), shape: SIMD2(0, 1.2))
-        XCTAssertTrue(lock.update(hand: SIMD3(0.4, 1.2, -0.4), deltaTime: 1.0 / 90))
+        XCTAssertTrue(lock.update(hand: SIMD3(0.2, 1.2, -0.4), deltaTime: 1.0 / 90))
         XCTAssertEqual(lock.target.x, 1, accuracy: 0.001)
         for _ in 0..<90 {
             XCTAssertTrue(lock.update(hand: nil, deltaTime: 1.0 / 90))
@@ -1865,7 +1865,7 @@ final class Endless_RunnerTests: XCTestCase {
         let beforeRecovery = lock.target
         XCTAssertTrue(lock.update(hand: SIMD3(-0.5, 1.4, -0.2), deltaTime: 1.0 / 90))
         XCTAssertEqual(lock.target, beforeRecovery)
-        XCTAssertTrue(lock.update(hand: SIMD3(-0.6, 1.4, -0.2), deltaTime: 1.0 / 90))
+        XCTAssertTrue(lock.update(hand: SIMD3(-0.55, 1.4, -0.2), deltaTime: 1.0 / 90))
         XCTAssertEqual(lock.target.x, 0.75, accuracy: 0.001)
         XCTAssertTrue(lock.update(hand: nil, deltaTime: 1.9))
         XCTAssertFalse(lock.update(hand: nil, deltaTime: 0.2))
@@ -1890,22 +1890,22 @@ final class Endless_RunnerTests: XCTestCase {
     func testFoundryHandsMoveIndependentlyAndLoseTrackingIndependently() {
         var left = FoundryForceLock(hand: SIMD3(-0.2, 1.2, -0.4), shape: SIMD2(-0.5, 1.2))
         var right = FoundryForceLock(hand: SIMD3(0.2, 1.2, -0.4), shape: SIMD2(0.5, 1.2))
-        XCTAssertTrue(left.update(hand: SIMD3(0.1, 1.3, -0.4), deltaTime: 1.0 / 90))
-        XCTAssertTrue(right.update(hand: SIMD3(-0.1, 1.1, -0.4), deltaTime: 1.0 / 90))
+        XCTAssertTrue(left.update(hand: SIMD3(-0.05, 1.25, -0.4), deltaTime: 1.0 / 90))
+        XCTAssertTrue(right.update(hand: SIMD3(0.05, 1.15, -0.4), deltaTime: 1.0 / 90))
         XCTAssertEqual(left.target.x, 0.25, accuracy: 0.001)
         XCTAssertEqual(right.target.x, -0.25, accuracy: 0.001)
         XCTAssertEqual(left.target.y, 1.45, accuracy: 0.001)
         XCTAssertEqual(right.target.y, 0.95, accuracy: 0.001)
         XCTAssertFalse(left.update(hand: nil, deltaTime: 2.1))
-        XCTAssertTrue(right.update(hand: SIMD3(0, 1.1, -0.4), deltaTime: 1.0 / 90))
+        XCTAssertTrue(right.update(hand: SIMD3(0.1, 1.15, -0.4), deltaTime: 1.0 / 90))
         XCTAssertEqual(right.target.x, 0, accuracy: 0.001)
     }
 
     func testFoundryTranslationIsBoundedAndMotionEasesTowardTarget() {
         let fullSweep = FoundryForceSteering.target(
-            grabShape: SIMD2(-0.76, 1.2), handDelta: SIMD2(0.9, 0)
+            grabShape: SIMD2(-0.76, 1.2), handDelta: SIMD2(0.304, 0)
         )
-        XCTAssertGreaterThan(fullSweep.x, 1.12)
+        XCTAssertEqual(fullSweep.x, 0.76, accuracy: 0.001)
         XCTAssertEqual(FoundryForceSteering.target(grabShape: .zero, handDelta: SIMD2(10, 10)),
                        SIMD2(1.55, 2.05))
         XCTAssertEqual(FoundryForceSteering.target(grabShape: .zero, handDelta: SIMD2(-10, -10)),
@@ -1920,9 +1920,10 @@ final class Endless_RunnerTests: XCTestCase {
             )
             position = step.position
             velocity = step.velocity
+            XCTAssertLessThanOrEqual(simd_length(velocity), FoundryForceSteering.maxSpeed + 0.001)
         }
-        XCTAssertGreaterThan(position.x, 0.0)
-        XCTAssertLessThanOrEqual(simd_length(velocity), FoundryForceSteering.maxSpeed + 0.001)
+        // Reach the slot's alignment tolerance within half a second without extra hand travel.
+        XCTAssertLessThan(abs(position.x - fullSweep.x), 0.16)
     }
 
     func testFoundryShapeCountPoolsAverageTwoAcrossRisks() {

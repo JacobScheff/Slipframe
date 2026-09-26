@@ -218,7 +218,8 @@ rotation, finger curling, and fast sweeps do not release it. Each hand independe
 holds its own shape, with simultaneous selection assigning distinct targets.
 Tracking can disappear for up to two seconds before releasing a shape. Recovery
 rebases the wrist position to avoid a jump. Shapes ease toward the target and bob,
-drift, and rotate gently. Translation stays responsive across the whole door.
+drift, and rotate gently. Objects move five times the wrist distance, so a roughly
+30 cm hand movement covers the outer slots. Faster follow motion keeps them responsive.
 Aligned shapes float into their slots; filling every slot opens the door. Reaching
 a closed door is a hit. Risk raises door speed and the possible shape count; all
 doors remain slower than the normal obstacle stream.

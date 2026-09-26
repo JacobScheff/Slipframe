@@ -19,10 +19,12 @@ import SwiftUI
 import UIKit
 
 enum FoundryForceSteering {
-    static let maxSpeed: Float = 1.9
+    /// A 15 cm wrist movement covers a 75 cm lane; full cross-door moves need about 30 cm.
+    static let translationGain: Float = 5.0
+    static let maxSpeed: Float = 3.8
 
     static func target(grabShape: SIMD2<Float>, handDelta: SIMD2<Float>) -> SIMD2<Float> {
-        let requested = grabShape + handDelta * 2.5
+        let requested = grabShape + handDelta * translationGain
         return SIMD2(min(1.55, max(-1.55, requested.x)),
                      min(2.05, max(0.52, requested.y)))
     }
@@ -30,11 +32,11 @@ enum FoundryForceSteering {
     static func advance(position: SIMD2<Float>, velocity: SIMD2<Float>,
                         target: SIMD2<Float>, deltaTime: Float)
         -> (position: SIMD2<Float>, velocity: SIMD2<Float>) {
-        var desiredVelocity = (target - position) * 7.5
+        var desiredVelocity = (target - position) * 10
         let desiredSpeed = simd_length(desiredVelocity)
         if desiredSpeed > maxSpeed { desiredVelocity *= maxSpeed / desiredSpeed }
         var nextVelocity = velocity
-            + (desiredVelocity - velocity) * min(1, deltaTime * 15)
+            + (desiredVelocity - velocity) * min(1, deltaTime * 20)
         let speed = simd_length(nextVelocity)
         if speed > maxSpeed { nextVelocity *= maxSpeed / speed }
         return (position + nextVelocity * deltaTime, nextVelocity)
