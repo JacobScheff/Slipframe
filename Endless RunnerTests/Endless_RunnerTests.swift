@@ -352,8 +352,9 @@ final class Endless_RunnerTests: XCTestCase {
             GameCenterLeaderboardID.identifier(metric: .coins, board: .daily(dayKey: "2099-01-01")),
             "coins.daily"
         )
-        XCTAssertEqual(GameCenterLeaderboardID.allConfiguredIDs.count, 16)
-        XCTAssertTrue(Set(GameCenterLeaderboardID.allConfiguredIDs).count == 16)
+        let expectedBoardIDs = 2 * (EnvironmentID.allCases.count + 2)
+        XCTAssertEqual(GameCenterLeaderboardID.allConfiguredIDs.count, expectedBoardIDs)
+        XCTAssertEqual(Set(GameCenterLeaderboardID.allConfiguredIDs).count, expectedBoardIDs)
     }
 
     func testEndRunSubmitsScoreAndCoinsToGameCenterExceptPlaylist() {
@@ -778,15 +779,17 @@ final class Endless_RunnerTests: XCTestCase {
         let keys = ["none"] + RiftModifier.allCases.map(\.rawValue)
         var counts = Dictionary(uniqueKeysWithValues: keys.map { ($0, 0) })
         let junctions = 7_000
+        var sampledAuthoredOptions = 0
 
         for _ in 0..<junctions {
             let options = RiftJunctionRules.makeOptions(excluding: .emberRun, rng: &rng)
-            for option in options {
+            for option in options where BiomeAssetID.authoredBiomes.contains(option.environment) {
                 counts[option.modifier?.rawValue ?? "none", default: 0] += 1
+                sampledAuthoredOptions += 1
             }
         }
 
-        let expected = Double(junctions * 3) / Double(keys.count)
+        let expected = Double(sampledAuthoredOptions) / Double(keys.count)
         for key in keys {
             let actual = Double(counts[key, default: 0])
             XCTAssertEqual(actual, expected, accuracy: expected * 0.08, key)
@@ -1767,6 +1770,21 @@ final class Endless_RunnerTests: XCTestCase {
             XCTAssertFalse(kind.symbolName.isEmpty)
             XCTAssertFalse(kind.cardBlurb.isEmpty)
         }
+    }
+
+    func testNewBiomeProfilesAndPlaceholderResources() {
+        XCTAssertEqual(EnvironmentCatalog.profile(for: .vectorFoundry).twist, .telekinesis)
+        XCTAssertEqual(EnvironmentCatalog.profile(for: .orbitGate).twist, .orbitGate)
+        XCTAssertEqual(EnvironmentID.vectorFoundry.musicCue, EnvironmentID.crystalCave.musicCue)
+        XCTAssertEqual(EnvironmentID.orbitGate.musicCue, EnvironmentID.stormPass.musicCue)
+        XCTAssertFalse(BiomeAssetID.required.contains("environment_vectorFoundry"))
+        XCTAssertFalse(BiomeAssetID.required.contains("environment_orbitGate"))
+        XCTAssertEqual(EnvironmentID.allCases.count, BiomeAssetID.authoredBiomes.count + 2)
+        let foundryModifiers = RiftJunctionRules.modifierPool(for: .vectorFoundry)
+        XCTAssertEqual(foundryModifiers.count, 4)
+        XCTAssertFalse(foundryModifiers.contains(.some(.aegis)))
+        XCTAssertFalse(foundryModifiers.contains(.some(.magnet)))
+        XCTAssertFalse(foundryModifiers.contains(.some(.closeCall)))
     }
 
     // MARK: - Authored art, cosmetic variation and portable animation

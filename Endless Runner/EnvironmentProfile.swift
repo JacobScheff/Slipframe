@@ -16,6 +16,8 @@ enum EnvironmentID: String, CaseIterable, Identifiable, Codable {
     case lowCrawl
     case stormPass
     case crystalCave
+    case vectorFoundry
+    case orbitGate
 
     var id: String { rawValue }
 
@@ -27,12 +29,21 @@ enum EnvironmentID: String, CaseIterable, Identifiable, Codable {
         case .lowCrawl: return "Low Crawl"
         case .stormPass: return "Storm Pass"
         case .crystalCave: return "Crystal Cave"
+        case .vectorFoundry: return "Vector Foundry"
+        case .orbitGate: return "Orbit Gate"
         }
     }
 
     /// Filename stem for the biome track in `Music/`
     /// (e.g. `emberRun.m4a`). See Music/README.md.
-    var musicCue: String { rawValue }
+    var musicCue: String {
+        // Placeholder tracks until these biomes have their own music.
+        switch self {
+        case .vectorFoundry: return EnvironmentID.crystalCave.rawValue
+        case .orbitGate: return EnvironmentID.stormPass.rawValue
+        default: return rawValue
+        }
+    }
 
     var symbolName: String {
         switch self {
@@ -42,6 +53,8 @@ enum EnvironmentID: String, CaseIterable, Identifiable, Codable {
         case .lowCrawl: return "arrow.down.to.line"
         case .stormPass: return "wind"
         case .crystalCave: return "diamond.fill"
+        case .vectorFoundry: return "hand.raised.fill"
+        case .orbitGate: return "circle.hexagongrid.fill"
         }
     }
 
@@ -54,6 +67,8 @@ enum EnvironmentID: String, CaseIterable, Identifiable, Codable {
         case .lowCrawl: return "Duck low"
         case .stormPass: return "Wind shove"
         case .crystalCave: return "Combine"
+        case .vectorFoundry: return "Move with your hand"
+        case .orbitGate: return "Follow the opening"
         }
     }
 }
@@ -65,6 +80,8 @@ enum EnvironmentTwist: Equatable {
     case lowCrawl
     case windShove
     case crystalHalves
+    case telekinesis
+    case orbitGate
 }
 
 /// Player-chosen challenge contract for one Normal-mode biome visit.
@@ -175,6 +192,15 @@ enum RiftJunctionRules {
     static let commitLeadSeconds: Float = 0.25
     static let crossingSeconds: Float = 1.2
 
+    static func modifierPool(for environment: EnvironmentID) -> [RiftModifier?] {
+        if environment == .vectorFoundry {
+            // Foundry has no wall collision or touch pickups. Every offered modifier
+            // must still change the visit's scoring or bonus behavior.
+            return [nil, .some(.tokenSurge), .some(.overdrive), .some(.bonusBank)]
+        }
+        return [nil] + RiftModifier.allCases.map { Optional($0) }
+    }
+
     /// Three distinct destinations. Risk and modifier are rolled independently per portal.
     static func makeOptions<RNG: RandomNumberGenerator>(
         excluding current: EnvironmentID,
@@ -182,13 +208,12 @@ enum RiftJunctionRules {
     ) -> [RiftPortalOption] {
         var environments = EnvironmentID.allCases.filter { $0 != current }
         environments.shuffle(using: &rng)
-        // Seven equiprobable results: the six modifiers plus no modifier.
-        let modifierPool: [RiftModifier?] = [nil] + RiftModifier.allCases.map { Optional($0) }
         return (0..<3).map { index in
-            RiftPortalOption(
-                environment: environments[index],
+            let environment = environments[index]
+            return RiftPortalOption(
+                environment: environment,
                 risk: RiftRisk.allCases.randomElement(using: &rng) ?? .charged,
-                modifier: modifierPool.randomElement(using: &rng) ?? nil
+                modifier: modifierPool(for: environment).randomElement(using: &rng) ?? nil
             )
         }
     }
@@ -437,6 +462,50 @@ enum EnvironmentCatalog {
                 duckHazardChance: 0,
                 summitStepTeachCount: 0,
                 jumpHazardChance: 0
+            )
+        case .vectorFoundry:
+            return EnvironmentProfile(
+                id: .vectorFoundry,
+                twist: .telekinesis,
+                palette: EnvironmentPalette(
+                    floor: TintColor(r: 0.035, g: 0.10, b: 0.15, a: 1),
+                    laneStripe: TintColor(r: 0.25, g: 0.95, b: 0.85, a: 0.9),
+                    portalRim: TintColor(r: 0.18, g: 0.9, b: 0.78, a: 1),
+                    portalVoid: TintColor(r: 0.01, g: 0.05, b: 0.07, a: 1),
+                    portalRail: TintColor(r: 0.22, g: 0.7, b: 0.7, a: 1),
+                    portalAccent: TintColor(r: 0.28, g: 0.85, b: 1, a: 1),
+                    ambienceBrightness: 0.9, fogDensity: 0,
+                    fogColor: TintColor(r: 0.1, g: 0.4, b: 0.5, a: 0),
+                    wallTint: TintColor(r: 0.1, g: 0.65, b: 0.7, a: 0.45),
+                    wallEmissive: TintColor(r: 0.28, g: 1, b: 0.85, a: 1),
+                    wallOpacity: 0.45, wallEmissiveIntensity: 0.65,
+                    coinTint: TintColor(r: 0.35, g: 1, b: 0.72, a: 1)
+                ),
+                ghostWallChance: 0, ghostWallOpacity: 0.45,
+                lowCrawlTeachCount: 0, duckHazardChance: 0,
+                summitStepTeachCount: 0, jumpHazardChance: 0
+            )
+        case .orbitGate:
+            return EnvironmentProfile(
+                id: .orbitGate,
+                twist: .orbitGate,
+                palette: EnvironmentPalette(
+                    floor: TintColor(r: 0.10, g: 0.045, b: 0.12, a: 1),
+                    laneStripe: TintColor(r: 1, g: 0.52, b: 0.72, a: 0.9),
+                    portalRim: TintColor(r: 1, g: 0.38, b: 0.65, a: 1),
+                    portalVoid: TintColor(r: 0.055, g: 0.015, b: 0.055, a: 1),
+                    portalRail: TintColor(r: 0.7, g: 0.2, b: 0.55, a: 1),
+                    portalAccent: TintColor(r: 0.95, g: 0.55, b: 0.9, a: 1),
+                    ambienceBrightness: 0.9, fogDensity: 0,
+                    fogColor: TintColor(r: 0.35, g: 0.1, b: 0.3, a: 0),
+                    wallTint: TintColor(r: 0.75, g: 0.18, b: 0.43, a: 0.48),
+                    wallEmissive: TintColor(r: 1, g: 0.4, b: 0.75, a: 1),
+                    wallOpacity: 0.48, wallEmissiveIntensity: 0.7,
+                    coinTint: TintColor(r: 1, g: 0.5, b: 0.76, a: 1)
+                ),
+                ghostWallChance: 0, ghostWallOpacity: 0.48,
+                lowCrawlTeachCount: 0, duckHazardChance: 0,
+                summitStepTeachCount: 0, jumpHazardChance: 0
             )
         }
     }

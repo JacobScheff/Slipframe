@@ -73,6 +73,13 @@ struct PlayHUDView: View {
             }
 
             if !gameModel.isGameOver {
+                if let biomeHint = gameModel.biomeHint {
+                    Text(biomeHint)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(neon)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 HStack(spacing: 10) {
                     Text("SCORE BONUS")
                         .font(.system(size: 10, weight: .medium, design: .monospaced))

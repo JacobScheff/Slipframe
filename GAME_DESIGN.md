@@ -137,7 +137,9 @@ motion. Other modes keep their existing automatic biome rules.
 
 **Portal modifiers**
 
-Each portal independently has an equal chance of rolling any modifier or no modifier.
+Each portal independently has an equal chance of rolling any compatible modifier or no modifier.
+Vector Foundry offers Token Surge, Overdrive, and Bonus Bank because its remote
+cells have no wall hits or touch pickups. Other biomes keep the full modifier pool.
 No modifier is shown by the absence of a lower portal glyph.
 
 - **Token Surge:** three-token depth chains and doubled token value; increases Crystal
@@ -192,7 +194,7 @@ Each environment has:
 
 #### Environments (roster)
 
-The six biomes in the random pool:
+The eight biomes in the random pool:
 
 1. Summit Step
 2. Low Crawl
@@ -200,6 +202,24 @@ The six biomes in the random pool:
 4. Ember Run
 5. Storm Pass
 6. Crystal Cave
+7. Vector Foundry (procedural placeholder art; Crystal Cave music temporarily)
+8. Orbit Gate (procedural placeholder art; Storm Pass music temporarily)
+
+##### Vector Foundry
+
+Cells and target hoops travel forward together. An open palm facing a cell highlights
+it; a closed hand holds it remotely. Relative hand tilt applies lateral and vertical
+force, so the cell accelerates and coasts instead of attaching rigidly to the hand.
+Reopening the hand releases it. Cells bob, pulse, and rotate gently while airborne.
+Guiding a cell through its hoop before the pair reaches the player awards tokens and
+score; a miss drains some score bonus.
+
+##### Orbit Gate
+
+Wide gates advance through the usual fixed corridor. Their full-height safe aperture
+slides between lanes and locks before contact so the final dodge is readable. The
+first two gates hold the gap in the center to teach the shape; later gates move it.
+The head must pass through the gap, while the hands are free to move.
 
 ##### Summit Step
 

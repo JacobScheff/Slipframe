@@ -68,6 +68,24 @@ enum HandPose {
         classify(anchor: anchor) == .fist
     }
 
+    /// Palm-facing direction inferred from wrist and knuckles. The wrist anchor's
+    /// axes alone are less intuitive when the user rolls their hand to steer.
+    static func palmDirection(anchor: HandAnchor) -> SIMD3<Float>? {
+        guard anchor.isTracked, let skeleton = anchor.handSkeleton else { return nil }
+        let wrist = skeleton.joint(.wrist)
+        let middle = skeleton.joint(.middleFingerKnuckle)
+        let index = skeleton.joint(.indexFingerKnuckle)
+        let little = skeleton.joint(.littleFingerKnuckle)
+        guard wrist.isTracked, middle.isTracked, index.isTracked, little.isTracked else { return nil }
+        let origin = anchor.originFromAnchorTransform
+        let along = worldPosition(origin: origin, joint: middle) - worldPosition(origin: origin, joint: wrist)
+        let across = worldPosition(origin: origin, joint: index) - worldPosition(origin: origin, joint: little)
+        var normal = simd_cross(across, along)
+        guard simd_length(normal) > 0.0001 else { return nil }
+        normal = simd_normalize(normal)
+        return anchor.chirality == .left ? normal : -normal
+    }
+
     /// Classifies fist vs open.
     ///
     /// Crystal Cave holds on anything that is *not* a clear open hand, so open

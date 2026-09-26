@@ -1,13 +1,13 @@
 {
-  "images" : [
+  "images": [
     {
-      "filename" : "Gemini_Generated_Image_c48e02c48e02c48e.png",
-      "idiom" : "vision",
-      "scale" : "2x"
+      "filename": "slipframe-icon-back.png",
+      "idiom": "vision",
+      "scale": "2x"
     }
   ],
-  "info" : {
-    "author" : "xcode",
-    "version" : 1
+  "info": {
+    "author": "xcode",
+    "version": 1
   }
 }

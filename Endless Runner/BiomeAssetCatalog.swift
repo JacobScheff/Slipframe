@@ -98,6 +98,10 @@ enum SpawnVisualVariation {
 
 /// Pure naming contract shared by the asset manifest, gameplay and tests.
 enum BiomeAssetID {
+    /// New gameplay biomes use procedural placeholders until authored USDZ art exists.
+    static let authoredBiomes: [EnvironmentID] = [
+        .emberRun, .summitStep, .ghostGlass, .lowCrawl, .stormPass, .crystalCave
+    ]
     static let wallVariantCount = 3
 
     static func propVariantCount(_ biome: EnvironmentID) -> Int {
@@ -135,7 +139,7 @@ enum BiomeAssetID {
         let variants = ["hazard_duck", "hazard_jump", "token", "crystal_azure",
                         "crystal_coral", "crystal_azure_charged", "crystal_coral_charged"]
             .flatMap { base in (1...2).map { "\(base)_\($0)" } }
-        return shared + variants + EnvironmentID.allCases.flatMap { biome in
+        return shared + variants + authoredBiomes.flatMap { biome in
             (0..<wallVariantCount).map { "wall_\(biome.rawValue)_\($0)" }
                 + ["floor_\(biome.rawValue)", "environment_\(biome.rawValue)",
                    "preview_\(biome.rawValue)"]
