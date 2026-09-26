@@ -2,7 +2,7 @@
 //  HandPose.swift
 //  Slipframe
 //
-//  Crystal Cave grab poses and Vector Foundry hand orientation.
+//  Crystal Cave grab poses and Lattice Forge hand orientation.
 //
 
 import ARKit

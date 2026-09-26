@@ -1788,9 +1788,9 @@ final class Endless_RunnerTests: XCTestCase {
         XCTAssertEqual(EnvironmentCatalog.profile(for: .orbitGate).twist, .orbitGate)
         XCTAssertEqual(EnvironmentID.vectorFoundry.musicCue, EnvironmentID.crystalCave.musicCue)
         XCTAssertEqual(EnvironmentID.orbitGate.musicCue, EnvironmentID.stormPass.musicCue)
-        XCTAssertFalse(BiomeAssetID.required.contains("environment_vectorFoundry"))
-        XCTAssertFalse(BiomeAssetID.required.contains("environment_orbitGate"))
-        XCTAssertEqual(EnvironmentID.allCases.count, BiomeAssetID.authoredBiomes.count + 2)
+        XCTAssertTrue(BiomeAssetID.required.contains("environment_vectorFoundry"))
+        XCTAssertTrue(BiomeAssetID.required.contains("environment_orbitGate"))
+        XCTAssertEqual(EnvironmentID.allCases.count, BiomeAssetID.authoredBiomes.count)
         let foundryModifiers = RiftJunctionRules.modifierPool(for: .vectorFoundry)
         XCTAssertEqual(foundryModifiers.count, 5)
         XCTAssertTrue(foundryModifiers.contains(.some(.aegis)))
@@ -1947,7 +1947,7 @@ final class Endless_RunnerTests: XCTestCase {
     }
 
     func testEveryAuthoredAssetIsBundledAndLoads() async throws {
-        XCTAssertEqual(BiomeAssetID.required.count, 91)
+        XCTAssertEqual(BiomeAssetID.required.count, 119)
         XCTAssertEqual(Set(BiomeAssetID.required).count, BiomeAssetID.required.count)
         await BiomeAssetCatalog.preload()
         XCTAssertTrue(BiomeAssetCatalog.missingAssets.isEmpty, "Missing: \(BiomeAssetCatalog.missingAssets)")

@@ -221,6 +221,14 @@ final class GameWorld {
     private enum FoundryShapeKind: CaseIterable {
         case sphere, cube, diamond
 
+        var assetID: String {
+            switch self {
+            case .sphere: return "foundry_shape_sphere"
+            case .cube: return "foundry_shape_cube"
+            case .diamond: return "foundry_shape_diamond"
+            }
+        }
+
         var color: UIColor {
             switch self {
             case .sphere: return .systemCyan
@@ -3058,11 +3066,16 @@ final class GameWorld {
         foundrySpawnCount += 1
         let root = Entity()
         root.name = "foundryDoor"
-        let panelMaterial = SimpleMaterial(color: .darkGray, roughness: 0.28, isMetallic: true)
-        let leftPanel = ModelEntity(mesh: .generateBox(width: 1.57, height: 2.35, depth: 0.16),
-                                    materials: [panelMaterial])
-        let rightPanel = ModelEntity(mesh: .generateBox(width: 1.57, height: 2.35, depth: 0.16),
-                                     materials: [panelMaterial])
+        func makePanel() -> Entity {
+            if let authored = BiomeAssetCatalog.clone("foundry_door_panel") {
+                return authored
+            }
+            let material = SimpleMaterial(color: .darkGray, roughness: 0.28, isMetallic: true)
+            return ModelEntity(mesh: .generateBox(width: 1.57, height: 2.35, depth: 0.16),
+                               materials: [material])
+        }
+        let leftPanel = makePanel()
+        let rightPanel = makePanel()
         leftPanel.position.x = -0.79
         rightPanel.position.x = 0.79
         root.addChild(leftPanel)
@@ -3115,6 +3128,11 @@ final class GameWorld {
 
     private func makeFoundryCore(kind: FoundryShapeKind) -> Entity {
         let entity = Entity()
+        if let authored = BiomeAssetCatalog.clone(kind.assetID) {
+            BiomeAssetCatalog.tint(authored, role: "tint_pickup", color: kind.color)
+            entity.addChild(authored)
+            return entity
+        }
         let material = SimpleMaterial(color: kind.color, roughness: 0.16, isMetallic: true)
         let model: ModelEntity
         switch kind {
@@ -3228,15 +3246,28 @@ final class GameWorld {
         let material = SimpleMaterial(color: color, roughness: 0.22, isMetallic: true)
         for segment in 0..<24 {
             let angle = Float(segment) * Float.pi / 12
-            let bar = ModelEntity(mesh: .generateBox(width: 0.22, height: 0.14, depth: 0.14),
+            let bar: Entity
+            if let authored = BiomeAssetCatalog.clone("orbit_hoop_segment") {
+                BiomeAssetCatalog.tint(authored, role: "body", color: color)
+                BiomeAssetCatalog.tint(authored, role: "accent", color: color)
+                bar = authored
+            } else {
+                bar = ModelEntity(mesh: .generateBox(width: 0.22, height: 0.14, depth: 0.14),
                                   materials: [material])
+            }
             bar.position = SIMD3(cos(angle) * 0.80, sin(angle) * 0.80, 0)
             bar.orientation = simd_quatf(angle: angle + Float.pi / 2,
                                           axis: SIMD3(0, 0, 1))
             ring.addChild(bar)
             if segment.isMultiple(of: 6) {
-                let marker = ModelEntity(mesh: .generateSphere(radius: 0.085),
+                let marker: Entity
+                if let authored = BiomeAssetCatalog.clone("orbit_marker") {
+                    BiomeAssetCatalog.tint(authored, role: "accent", color: color)
+                    marker = authored
+                } else {
+                    marker = ModelEntity(mesh: .generateSphere(radius: 0.085),
                                          materials: [UnlitMaterial(color: color)])
+                }
                 marker.position = SIMD3(cos(angle) * 0.80, sin(angle) * 0.80, 0.10)
                 ring.addChild(marker)
             }
@@ -3249,25 +3280,29 @@ final class GameWorld {
     private func makeTimedOrbitRing() -> Entity {
         let ring = Entity()
         let material = SimpleMaterial(color: .systemPink, roughness: 0.3, isMetallic: true)
-        let hub = ModelEntity(mesh: .generateSphere(radius: 0.29), materials: [material])
+        let hub: Entity = BiomeAssetCatalog.clone("orbit_shutter_hub")
+            ?? ModelEntity(mesh: .generateSphere(radius: 0.29), materials: [material])
         ring.addChild(hub)
         for segment in 0..<24 {
             let angle = Float(segment) * Float.pi / 12
             let signedAngle = angle > Float.pi ? angle - 2 * Float.pi : angle
             if abs(signedAngle) <= 0.52 { continue }
-            let blade = ModelEntity(mesh: .generateBox(width: 0.72, height: 0.13, depth: 0.16),
-                                    materials: [material])
+            let blade: Entity = BiomeAssetCatalog.clone("orbit_shutter_blade")
+                ?? ModelEntity(mesh: .generateBox(width: 0.72, height: 0.13, depth: 0.16),
+                               materials: [material])
             blade.position = SIMD3(cos(angle) * 0.65, sin(angle) * 0.65, 0)
             blade.orientation = simd_quatf(angle: angle, axis: SIMD3(0, 0, 1))
             ring.addChild(blade)
-            let band = ModelEntity(mesh: .generateBox(width: 0.21, height: 0.18, depth: 0.16),
-                                   materials: [material])
+            let band: Entity = BiomeAssetCatalog.clone("orbit_shutter_band")
+                ?? ModelEntity(mesh: .generateBox(width: 0.21, height: 0.18, depth: 0.16),
+                               materials: [material])
             band.position = SIMD3(cos(angle) * 0.65, sin(angle) * 0.65, 0.01)
             band.orientation = simd_quatf(angle: angle + Float.pi / 2,
                                            axis: SIMD3(0, 0, 1))
             ring.addChild(band)
-            let rim = ModelEntity(mesh: .generateBox(width: 0.25, height: 0.13, depth: 0.16),
-                                  materials: [UnlitMaterial(color: .systemYellow)])
+            let rim: Entity = BiomeAssetCatalog.clone("orbit_shutter_rim")
+                ?? ModelEntity(mesh: .generateBox(width: 0.25, height: 0.13, depth: 0.16),
+                               materials: [UnlitMaterial(color: .systemYellow)])
             rim.position = SIMD3(cos(angle) * 1.02, sin(angle) * 1.02, 0.02)
             rim.orientation = simd_quatf(angle: angle + Float.pi / 2,
                                          axis: SIMD3(0, 0, 1))

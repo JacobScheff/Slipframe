@@ -138,7 +138,7 @@ motion. Other modes keep their existing automatic biome rules.
 **Portal modifiers**
 
 Each portal independently has an equal chance of rolling any compatible modifier or no modifier.
-Vector Foundry offers Token Surge, Aegis, Overdrive, and Bonus Bank. Its door can
+Lattice Forge offers Token Surge, Aegis, Overdrive, and Bonus Bank. Its door can
 hit the player, while Magnet and Close Call have no useful Foundry interaction.
 Other biomes keep the full modifier pool.
 No modifier is shown by the absence of a lower portal glyph.
@@ -203,10 +203,10 @@ The eight biomes in the random pool:
 4. Ember Run
 5. Storm Pass
 6. Crystal Cave
-7. Vector Foundry (procedural placeholder art; Crystal Cave music temporarily)
-8. Orbit Gate (procedural placeholder art; Storm Pass music temporarily)
+7. Lattice Forge (Crystal Cave music temporarily)
+8. Gyre Gate (Storm Pass music temporarily)
 
-##### Vector Foundry
+##### Lattice Forge
 
 Slow doors approach along the track at roughly twice the original cadence. Each has
 one to three colored, shape-matched slots, averaging about two shapes per door.
@@ -220,7 +220,7 @@ Aligned shapes float into their slots; filling every slot opens the door. Reachi
 a closed door is a hit. Risk raises door speed and the possible shape count; all
 doors remain slower than the normal obstacle stream.
 
-##### Orbit Gate
+##### Gyre Gate
 
 The first two beats teach three depth-separated 3D hoops. Later beats cycle among
 those triples, a flat rotating shutter with a timed wedge opening, and pairs of

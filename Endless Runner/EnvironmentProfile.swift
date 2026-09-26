@@ -29,8 +29,8 @@ enum EnvironmentID: String, CaseIterable, Identifiable, Codable {
         case .lowCrawl: return "Low Crawl"
         case .stormPass: return "Storm Pass"
         case .crystalCave: return "Crystal Cave"
-        case .vectorFoundry: return "Vector Foundry"
-        case .orbitGate: return "Orbit Gate"
+        case .vectorFoundry: return "Lattice Forge"
+        case .orbitGate: return "Gyre Gate"
         }
     }
 
@@ -67,8 +67,8 @@ enum EnvironmentID: String, CaseIterable, Identifiable, Codable {
         case .lowCrawl: return "Duck low"
         case .stormPass: return "Wind shove"
         case .crystalCave: return "Combine"
-        case .vectorFoundry: return "Move with your hand"
-        case .orbitGate: return "Follow the opening"
+        case .vectorFoundry: return "Shape the lock"
+        case .orbitGate: return "Thread the rings"
         }
     }
 }

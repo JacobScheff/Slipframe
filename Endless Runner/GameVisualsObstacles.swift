@@ -20,17 +20,6 @@ extension GameVisualBuilders {
         biome: EnvironmentID, width: Float, height: Float, depth: Float,
         profile: EnvironmentProfile, seed: UInt64
     ) -> Entity {
-        if biome == .vectorFoundry || biome == .orbitGate {
-            let root = Entity()
-            root.name = "wallSlab"
-            let tint = EnvironmentMaterials.uiColor(profile.palette.wallEmissive)
-            let slab = ModelEntity(
-                mesh: .generateBox(width: width, height: height, depth: depth),
-                materials: [SimpleMaterial(color: tint, roughness: 0.35, isMetallic: true)]
-            )
-            root.addChild(slab)
-            return root
-        }
         let root = BiomeAssetCatalog.obstacle(
             BiomeAssetID.wall(biome, seed: seed),
             dimensions: SIMD3(width, height, depth), nominal: SIMD3(0.7, 1.8, 0.7))

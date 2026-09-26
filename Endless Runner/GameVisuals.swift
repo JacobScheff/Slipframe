@@ -205,24 +205,6 @@ enum GameVisualBuilders {
         if let environment = BiomeAssetCatalog.clone("environment_\(biome.rawValue)") {
             environment.position.y = -(portalHeight - 2.5) * 0.5
             root.addChild(environment)
-        } else if biome == .vectorFoundry || biome == .orbitGate {
-            let palette = EnvironmentCatalog.profile(for: biome).palette
-            for side: Float in [-1, 1] {
-                let column = ModelEntity(
-                    mesh: .generateBox(width: 0.10, height: 2.2, depth: 8),
-                    materials: [EnvironmentMaterials.unlit(palette.portalAccent)]
-                )
-                column.position = SIMD3(side * 1.65, -0.15, -5)
-                root.addChild(column)
-            }
-            for index in 0..<5 {
-                let crossbar = ModelEntity(
-                    mesh: .generateBox(width: 3.3, height: 0.035, depth: 0.06),
-                    materials: [EnvironmentMaterials.unlit(palette.portalRim)]
-                )
-                crossbar.position = SIMD3(0, 1.1, -3 - Float(index) * 2.2)
-                root.addChild(crossbar)
-            }
         }
         for (index, placement) in SceneryVariation.placements(biome: biome, seed: scenerySeed).enumerated() {
             guard let prop = BiomeAssetCatalog.clone(BiomeAssetID.prop(biome, variant: placement.variant)) else { continue }
