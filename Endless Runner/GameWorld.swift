@@ -574,6 +574,7 @@ final class GameWorld {
     private var lastArtPalette: EnvironmentPalette?
     private var lastArtTelegraph: Int = -1
     private var portalMotions: [AuthoredMotion] = []
+    private var archiveClues: ArchiveClueController?
     private var junctionMotions: [AuthoredMotion] = []
     /// Track slab extends this far behind the stand line (+Z).
     private static let trackNearZ: Float = 1.1
@@ -1093,6 +1094,8 @@ final class GameWorld {
         )
         portalWorld.addChild(interior)
         portalMotions = BiomeAssetCatalog.motionBindings(in: interior)
+        archiveClues = ArchiveClueController(root: interior,
+            biome: visualEnvironmentID ?? environmentDirector.currentID)
     }
 
     private func layoutPortal() {
@@ -1909,6 +1912,8 @@ final class GameWorld {
         }
 
         guard gameModel.isPlaying, !gameModel.isGameOver else {
+            archiveClues?.update(deltaTime: 0, active: false, safe: false,
+                                junction: false, windActive: false)
             if gameModel.prefersRoomDimming {
                 gameModel.prefersRoomDimming = false
             }
@@ -1983,6 +1988,14 @@ final class GameWorld {
         }
         let telegraph = max(frame.telegraphStrength, tutorialPortalPulse)
         applyPalette(frame.displayedPalette, telegraph: telegraph)
+        let clueSafe = !walls.contains { $0.playfieldZ > -4 && $0.playfieldZ < 0.8 }
+            && !foundryItems.contains { !$0.resolved && $0.z > -4 && $0.z < 0.8 }
+            && !orbitItems.contains { $0.z > -4 && $0.z < 0.8 }
+            && heldLeft == nil && heldRight == nil
+        archiveClues?.update(deltaTime: simDt,
+                            active: !gameModel.isTutorialRun && motion > StreamFlow.stopThreshold,
+                            safe: clueSafe, junction: junction != nil,
+                            windActive: windTelegraphRemaining > 0 || windDurationActive > 0)
         if biomeHintRemaining > 0 {
             biomeHintRemaining = max(0, biomeHintRemaining - simDt)
             if biomeHintRemaining == 0 { gameModel.biomeHint = nil }
@@ -2553,6 +2566,7 @@ final class GameWorld {
             }
 
             let unlocked = door.shapes.allSatisfy(\.resolved)
+            if unlocked, door.opening == 0 { archiveClues?.doorOpened() }
             if unlocked { door.opening = min(1, door.opening + deltaTime * 1.25) }
             door.leftPanel.position.x = -0.79 - door.opening * 1.55
             door.rightPanel.position.x = 0.79 + door.opening * 1.55
@@ -2631,6 +2645,7 @@ final class GameWorld {
                 } else {
                     gameModel.addFlow(2)
                 }
+                if safe { archiveClues?.ringPassed() }
             }
         }
     }
@@ -2871,6 +2886,7 @@ final class GameWorld {
     }
 
     private func startWindDrift() {
+        GameSFX.shared.playArchiveThunder()
         // Warning line is gone — begin the slow shove with no leftover bar.
         gustEntity?.removeFromParent()
         gustEntity = nil
@@ -3272,7 +3288,6 @@ final class GameWorld {
             normalize(SIMD3(0.15, 1, 0)),
             normalize(SIMD3(0.8, -0.65, 0))
         ]
-        let colors: [UIColor] = [.systemPink, .systemYellow, .systemCyan]
         let shift = nextBool() ? Float(1) : Float(-1)
         var rings: [OrbitRing] = []
         if pattern == 1 {
@@ -3288,7 +3303,7 @@ final class GameWorld {
         } else {
             let count = pattern == 0 ? 3 : 2
             for index in 0..<count {
-                let ring = makeOrbitHoop(color: colors[index])
+                let ring = makeOrbitHoop()
                 ring.name = "rotatingRing\(index + 1)"
                 let centerX: Float
                 let centerY: Float
@@ -3325,15 +3340,14 @@ final class GameWorld {
         }
     }
 
-    private func makeOrbitHoop(color: UIColor) -> Entity {
+    private func makeOrbitHoop() -> Entity {
         let ring = Entity()
+        let color = UIColor(red: 0.46, green: 0.24, blue: 0.48, alpha: 1)
         let material = SimpleMaterial(color: color, roughness: 0.22, isMetallic: true)
         for segment in 0..<24 {
             let angle = Float(segment) * Float.pi / 12
             let bar: Entity
             if let authored = BiomeAssetCatalog.clone("orbit_hoop_segment") {
-                BiomeAssetCatalog.tint(authored, role: "body", color: color)
-                BiomeAssetCatalog.tint(authored, role: "accent", color: color)
                 bar = authored
             } else {
                 bar = ModelEntity(mesh: .generateBox(width: 0.22, height: 0.14, depth: 0.14),
@@ -3346,7 +3360,6 @@ final class GameWorld {
             if segment.isMultiple(of: 6) {
                 let marker: Entity
                 if let authored = BiomeAssetCatalog.clone("orbit_marker") {
-                    BiomeAssetCatalog.tint(authored, role: "accent", color: color)
                     marker = authored
                 } else {
                     marker = ModelEntity(mesh: .generateSphere(radius: 0.085),
@@ -3363,7 +3376,7 @@ final class GameWorld {
     /// moving wedge while the gate crosses the headset plane.
     private func makeTimedOrbitRing() -> Entity {
         let ring = Entity()
-        let material = SimpleMaterial(color: .systemPink, roughness: 0.3, isMetallic: true)
+        let material = SimpleMaterial(color: UIColor(red: 0.26, green: 0.10, blue: 0.29, alpha: 1), roughness: 0.3, isMetallic: true)
         let hub: Entity = BiomeAssetCatalog.clone("orbit_shutter_hub")
             ?? ModelEntity(mesh: .generateSphere(radius: 0.29), materials: [material])
         ring.addChild(hub)
@@ -3386,7 +3399,7 @@ final class GameWorld {
             ring.addChild(band)
             let rim: Entity = BiomeAssetCatalog.clone("orbit_shutter_rim")
                 ?? ModelEntity(mesh: .generateBox(width: 0.25, height: 0.13, depth: 0.16),
-                               materials: [UnlitMaterial(color: .systemYellow)])
+                               materials: [UnlitMaterial(color: UIColor(red: 0.63, green: 0.42, blue: 0.68, alpha: 1))])
             rim.position = SIMD3(cos(angle) * 1.02, sin(angle) * 1.02, 0.02)
             rim.orientation = simd_quatf(angle: angle + Float.pi / 2,
                                          axis: SIMD3(0, 0, 1))
@@ -3394,7 +3407,7 @@ final class GameWorld {
         }
         for edgeAngle in [Float(-0.55), Float(0.55)] {
             let edge = ModelEntity(mesh: .generateBox(width: 0.72, height: 0.045, depth: 0.20),
-                                   materials: [UnlitMaterial(color: .systemCyan)])
+                                   materials: [UnlitMaterial(color: UIColor(red: 0.90, green: 0.75, blue: 0.94, alpha: 1))])
             edge.position = SIMD3(cos(edgeAngle) * 0.65, sin(edgeAngle) * 0.65, 0.11)
             edge.orientation = simd_quatf(angle: edgeAngle, axis: SIMD3(0, 0, 1))
             ring.addChild(edge)
@@ -3813,6 +3826,7 @@ final class GameWorld {
             heldLeft = nil
             heldRight = nil
             visualFX.spawnCrystalMerge(at: (leftPos + rightPos) * 0.5)
+            archiveClues?.crystalMerged()
             GameSFX.shared.playCoinCollect()
             let model = self.gameModel
             DispatchQueue.main.async {

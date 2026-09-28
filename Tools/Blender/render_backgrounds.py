@@ -29,10 +29,12 @@ def setup(key):
     helpers['copy_asset'](scene, 'environment_' + key)
     if key != 'lowCrawl':
         for i in range(8):
-            suffix = '' if i % 3 == 0 else '_' + str(i % 3)
+            count = 5 if key in ['emberRun','summitStep','crystalCave','orbitGate'] else 3
+            suffix = '' if i % count == 0 else '_' + str(i % count)
             side = -1 if i % 2 == 0 else 1
             helpers['copy_asset'](scene, 'prop_' + key + suffix,
-                                  (side*3.2, 4+(i//2)*5.1+(1.05 if i%2 else 0), -1.25), .95)
+                                  (side*3.2, 4+(i//2)*5.1+(1.05 if i%2 else 0)
+                                   +(18 if i in [2,3] else 0), -1.25), .95)
     helpers['camera_at'](scene, (0, -3.8, .35), (0, 22, .9), 30)
     scene.camera.data.clip_end = 400
     return scene

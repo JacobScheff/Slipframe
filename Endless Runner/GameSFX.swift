@@ -21,6 +21,8 @@ final class GameSFX {
     private var junctionCommitPlayers: [RiftRisk: AVAudioPlayer] = [:]
     private var shieldBreakPlayer: AVAudioPlayer?
     private var nearMissPlayer: AVAudioPlayer?
+    private var archiveSignalPlayer: AVAudioPlayer?
+    private var archiveThunderPlayer: AVAudioPlayer?
     private var didConfigureSession = false
 
     private init() {
@@ -64,6 +66,9 @@ final class GameSFX {
         nearMissPlayer = Self.makePlayer(
             frequencies: [740, 990], duration: 0.14, volume: 0.38, noiseAmount: 0.1
         )
+        archiveSignalPlayer = Self.bundledPlayer("archiveSignal", volume: 0.22)
+        archiveThunderPlayer = Self.bundledPlayer("archiveThunder", volume: 0.20)
+        archiveThunderPlayer?.pan = 0.65
     }
 
     /// Call when the immersive world attaches so the first collect is hitch-free.
@@ -78,6 +83,8 @@ final class GameSFX {
         junctionCommitPlayers.values.forEach { $0.prepareToPlay() }
         shieldBreakPlayer?.prepareToPlay()
         nearMissPlayer?.prepareToPlay()
+        archiveSignalPlayer?.prepareToPlay()
+        archiveThunderPlayer?.prepareToPlay()
     }
 
     func playCoinCollect() {
@@ -127,6 +134,18 @@ final class GameSFX {
 
     func playNearMiss() {
         play(nearMissPlayer)
+    }
+
+    func playArchiveSignal() { play(archiveSignalPlayer) }
+    func playArchiveThunder() { play(archiveThunderPlayer) }
+
+    private static func bundledPlayer(_ name: String, volume: Float) -> AVAudioPlayer? {
+        guard let url = Bundle.main.url(forResource: name, withExtension: "wav", subdirectory: "Music")
+                ?? Bundle.main.url(forResource: name, withExtension: "wav"),
+              let player = try? AVAudioPlayer(contentsOf: url) else { return nil }
+        player.volume = volume
+        player.prepareToPlay()
+        return player
     }
 
     private func play(_ player: AVAudioPlayer?) {

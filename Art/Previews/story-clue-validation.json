@@ -1,0 +1,42 @@
+{
+  "emberRun": {
+    "originalMeshesPreserved": 30,
+    "clueMeshes": 4,
+    "minimumMovingClearanceMeters": 2.035
+  },
+  "summitStep": {
+    "originalMeshesPreserved": 31,
+    "clueMeshes": 3,
+    "minimumMovingClearanceMeters": 2.09
+  },
+  "lowCrawl": {
+    "originalMeshesPreserved": 30,
+    "clueMeshes": 5,
+    "minimumMovingClearanceMeters": 2.03
+  },
+  "ghostGlass": {
+    "originalMeshesPreserved": 28,
+    "clueMeshes": 3,
+    "minimumMovingClearanceMeters": 2.17
+  },
+  "stormPass": {
+    "originalMeshesPreserved": 29,
+    "clueMeshes": 8,
+    "minimumMovingClearanceMeters": 2.025
+  },
+  "crystalCave": {
+    "originalMeshesPreserved": 33,
+    "clueMeshes": 11,
+    "minimumMovingClearanceMeters": 2.015
+  },
+  "vectorFoundry": {
+    "originalMeshesPreserved": 14,
+    "clueMeshes": 12,
+    "minimumMovingClearanceMeters": 1.98
+  },
+  "orbitGate": {
+    "originalMeshesPreserved": 17,
+    "clueMeshes": 5,
+    "minimumMovingClearanceMeters": 2.072
+  }
+}

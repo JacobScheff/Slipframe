@@ -30,10 +30,10 @@ def check():
     for base in ['hazard_duck','hazard_jump','token','crystal_azure','crystal_coral','crystal_azure_charged','crystal_coral_charged']:
         expected.update(f'{base}_{i}' for i in [1,2])
     for biome in BIOMES:
-        expected.update(f'wall_{biome}_{i}' for i in range(3))
+        expected.update(f'wall_{biome}_{i}' for i in range(4))
         expected.update(f'{kind}_{biome}' for kind in ['floor', 'prop', 'preview', 'environment'])
         if biome != 'lowCrawl':
-            expected.update(f'prop_{biome}_{i}' for i in [1, 2])
+            expected.update(f'prop_{biome}_{i}' for i in (range(1,5) if biome in ['emberRun','summitStep','crystalCave','orbitGate'] else [1,2]))
     assert len(records) == len(manifest['assets']) == len(expected)
     assert set(records) == expected
     assert {p.stem for p in ART.glob('*.usdz')} == expected
@@ -132,7 +132,7 @@ def check():
         # following extreme rotation/scale test also bounds all the variants.
         box = bounds['prop_' + biome]
         variant_boxes = [box]
-        for variant in [1, 2]:
+        for variant in (range(1,5) if biome in ['emberRun','summitStep','crystalCave','orbitGate'] else [1,2]):
             other = bounds[f'prop_{biome}_{variant}']
             if biome not in ['vectorFoundry', 'orbitGate']:
                 assert all(a >= b-1e-5 for a, b in zip(other.GetMin(), box.GetMin())), (biome, variant)

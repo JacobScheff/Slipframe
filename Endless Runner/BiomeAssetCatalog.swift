@@ -55,7 +55,9 @@ enum SceneryVariation {
             return Placement(
                 position: SIMD3(side * sample(3.05...3.45), 0,
                                 -4.0 - Float(index / 2) * 5.1
-                                    - (index.isMultiple(of: 2) ? 0 : 1.05) + sample(-0.30...0.30)),
+                                    - (index.isMultiple(of: 2) ? 0 : 1.05) + sample(-0.30...0.30)
+                                    // Clear the authored clue alcoves at 8–12 m.
+                                    - ((index == 2 || index == 3) ? 18 : 0)),
                 scale: SIMD3(size, size * height, size),
                 yaw: sample(-angle...angle),
                 lean: natural ? sample(-0.045...0.045) : 0,
@@ -99,10 +101,14 @@ enum SpawnVisualVariation {
 /// Pure naming contract shared by the asset manifest, gameplay and tests.
 enum BiomeAssetID {
     static let authoredBiomes: [EnvironmentID] = EnvironmentID.allCases
-    static let wallVariantCount = 3
+    static let wallVariantCount = 4
 
     static func propVariantCount(_ biome: EnvironmentID) -> Int {
-        biome == .lowCrawl ? 1 : 3
+        switch biome {
+        case .lowCrawl: return 1
+        case .emberRun, .summitStep, .crystalCave, .orbitGate: return 5
+        default: return 3
+        }
     }
 
     static func prop(_ biome: EnvironmentID, variant: Int) -> String {
@@ -182,6 +188,7 @@ enum BiomeAssetCatalog {
 
     static func clone(_ name: String) -> Entity? {
         guard let clone = prototypes[name]?.clone(recursive: true) else { return nil }
+        ArchiveClueController.prepare(clone)
         if name.hasPrefix("prop_ghostGlass") || name == "preview_ghostGlass" {
             ghostOpacity(clone, opacity: 0.012)
         }
@@ -216,7 +223,7 @@ enum BiomeAssetCatalog {
 
     /// USD import can preserve the object Xform or its Mesh child as the model
     /// owner. Export names both; ancestor lookup also tolerates an importer rename.
-    private static func hasRole(_ entity: Entity, _ role: String) -> Bool {
+    static func hasRole(_ entity: Entity, _ role: String) -> Bool {
         var current: Entity? = entity
         while let node = current {
             if node.name.contains("__\(role)__") { return true }
@@ -290,6 +297,149 @@ enum BiomeAssetCatalog {
         }
         return root
     }
+}
+
+/// Cosmetic archive events use their own clock and never consume gameplay RNG.
+/// All art is baked in the environment USDZ; only named clue parts move.
+@MainActor
+final class ArchiveClueController {
+    struct Part {
+        let entity: Entity
+        let base: Transform
+        let role: String
+    }
+
+    private let biome: EnvironmentID
+    private let parts: [Part]
+    private var time: Float = 0
+    private var revealStart: Float?
+    private var pulseStart: Float?
+    private var syncStart: Float?
+    private var syncCount = 0
+    private var fanAngle: Float = 0
+    private var fanStrength: Float = 0
+    private var hasRevealed = false
+    private var foundryRequested = false
+    private var recordedPresentation = false
+    private let previouslyPresented: Bool
+
+    static func role(of entity: Entity) -> String? {
+        var current: Entity? = entity
+        while let node = current {
+            if let role = node.name.components(separatedBy: "__").first(where: { $0.hasPrefix("story_") }) {
+                return role
+            }
+            current = node.parent
+        }
+        return nil
+    }
+
+    static func prepare(_ root: Entity) {
+        for entity in BiomeAssetCatalog.models(in: root) {
+            guard let role = role(of: entity) else { continue }
+            if role == "story_sync" || role.hasPrefix("story_pulse") {
+                entity.isEnabled = false
+            }
+        }
+    }
+
+    init(root: Entity, biome: EnvironmentID) {
+        self.biome = biome
+        parts = BiomeAssetCatalog.models(in: root).compactMap { entity in
+            guard let role = Self.role(of: entity) else { return nil }
+            return Part(entity: entity, base: entity.transform, role: role)
+        }
+        previouslyPresented = UserDefaults.standard.bool(forKey: "archiveCluePresented_\(biome.rawValue)")
+    }
+
+    func crystalMerged() { pulseStart = time }
+
+    func doorOpened() {
+        guard biome == .vectorFoundry else { return }
+        foundryRequested = true
+        pulseStart = time
+    }
+
+    func ringPassed() {
+        guard biome == .orbitGate, syncCount < 3 else { return }
+        syncCount = min(3, syncCount + 1)
+        syncStart = time
+    }
+
+    private static func smooth(_ value: Float) -> Float {
+        let t = max(0, min(1, value))
+        return t * t * (3 - 2 * t)
+    }
+
+    private static func envelope(_ age: Float, duration: Float) -> Float {
+        guard age >= 0, age < duration else { return 0 }
+        return smooth(age / 0.55) * smooth((duration - age) / 0.75)
+    }
+
+    func update(deltaTime: Float, active: Bool, safe: Bool, junction: Bool, windActive: Bool) {
+        guard active else {
+            for part in parts where part.role == "story_sync" || part.role.hasPrefix("story_pulse") {
+                part.entity.isEnabled = false
+            }
+            return
+        }
+        time += max(0, deltaTime)
+        let threshold: Float = previouslyPresented ? 18 : 7
+        let mayReveal = biome != .vectorFoundry || foundryRequested || junction
+        if !hasRevealed, time >= threshold, (safe || junction), mayReveal {
+            revealStart = time
+            hasRevealed = true
+            if biome == .emberRun, !junction { GameSFX.shared.playArchiveSignal() }
+        }
+        let age = revealStart.map { time - $0 } ?? -1
+        if !recordedPresentation, age >= 1, (safe || junction) {
+            // This records presentation, not gaze or a claim that the clue was seen.
+            UserDefaults.standard.set(true, forKey: "archiveCluePresented_\(biome.rawValue)")
+            recordedPresentation = true
+        }
+        let windTarget: Float = windActive ? 1 : 0
+        fanStrength += (windTarget - fanStrength) * min(1, deltaTime * (windActive ? 3 : 0.65))
+        fanAngle += deltaTime * (0.45 + fanStrength * 5)
+
+        for part in parts {
+            let entity = part.entity
+            entity.transform = part.base
+            switch part.role {
+            case "story_hatch":
+                let opening = Self.smooth(age / 1.1) * Self.smooth((5.5 - age) / 1.1)
+                rotate(part, around: SIMD3(3.27, 0.04, -9.51),
+                       rotation: simd_quatf(angle: opening * 1.12, axis: SIMD3(0, 1, 0)))
+            case "story_fan":
+                rotate(part, around: SIMD3(2.70, 0.05, -9.06),
+                       rotation: simd_quatf(angle: fanAngle, axis: SIMD3(0, 0, 1)))
+            case "story_speaker":
+                entity.position.z += sin(time * 43) * fanStrength * 0.009
+            default:
+                if part.role.hasPrefix("story_rain"), let index = part.role.last?.wholeNumberValue {
+                    let fall = (time * 0.85 + Float(index) / 3).truncatingRemainder(dividingBy: 1)
+                    entity.position.y -= fall * 0.67
+                    entity.components.set(OpacityComponent(opacity: Self.envelope(fall, duration: 1) * 0.5))
+                } else if part.role.hasPrefix("story_pulse"), let index = part.role.last?.wholeNumberValue {
+                    let pulseAge = pulseStart.map { time - $0 - Float(index) * 0.16 } ?? -1
+                    let opacity = Self.envelope(pulseAge, duration: 0.65)
+                    entity.isEnabled = opacity > 0.001
+                    entity.components.set(OpacityComponent(opacity: opacity))
+                } else if part.role == "story_sync" {
+                    let syncAge = syncStart.map { time - $0 } ?? -1
+                    let opacity = Self.envelope(syncAge, duration: 1.2)
+                    entity.isEnabled = opacity > 0.001
+                    entity.components.set(OpacityComponent(opacity: opacity))
+                }
+            }
+        }
+    }
+
+    private func rotate(_ part: Part, around pivot: SIMD3<Float>, rotation: simd_quatf) {
+        part.entity.orientation = rotation * part.base.rotation
+        part.entity.position = part.base.translation + pivot - rotation.act(pivot)
+    }
+
+
 }
 
 /// Portable animation of named Blender mesh parts. No rig, shader-node animation,

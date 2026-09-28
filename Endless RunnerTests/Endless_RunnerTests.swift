@@ -1787,7 +1787,7 @@ final class Endless_RunnerTests: XCTestCase {
         XCTAssertEqual(EnvironmentCatalog.profile(for: .vectorFoundry).twist, .telekinesis)
         XCTAssertEqual(EnvironmentCatalog.profile(for: .orbitGate).twist, .orbitGate)
         XCTAssertEqual(EnvironmentID.vectorFoundry.musicCue, EnvironmentID.crystalCave.musicCue)
-        XCTAssertEqual(EnvironmentID.orbitGate.musicCue, EnvironmentID.stormPass.musicCue)
+        XCTAssertEqual(EnvironmentID.orbitGate.musicCue, "orbitGate")
         XCTAssertTrue(BiomeAssetID.required.contains("environment_vectorFoundry"))
         XCTAssertTrue(BiomeAssetID.required.contains("environment_orbitGate"))
         XCTAssertEqual(EnvironmentID.allCases.count, BiomeAssetID.authoredBiomes.count)
@@ -2052,7 +2052,7 @@ final class Endless_RunnerTests: XCTestCase {
     }
 
     func testEveryAuthoredAssetIsBundledAndLoads() async throws {
-        XCTAssertEqual(BiomeAssetID.required.count, 119)
+        XCTAssertEqual(BiomeAssetID.required.count, 135)
         XCTAssertEqual(Set(BiomeAssetID.required).count, BiomeAssetID.required.count)
         await BiomeAssetCatalog.preload()
         XCTAssertTrue(BiomeAssetCatalog.missingAssets.isEmpty, "Missing: \(BiomeAssetCatalog.missingAssets)")
@@ -2099,6 +2099,64 @@ final class Endless_RunnerTests: XCTestCase {
             let world = try XCTUnwrap(BiomeAssetCatalog.clone(name))
             XCTAssertFalse(BiomeAssetCatalog.motionBindings(in: world).isEmpty, name)
         }
+    }
+
+    func testArchiveCluePreviewsHideUntriggeredEffects() async throws {
+        await BiomeAssetCatalog.preload()
+        for biome in EnvironmentID.allCases {
+            let world = try XCTUnwrap(BiomeAssetCatalog.clone("environment_\(biome.rawValue)"))
+            let parts = BiomeAssetCatalog.models(in: world).filter { ArchiveClueController.role(of: $0) != nil }
+            XCTAssertFalse(parts.isEmpty, biome.rawValue)
+            for part in parts {
+                let role = try XCTUnwrap(ArchiveClueController.role(of: part))
+                XCTAssertFalse(role.hasPrefix("story_echo") || role.hasPrefix("story_arm"))
+                if role == "story_sync" || role.hasPrefix("story_pulse") {
+                    XCTAssertFalse(part.isEnabled, "Untriggered effect visible in \(biome.rawValue)")
+                }
+                XCTAssertNil(part.components[CollisionComponent.self])
+            }
+        }
+    }
+
+    func testCrystalClueRespondsToMergeAndPausesWithoutAdvancing() async throws {
+        await BiomeAssetCatalog.preload()
+        let world = try XCTUnwrap(BiomeAssetCatalog.clone("environment_crystalCave"))
+        let controller = ArchiveClueController(root: world, biome: .crystalCave)
+        let pulse = try XCTUnwrap(BiomeAssetCatalog.models(in: world).first {
+            ArchiveClueController.role(of: $0) == "story_pulse0"
+        })
+        controller.update(deltaTime: 9, active: true, safe: false, junction: false, windActive: false)
+        XCTAssertFalse(pulse.isEnabled)
+        controller.crystalMerged()
+        controller.update(deltaTime: 0.3, active: true, safe: false, junction: false, windActive: false)
+        XCTAssertTrue(pulse.isEnabled)
+        let beforePause = try XCTUnwrap(pulse.components[OpacityComponent.self]).opacity
+        controller.update(deltaTime: 20, active: false, safe: false, junction: false, windActive: false)
+        XCTAssertFalse(pulse.isEnabled)
+        controller.update(deltaTime: 0, active: true, safe: false, junction: false, windActive: false)
+        XCTAssertEqual(try XCTUnwrap(pulse.components[OpacityComponent.self]).opacity, beforePause, accuracy: 0.001)
+        controller.update(deltaTime: 3, active: true, safe: false, junction: false, windActive: false)
+        XCTAssertFalse(pulse.isEnabled)
+    }
+
+    func testGyreClueOnlyReplaysItsFirstThreeSuccessfulPasses() async throws {
+        await BiomeAssetCatalog.preload()
+        let world = try XCTUnwrap(BiomeAssetCatalog.clone("environment_orbitGate"))
+        let controller = ArchiveClueController(root: world, biome: .orbitGate)
+        let indicators = BiomeAssetCatalog.models(in: world).filter {
+            ArchiveClueController.role(of: $0)?.hasPrefix("story_sync") == true
+        }
+        XCTAssertFalse(indicators.isEmpty)
+        for _ in 0..<3 {
+            controller.ringPassed()
+            controller.update(deltaTime: 0.6, active: true, safe: false, junction: false, windActive: false)
+            XCTAssertTrue(indicators.contains { $0.isEnabled })
+        }
+        controller.update(deltaTime: 4, active: true, safe: false, junction: false, windActive: false)
+        XCTAssertFalse(indicators.contains { $0.isEnabled })
+        controller.ringPassed()
+        controller.update(deltaTime: 0.6, active: true, safe: false, junction: false, windActive: false)
+        XCTAssertFalse(indicators.contains { $0.isEnabled })
     }
 
     func testImportedDecorationsAreGroundedAndOutsidePlaySpace() async {

@@ -37,10 +37,10 @@ enum EnvironmentID: String, CaseIterable, Identifiable, Codable {
     /// Filename stem for the biome track in `Music/`
     /// (e.g. `emberRun.m4a`). See Music/README.md.
     var musicCue: String {
-        // Placeholder tracks until these biomes have their own music.
+        // Lattice Forge shares the crystal motif; Gyre Gate has a clockwork score.
         switch self {
         case .vectorFoundry: return EnvironmentID.crystalCave.rawValue
-        case .orbitGate: return EnvironmentID.stormPass.rawValue
+        case .orbitGate: return rawValue
         default: return rawValue
         }
     }
