@@ -93,7 +93,7 @@ final class GameCenterService: NSObject, ObservableObject, GameCenterSubmitting 
     @Published private(set) var isAuthenticated = false
     @Published private(set) var localPlayerDisplayName: String?
     @Published private(set) var statusMessage: String = "Checking Game Center…"
-    /// GameKit sign-in UI to present from `GameCenterAuthWindow` (not immersive sheets).
+    /// Sign-in controller supplied by GameKit.
     @Published private(set) var authenticationViewController: UIViewController?
     /// True while GameKit has handed us a sign-in controller that still needs presentation.
     @Published private(set) var needsSignInPresentation = false
@@ -105,6 +105,7 @@ final class GameCenterService: NSObject, ObservableObject, GameCenterSubmitting 
     private var didConfigureHandler = false
     private var personalBests: PersonalBestStore?
     private var loadTask: Task<Void, Never>?
+    private var loadID = UUID()
 
     func attachPersonalBests(_ store: PersonalBestStore) {
         personalBests = store
@@ -146,7 +147,6 @@ final class GameCenterService: NSObject, ObservableObject, GameCenterSubmitting 
         if player.isAuthenticated {
             localPlayerDisplayName = player.displayName
             statusMessage = "Signed in as \(player.displayName)"
-            remoteErrorMessage = nil
         } else if let error {
             localPlayerDisplayName = nil
             statusMessage = "Game Center unavailable — local bests only."
@@ -170,6 +170,9 @@ final class GameCenterService: NSObject, ObservableObject, GameCenterSubmitting 
     func submitRunAsync(board: LeaderboardBoard, score: Int, coins: Int) async {
         guard GKLocalPlayer.local.isAuthenticated else { return }
         guard score > 0 || coins > 0 else { return }
+        // The recurring online board accepts today's challenge only. The model
+        // still records the correct local best when a run straddles midnight.
+        if case .daily(let dayKey) = board, dayKey != DailyChallenge.dayKey() { return }
 
         do {
             if score > 0 {
@@ -189,7 +192,7 @@ final class GameCenterService: NSObject, ObservableObject, GameCenterSubmitting 
                 )
             }
         } catch {
-            remoteErrorMessage = error.localizedDescription
+            print("Game Center score submission failed: \(error)")
         }
     }
 
@@ -208,8 +211,10 @@ final class GameCenterService: NSObject, ObservableObject, GameCenterSubmitting 
         audience: LeaderboardAudience,
         count: Int = 10
     ) {
-        loadTask?.cancel()
+        clearRemote()
+        isLoadingRemote = true
         loadTask = Task {
+            guard !Task.isCancelled else { return }
             await loadRemoteScoresAsync(board: board, metric: metric, audience: audience, count: count)
         }
     }
@@ -220,6 +225,8 @@ final class GameCenterService: NSObject, ObservableObject, GameCenterSubmitting 
         audience: LeaderboardAudience,
         count: Int = 10
     ) async {
+        let requestID = UUID()
+        loadID = requestID
         guard GKLocalPlayer.local.isAuthenticated else {
             remoteSnapshot = nil
             remoteErrorMessage = nil
@@ -229,11 +236,14 @@ final class GameCenterService: NSObject, ObservableObject, GameCenterSubmitting 
 
         isLoadingRemote = true
         remoteErrorMessage = nil
-        defer { isLoadingRemote = false }
+        defer {
+            if loadID == requestID { isLoadingRemote = false }
+        }
 
         let leaderboardID = GameCenterLeaderboardID.identifier(metric: metric, board: board)
         do {
             let leaderboards = try await GKLeaderboard.loadLeaderboards(IDs: [leaderboardID])
+            guard loadID == requestID, !Task.isCancelled else { return }
             guard let leaderboard = leaderboards.first else {
                 remoteSnapshot = RemoteLeaderboardSnapshot(entries: [], localRank: nil, localValue: nil)
                 remoteErrorMessage = "Leaderboard “\(leaderboardID)” not found in App Store Connect."
@@ -247,7 +257,7 @@ final class GameCenterService: NSObject, ObservableObject, GameCenterSubmitting 
                 range: NSRange(location: 1, length: length)
             )
 
-            if Task.isCancelled { return }
+            guard loadID == requestID, !Task.isCancelled else { return }
 
             let localPlayerID = GKLocalPlayer.local.gamePlayerID
             let mapped = (entries).map { entry in
@@ -264,7 +274,7 @@ final class GameCenterService: NSObject, ObservableObject, GameCenterSubmitting 
                 localValue: localEntry?.score
             )
         } catch {
-            if Task.isCancelled { return }
+            guard loadID == requestID, !Task.isCancelled else { return }
             remoteSnapshot = nil
             remoteErrorMessage = error.localizedDescription
         }
@@ -272,6 +282,8 @@ final class GameCenterService: NSObject, ObservableObject, GameCenterSubmitting 
 
     func clearRemote() {
         loadTask?.cancel()
+        loadTask = nil
+        loadID = UUID()
         remoteSnapshot = nil
         remoteErrorMessage = nil
         isLoadingRemote = false

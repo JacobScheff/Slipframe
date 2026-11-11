@@ -518,15 +518,6 @@ final class GameWorld {
     private static let adjacentPairSpread: Float = 0.09
     /// Extra Z gap when consecutive adjacent doubles open on opposite outer lanes (left↔right).
     private static let oppositeOpenLaneSpacingBonus: Float = 0.35
-    /// HUD sits above the corridor, further down the track, clear of the play volume.
-    private static let hudPosition = SIMD3<Float>(0, 2.35, -2.7)
-    /// Coaching card sits just under the center HUD band.
-    private static let tutorialOverlayHUDDrop: Float = 0.28
-    /// World scale for the SwiftUI attachment (attachments are small by default).
-    private static let hudScale: Float = 2.7
-    /// Centered command console (Play / Scores / Settings) at comfortable reach.
-    private static let menuConsolePosition = SIMD3<Float>(0, 1.42, -1.9)
-    private static let menuConsoleScale: Float = 2.05
     /// Pause after a crash before walls start dissolving.
     private static let gameOverClearDelay: Float = 2.2
     /// Duration of the post-game wall sink / squash animation.
@@ -614,6 +605,9 @@ final class GameWorld {
 
     /// Playfield origin: floor at y=0, stand line at z=0, track extends along −Z.
     let root = Entity()
+    private let consoleAnchor = Entity()
+    private let hudAnchor = Entity()
+    private let roomGrid = RoomGrid()
     private let headAnchor = AnchorEntity(.head)
     private let floorAnchor = AnchorEntity(
         .plane(
@@ -630,9 +624,6 @@ final class GameWorld {
             minimumBounds: GameWorld.wallMinimumBounds
         )
     )
-    private let hudAnchor = Entity()
-    private let menuConsoleAnchor = Entity()
-    private let tutorialOverlayAnchor = Entity()
     private let trackRoot = Entity()
     /// Holds the portal plane + neon rim in playfield space (always visible).
     private let portalRoot = Entity()
@@ -643,19 +634,7 @@ final class GameWorld {
 
     private weak var gameModel: GameModel?
     private let environmentDirector = EnvironmentDirector()
-    private let tutorialDirector = TutorialDirector()
-    private var lastPreviewMode: PlayMode?
     private var activeSpawnProfile: EnvironmentProfile = EnvironmentCatalog.profile(for: .emberRun)
-    private var lazyLockPose: LazyLockPose?
-    private var tutorialHitCooldown: Float = 0
-    private var tutorialSpeedMultiplier: Float = 1
-    private var tutorialPortalPulse: Float = 0
-    private var tutorialSpawningEnabled = true
-    private var biomeHintRemaining: Float = 0
-    /// nil = settled at rest poses; otherwise seconds into the post-tutorial menu rise.
-    private var menuRevealElapsed: Float?
-    private static let menuRevealDuration: Float = 1.25
-    private static let menuRevealRise: Float = 0.7
 
     private var walls: [WallItem] = []
     private var coins: [CoinItem] = []
@@ -674,7 +653,6 @@ final class GameWorld {
     private var leftFoundryBasisWorld: HandPose.ForceBasis?
     private var rightFoundryBasisWorld: HandPose.ForceBasis?
 
-    private var speed: Float = GameWorld.runSpeed
     /// 1 while the player is on the play volume; eases to 0 when they step off.
     private var streamFlow = StreamFlow()
     /// First obstacle spawns on the opening tick of a run.
@@ -702,11 +680,9 @@ final class GameWorld {
     private var didSnapWithWorldTracking = false
     /// True once we've placed using a detected floor plane (not eye-height fallback).
     private var didSnapWithFloor = false
-    /// True after the playfield has been placed on a real floor plane.
-    var hasSnappedToFloor: Bool { didSnapWithFloor }
     /// Standing eye height in playfield space — median of idle headset samples.
     private var standingEyeHeight: Float = GameWorld.fallbackEyeHeight
-    /// Rolling headset-Y samples gathered while idle (menu / game over).
+    /// Rolling headset-Y samples gathered while idle.
     private var standingHeightSamples: [Float] = []
     private var timeUntilStandingSample: Float = 0
     /// Sample standing height every few seconds while not in a run.
@@ -749,10 +725,13 @@ final class GameWorld {
 
     /// ARKit providers — AnchorEntity(.head/.hand) transforms are privacy-locked
     /// on visionOS, so gameplay reads DeviceAnchor + HandTrackingProvider instead.
-    private let arSession = ARKitSession()
-    private let handTracking = HandTrackingProvider()
-    private let worldTracking = WorldTrackingProvider()
+    private var arSession = ARKitSession()
+    private var handTracking = HandTrackingProvider()
+    private var worldTracking = WorldTrackingProvider()
     private var arTask: Task<Void, Never>?
+    private var roomTask: Task<Void, Never>?
+    private var nextPreviewCheck: Float = 0
+    private var lastPreviewEnvironment: EnvironmentID?
     /// World-space contact points (wrist + fingertips) for each hand.
     private var leftHandContactsWorld: [SIMD3<Float>] = []
     private var rightHandContactsWorld: [SIMD3<Float>] = []
@@ -777,11 +756,15 @@ final class GameWorld {
         content.add(headAnchor)
         content.add(floorAnchor)
         content.add(wallAnchor)
+        content.add(roomGrid.root)
+        root.addChild(consoleAnchor)
+        root.addChild(hudAnchor)
         isPlayfieldLocked = false
         didSnapWithWorldTracking = false
         didSnapWithFloor = false
-        lastPreviewMode = gameModel.resolvedPlayMode
         elapsedTime = 0
+        nextPreviewCheck = 0
+        lastPreviewEnvironment = nil
         visualEnvironmentID = nil
         lastArtPalette = nil
         visualFX.attach(to: root)
@@ -796,8 +779,6 @@ final class GameWorld {
 
         buildPortal()
         buildStaticEnvironment()
-        ensureHUDAnchor()
-        ensureMenuConsoleAnchor()
         setTrackVisible(gameModel.showsTrack)
         startARSession()
         // Warm audio before the first coin so setActive does not hitch mid-run.
@@ -808,72 +789,35 @@ final class GameWorld {
         placePlayfield()
     }
 
-    /// Parents the SwiftUI play/score attachment so it stays fixed with the track.
-    func attachHUD(_ hudEntity: Entity) {
-        ensureHUDAnchor()
-        // Attachments face +Z by default; player looks down −Z, so identity faces you.
-        // (A 180° yaw shows the panel mirrored from behind.)
-        hudEntity.orientation = simd_quatf(ix: 0, iy: 0, iz: 0, r: 1)
-        hudEntity.scale = SIMD3(repeating: GameWorld.hudScale)
-        guard hudEntity.parent !== hudAnchor else { return }
-        hudEntity.removeFromParent()
-        hudAnchor.addChild(hudEntity)
-    }
-
-    func attachMenuConsole(_ entity: Entity) {
-        ensureMenuConsoleAnchor()
-        entity.orientation = simd_quatf(ix: 0, iy: 0, iz: 0, r: 1)
-        entity.scale = SIMD3(repeating: GameWorld.menuConsoleScale)
-        guard entity.parent !== menuConsoleAnchor else { return }
-        entity.removeFromParent()
-        menuConsoleAnchor.addChild(entity)
-    }
-
-    func attachTutorialOverlay(_ entity: Entity) {
-        ensureTutorialOverlayAnchor()
-        entity.orientation = simd_quatf(ix: 0, iy: 0, iz: 0, r: 1)
-        entity.scale = SIMD3(repeating: 1.35)
-        guard entity.parent !== tutorialOverlayAnchor else { return }
-        entity.removeFromParent()
-        tutorialOverlayAnchor.addChild(entity)
-    }
-
-    /// Show / hide Ready-state chrome (center console + HUD).
-    /// When becoming visible after a tutorial, plays a rise-and-scale reveal.
-    func setMenuChromeVisible(_ visible: Bool) {
-        ensureHUDAnchor()
-        ensureMenuConsoleAnchor()
-        menuConsoleAnchor.isEnabled = visible
-        hudAnchor.isEnabled = true
-
-        if visible, gameModel?.pendingMenuReveal == true {
-            gameModel?.consumeMenuReveal()
-            beginMenuReveal()
-        } else if !visible {
-            menuRevealElapsed = nil
-            applyMenuRevealPose(progress: 1)
-        } else if menuRevealElapsed == nil {
-            applyMenuRevealPose(progress: 1)
-        }
-    }
-
     func setTrackVisible(_ visible: Bool) {
         trackRoot.isEnabled = visible
     }
 
-    func setTutorialOverlayVisible(_ visible: Bool) {
-        tutorialOverlayAnchor.isEnabled = visible
+    func syncInterface(console: Entity?, hud: Entity?, reduceMotion: Bool) {
+        guard let gameModel else { return }
+        if let console, console.parent !== consoleAnchor {
+            console.scale = SIMD3(repeating: 1.5)
+            consoleAnchor.addChild(console)
+        }
+        if let hud, hud.parent !== hudAnchor {
+            hud.scale = SIMD3(repeating: 1.65)
+            hudAnchor.addChild(hud)
+        }
+        consoleAnchor.isEnabled = !gameModel.isPlaying
+        hudAnchor.isEnabled = gameModel.isPlaying
+        roomGrid.root.isEnabled = gameModel.showsRoomGrid
+        roomGrid.reduceMotion = reduceMotion
+        syncPreview()
     }
 
-    /// Idle palette preview when the level-select draft changes.
-    func previewPlayMode(_ mode: PlayMode) {
-        guard gameModel?.isPlaying != true else { return }
-        guard mode != lastPreviewMode else { return }
-        lastPreviewMode = mode
-        environmentDirector.previewMode(mode)
-        activeSpawnProfile = environmentDirector.currentProfile
+    private func syncPreview() {
+        guard let gameModel, !gameModel.isPlaying, gameModel.fieldIsClear else { return }
+        let id = gameModel.previewEnvironment() ?? .emberRun
+        guard id != lastPreviewEnvironment else { return }
+        lastPreviewEnvironment = id
+        environmentDirector.preview(id)
         applyPalette(environmentDirector.displayedPalette, telegraph: 0)
-        syncRoomDimming()
+        roomGrid.pulse()
     }
 
     func syncRun(with gameModel: GameModel) {
@@ -885,6 +829,15 @@ final class GameWorld {
     func teardown() {
         arTask?.cancel()
         arTask = nil
+        roomTask?.cancel()
+        roomTask = nil
+        arSession.stop()
+        arSession = ARKitSession()
+        handTracking = HandTrackingProvider()
+        worldTracking = WorldTrackingProvider()
+        roomGrid.clear()
+        roomGrid.root.removeFromParent()
+        gameModel?.markFieldClear()
         leftHandContactsWorld = []
         rightHandContactsWorld = []
         leftHandGripWorld = nil
@@ -918,18 +871,7 @@ final class GameWorld {
         orbitSpawnCount = 0
         gameplayRNG = nil
         gameModel?.prefersRoomDimming = false
-        gameModel?.clearTutorialOverlay()
-        tutorialDirector.stop()
         GameMusic.shared.stop()
-        for child in hudAnchor.children {
-            child.removeFromParent()
-        }
-        for child in menuConsoleAnchor.children {
-            child.removeFromParent()
-        }
-        for child in tutorialOverlayAnchor.children {
-            child.removeFromParent()
-        }
         for child in trackRoot.children {
             child.removeFromParent()
         }
@@ -943,42 +885,6 @@ final class GameWorld {
         portalWorld.removeFromParent()
         for child in root.children {
             child.removeFromParent()
-        }
-    }
-
-    private func ensureHUDAnchor() {
-        hudAnchor.name = "playHUD"
-        // Don't stomp an in-flight post-tutorial reveal pose.
-        if menuRevealElapsed == nil {
-            hudAnchor.position = GameWorld.hudPosition
-            hudAnchor.scale = SIMD3(repeating: 1)
-        }
-        if hudAnchor.parent !== root {
-            root.addChild(hudAnchor)
-        }
-    }
-
-    private func ensureMenuConsoleAnchor() {
-        menuConsoleAnchor.name = "menuConsole"
-        if menuRevealElapsed == nil {
-            menuConsoleAnchor.position = GameWorld.menuConsolePosition
-            menuConsoleAnchor.scale = SIMD3(repeating: 1)
-        }
-        if menuConsoleAnchor.parent !== root {
-            root.addChild(menuConsoleAnchor)
-        }
-    }
-
-    private func ensureTutorialOverlayAnchor() {
-        tutorialOverlayAnchor.name = "tutorialOverlay"
-        // Seed under the HUD; lazy-lock retargets XZ while active.
-        if tutorialOverlayAnchor.parent !== root {
-            tutorialOverlayAnchor.position = SIMD3(
-                0,
-                GameWorld.hudPosition.y - GameWorld.tutorialOverlayHUDDrop,
-                -1.8
-            )
-            root.addChild(tutorialOverlayAnchor)
         }
     }
 
@@ -1128,53 +1034,24 @@ final class GameWorld {
         leftFoundryBasisWorld = nil
         rightFoundryBasisWorld = nil
         orbitSpawnCount = 0
-        let mode = gameModel?.resolvedPlayMode ?? .normal
-        configureGameplayRNG(for: mode)
+        let mode = gameModel?.runMode ?? .normal
+        let date = gameModel?.runDate ?? Date()
+        configureGameplayRNG(for: mode, date: date)
         resetWind()
-        lastPreviewMode = mode
-        environmentDirector.beginRun(mode: mode)
+        lastPreviewEnvironment = nil
+        environmentDirector.beginRun(mode: mode, date: date, playlistStart: gameModel?.runPlaylistStart)
         activeSpawnProfile = environmentDirector.currentProfile
-        updateBiomeHint()
+        roomGrid.pulse()
         if activeSpawnProfile.twist == .windShove {
             timeUntilWind = nextFloat(in: 1.0...2.0)
         }
         buildPortalRim()
         applyPalette(environmentDirector.displayedPalette, telegraph: 0)
         layoutPortal()
-        tutorialHitCooldown = 0
-        tutorialSpeedMultiplier = 1
-        tutorialPortalPulse = 0
-        tutorialSpawningEnabled = true
-        lazyLockPose = nil
         streamFlow.reset()
         GameMusic.shared.resetPlaybackFlow()
-        if mode == .tutorial {
-            tutorialDirector.begin()
-            let first = tutorialDirector.currentSection
-            tutorialSpeedMultiplier = first.speedMultiplier
-            if let environment = first.environment {
-                environmentDirector.forceEnvironment(environment, telegraph: false)
-                activeSpawnProfile = environmentDirector.currentProfile
-            }
-            GameMusic.shared.prepare()
-            _ = GameMusic.shared.playFromStart(TutorialMusic.cue, loop: false)
-            gameModel?.applyTutorialOverlay(
-                title: first.title,
-                body: first.body,
-                opacity: 1,
-                banner: nil
-            )
-            setTutorialOverlayVisible(true)
-            // Brief empty beat so the first wall isn't on top of the player.
-            distanceUntilSpawn = 1.6
-        } else {
-            tutorialDirector.stop()
-            gameModel?.clearTutorialOverlay()
-            setTutorialOverlayVisible(false)
-            distanceUntilSpawn = 0
-            GameMusic.shared.prepare()
-        }
-        speed = GameWorld.runSpeed * tutorialSpeedMultiplier
+        distanceUntilSpawn = 0
+        GameMusic.shared.prepare()
         distanceAccumulator = 0
         flowDecayAccumulator = 0
         junctionQueued = false
@@ -1231,6 +1108,7 @@ final class GameWorld {
         root.addChild(junctionRoot)
         junction = JunctionState(root: junctionRoot, gates: gates, guide: guide, options: options)
         junctionMotions = BiomeAssetCatalog.motionBindings(in: junctionRoot)
+        gameModel?.portalOptions = options
         gameModel?.isChoosingPortal = true
         GameSFX.shared.playJunctionOpen()
     }
@@ -1338,9 +1216,11 @@ final class GameWorld {
         junctionMotions.removeAll()
         portalRoot.scale = SIMD3(repeating: 1)
         gameModel.isChoosingPortal = false
+        gameModel.portalOptions = []
         environmentDirector.chooseNormalEnvironment(option.environment)
         activeSpawnProfile = environmentDirector.currentProfile
-        updateBiomeHint()
+        gameModel.enterBiome(activeSpawnProfile.id)
+        roomGrid.pulse()
         gameModel.configureStage(risk: option.risk, modifier: option.modifier)
         gameModel.recordPortalCrossing()
         phraseQueue.removeAll()
@@ -1417,6 +1297,8 @@ final class GameWorld {
         standingHeightSamples.removeAll()
         standingEyeHeight = PlayfieldPlacement.fallbackEyeHeight
         recordStandingHeightSample(playfieldHeadPosition().y)
+        consoleAnchor.position = SIMD3(-0.68, standingEyeHeight, -2.15)
+        hudAnchor.position = SIMD3(0, standingEyeHeight + 0.58, -2.85)
         timeUntilStandingSample = GameWorld.standingSampleInterval
         updatePortalAndTrack()
         rebuildFixedTrack(force: true)
@@ -1602,6 +1484,7 @@ final class GameWorld {
         portalRoot.isEnabled = true
         portalRoot.scale = SIMD3(repeating: 1)
         gameModel?.isChoosingPortal = false
+        gameModel?.portalOptions = []
     }
 
     private func resetGameOverClear() {
@@ -1635,13 +1518,7 @@ final class GameWorld {
         if animT >= GameWorld.gameOverClearDuration || walls.isEmpty {
             clearDynamicContent()
             gameOverClearFinished = true
-            // Tutorial skip reuses this dissolve, then hands back to the ready menu.
-            if gameModel?.isTutorialRun == true {
-                gameModel?.finalizeTutorialSkip()
-            } else {
-                // Publishing this state starts the existing rise/scale console reveal.
-                gameModel?.revealGameOverMenu()
-            }
+            gameModel?.markFieldClear()
             return
         }
 
@@ -1690,8 +1567,31 @@ final class GameWorld {
                         handsEnabled = true
                     }
                 }
+                var roomPlanes: PlaneDetectionProvider?
+                if PlaneDetectionProvider.isSupported {
+                    let auth = await arSession.requestAuthorization(for: [.worldSensing])
+                    if auth[.worldSensing] == .allowed {
+                        let provider = PlaneDetectionProvider(alignments: [.horizontal, .vertical])
+                        providers.append(provider)
+                        roomPlanes = provider
+                    }
+                }
+                guard !Task.isCancelled else { return }
                 guard !providers.isEmpty else { return }
                 try await arSession.run(providers)
+                guard !Task.isCancelled else { return }
+                if let roomPlanes {
+                    roomTask = Task { @MainActor [weak self] in
+                        for await update in roomPlanes.anchorUpdates {
+                            guard !Task.isCancelled, let self else { break }
+                            if update.event == .removed {
+                                roomGrid.remove(update.anchor.id)
+                            } else {
+                                roomGrid.update(update.anchor)
+                            }
+                        }
+                    }
+                }
 
                 guard handsEnabled else { return }
 
@@ -1901,29 +1801,22 @@ final class GameWorld {
 
         guard let gameModel else { return }
         syncAegisAura(gameModel: gameModel)
+        roomGrid.tick(deltaTime: deltaTime, playing: gameModel.isPlaying)
 
-        // Calibrate standing height on the menu / after a run — freeze during play
+        // Calibrate standing height while idle — freeze during play
         // so a jump cannot raise the baseline mid-hurdle.
         if !gameModel.isPlaying {
             updateStandingHeightCalibration(deltaTime: deltaTime)
+            if elapsedTime >= nextPreviewCheck {
+                nextPreviewCheck = elapsedTime + 1
+                syncPreview()
+            }
         }
 
         guard gameModel.isPlaying, !gameModel.isGameOver else {
             if gameModel.prefersRoomDimming {
                 gameModel.prefersRoomDimming = false
             }
-            if tutorialDirector.isActive {
-                // Interrupted exit (skip / dismiss). Natural finish already stopped the director.
-                tutorialDirector.stop()
-                tutorialPortalPulse = 0
-                tutorialSpeedMultiplier = 1
-                tutorialSpawningEnabled = true
-                lazyLockPose = nil
-                setTutorialOverlayVisible(false)
-                gameModel.clearTutorialOverlay()
-            }
-            // Keep animating the post-tutorial menu rise while idle.
-            tickMenuReveal(deltaTime: deltaTime)
             if gameModel.isGameOver {
                 tickGameOverClear(deltaTime: deltaTime)
             } else {
@@ -1947,12 +1840,6 @@ final class GameWorld {
         GameMusic.shared.setPlaybackFlow(motion)
         let simDt = dt * motion
 
-        if gameModel.isTutorialRun {
-            tickTutorial(gameModel: gameModel, deltaTime: simDt)
-            // Outro may finish the run mid-frame.
-            guard gameModel.isPlaying else { return }
-        }
-
         let frame = environmentDirector.update(deltaTime: simDt)
         if frame.requestsJunction {
             // Finish the currently readable beat before presenting the restful choice.
@@ -1961,7 +1848,8 @@ final class GameWorld {
         }
         if frame.didEnterEnvironment {
             activeSpawnProfile = frame.profile
-            updateBiomeHint()
+            gameModel.enterBiome(frame.currentID)
+            roomGrid.pulse()
             dropHeldHalves()
             for item in foundryItems {
                 for shape in item.shapes { shape.heldBy = nil }
@@ -1981,26 +1869,16 @@ final class GameWorld {
                 timeUntilWind = nextFloat(in: 1.2...2.5)
             }
         }
-        let telegraph = max(frame.telegraphStrength, tutorialPortalPulse)
-        applyPalette(frame.displayedPalette, telegraph: telegraph)
-        if biomeHintRemaining > 0 {
-            biomeHintRemaining = max(0, biomeHintRemaining - simDt)
-            if biomeHintRemaining == 0 { gameModel.biomeHint = nil }
-        }
+        applyPalette(frame.displayedPalette, telegraph: frame.telegraphStrength)
 
         if junction != nil {
-            updateJunction(deltaTime: dt, head: playfieldHeadPosition(), gameModel: gameModel)
+            if simDt > 0 {
+                updateJunction(deltaTime: simDt, head: playfieldHeadPosition(), gameModel: gameModel)
+            }
             return
         }
 
-        if tutorialHitCooldown > 0 {
-            tutorialHitCooldown = max(0, tutorialHitCooldown - simDt)
-        }
-
-        // Never ramp with elapsed time or chosen risk. Tutorial may temporarily slow it.
-        let travel = speed * simDt
-        speed = GameWorld.runSpeed * tutorialSpeedMultiplier
-
+        let travel = GameWorld.runSpeed * simDt
         distanceAccumulator += travel
         if distanceAccumulator >= 1 {
             let gained = Int(distanceAccumulator)
@@ -2026,7 +1904,7 @@ final class GameWorld {
         updateHeldHalves(deltaTime: dt)
 
         distanceUntilSpawn -= travel
-        if !junctionQueued, tutorialSpawningEnabled, motion > StreamFlow.stopThreshold, distanceUntilSpawn <= 0 {
+        if !junctionQueued, motion > StreamFlow.stopThreshold, distanceUntilSpawn <= 0 {
             patternSpawnZOffset = 0
             spawnNextPattern()
             // Preserve spacing to the following beat when this one was pushed deeper.
@@ -2043,159 +1921,15 @@ final class GameWorld {
         }
     }
 
-    private func tickTutorial(gameModel: GameModel, deltaTime: Float) {
-        let frame = tutorialDirector.update(deltaTime: deltaTime)
-        updateLazyLockedTutorialOverlay(deltaTime: deltaTime)
-        setTutorialOverlayVisible(true)
-
-        if frame.didEnterSection {
-            tutorialSpeedMultiplier = max(0.01, frame.section.speedMultiplier)
-            speed = GameWorld.runSpeed * tutorialSpeedMultiplier
-            if let environment = frame.section.environment {
-                environmentDirector.forceEnvironment(environment, telegraph: true)
-                activeSpawnProfile = environmentDirector.currentProfile
-                dropHeldHalves()
-                if activeSpawnProfile.twist == .windShove {
-                    timeUntilWind = nextFloat(in: 0.8...1.6)
-                } else {
-                    resetWind()
-                }
-                applyPalette(environmentDirector.displayedPalette, telegraph: 1)
-                // Breathing room between teaching verbs.
-                distanceUntilSpawn = max(distanceUntilSpawn, 2.2)
-            }
-            if frame.section.isOutro {
-                tutorialSpawningEnabled = false
-                clearDynamicContent()
-                dropHeldHalves()
-                resetWind()
-            }
-            if frame.section.portalOverdrive {
-                // Kick a visible surge as coaching UI dissolves.
-                distanceUntilSpawn = min(distanceUntilSpawn, 0.8)
-            }
-        }
-
-        tutorialPortalPulse = frame.portalPulse
-        gameModel.applyTutorialOverlay(
-            title: frame.section.title,
-            body: frame.section.body,
-            opacity: frame.overlayOpacity,
-            banner: frame.successBanner
-        )
-
-        if frame.shouldFinish {
-            // Leave the master track alone — it already hard-cuts to silence in-file.
-            tutorialDirector.stop()
-            tutorialPortalPulse = 0
-            tutorialSpeedMultiplier = 1
-            tutorialSpawningEnabled = true
-            setTutorialOverlayVisible(false)
-            gameModel.finishTutorial(markCompleted: true, revealMenu: true)
-        }
-    }
-
-    private func beginMenuReveal() {
-        menuRevealElapsed = 0
-        applyMenuRevealPose(progress: 0)
-        menuConsoleAnchor.isEnabled = true
-        hudAnchor.isEnabled = true
-    }
-
-    private func tickMenuReveal(deltaTime: Float) {
-        guard var elapsed = menuRevealElapsed else { return }
-        elapsed += deltaTime
-        let t = min(1, elapsed / GameWorld.menuRevealDuration)
-        applyMenuRevealPose(progress: easeOutBack(t))
-        if t >= 1 {
-            menuRevealElapsed = nil
-            applyMenuRevealPose(progress: 1)
-        } else {
-            menuRevealElapsed = elapsed
-        }
-    }
-
-    /// `progress` 0 = hidden below / tiny, 1 = rest pose.
-    private func applyMenuRevealPose(progress: Float) {
-        let p = max(0, min(1, progress))
-        let rise = GameWorld.menuRevealRise * (1 - p)
-        let scaleFactor = max(0.04, p)
-
-        hudAnchor.position = SIMD3(
-            GameWorld.hudPosition.x,
-            GameWorld.hudPosition.y - rise,
-            GameWorld.hudPosition.z
-        )
-        // Attachment scale is applied on the child; nudge the anchor for the grow.
-        hudAnchor.scale = SIMD3(repeating: scaleFactor)
-
-        menuConsoleAnchor.position = SIMD3(
-            GameWorld.menuConsolePosition.x,
-            GameWorld.menuConsolePosition.y - rise * 1.15,
-            GameWorld.menuConsolePosition.z
-        )
-        menuConsoleAnchor.scale = SIMD3(repeating: scaleFactor)
-    }
-
-    private func easeOutBack(_ t: Float) -> Float {
-        let c1: Float = 1.70158
-        let c3 = c1 + 1
-        let u = t - 1
-        return 1 + c3 * u * u * u + c1 * u * u
-    }
-
-    private func updateLazyLockedTutorialOverlay(deltaTime: Float) {
-        ensureTutorialOverlayAnchor()
-        let head = playfieldHeadPosition()
-        let forward = playfieldFlatForward()
-        // Match HUD height (slightly below) so coaching copy sits under the score panel.
-        var desired = LazyLock.desiredPose(
-            headPosition: head,
-            flatForward: forward,
-            distance: 1.85,
-            drop: 0
-        )
-        desired.position.y = GameWorld.hudPosition.y - GameWorld.tutorialOverlayHUDDrop
-        let next = LazyLock.step(current: lazyLockPose, desired: desired, deltaTime: deltaTime)
-        var seated = next
-        seated.position.y = desired.position.y
-        lazyLockPose = seated
-        tutorialOverlayAnchor.position = seated.position
-        tutorialOverlayAnchor.orientation = simd_quatf(angle: seated.yaw, axis: SIMD3(0, 1, 0))
-    }
-
-    /// Horizontal look direction in playfield space for lazy-lock seating.
-    private func playfieldFlatForward() -> SIMD3<Float> {
-        if worldTracking.state == .running,
-           let device = worldTracking.queryDeviceAnchor(atTimestamp: CACurrentMediaTime()),
-           device.isTracked {
-            let matrix = device.originFromAnchorTransform
-            let headWorld = SIMD3<Float>(matrix.columns.3.x, matrix.columns.3.y, matrix.columns.3.z)
-            let forwardWorld = SIMD3<Float>(-matrix.columns.2.x, 0, -matrix.columns.2.z)
-            let headLocal = root.convert(position: headWorld, from: nil)
-            let aheadLocal = root.convert(position: headWorld + forwardWorld, from: nil)
-            var flat = SIMD3<Float>(aheadLocal.x - headLocal.x, 0, aheadLocal.z - headLocal.z)
-            let len = length(flat)
-            if len < 0.05 { return SIMD3(0, 0, -1) }
-            return flat / len
-        }
-
-        let headRotation = headAnchor.orientation(relativeTo: root)
-        let forward = headRotation.act(SIMD3<Float>(0, 0, -1))
-        var flat = SIMD3<Float>(forward.x, 0, forward.z)
-        let len = length(flat)
-        if len < 0.05 { return SIMD3(0, 0, -1) }
-        return flat / len
-    }
-
     // MARK: - Gameplay RNG (Daily seed)
 
-    private func configureGameplayRNG(for mode: PlayMode) {
+    private func configureGameplayRNG(for mode: PlayMode, date: Date) {
         switch mode {
         case .daily:
-            gameplayRNG = DailyChallenge.makeGameplayGenerator(dayKey: DailyChallenge.dayKey())
-            sceneryRunSeed = DailyChallenge.seed(for: DailyChallenge.dayKey())
-        case .normal, .solo, .playlist, .tutorial:
+            let dayKey = DailyChallenge.dayKey(for: date)
+            gameplayRNG = DailyChallenge.makeGameplayGenerator(dayKey: dayKey)
+            sceneryRunSeed = DailyChallenge.seed(for: dayKey)
+        case .normal, .solo, .playlist:
             gameplayRNG = nil
             sceneryRunSeed = UInt64.random(in: .min ... .max)
         }
@@ -2252,20 +1986,20 @@ final class GameWorld {
         default:
             base = nextFloat(in: GameWorld.spawnGapMin...GameWorld.spawnGapMax)
         }
-        if case .normal? = gameModel?.resolvedPlayMode {
+        if case .normal? = gameModel?.runMode {
             return base * (gameModel?.stats.risk.spawnGapScale ?? 1)
         }
         return base
     }
 
     private var collectibleChance: Float {
-        guard case .normal? = gameModel?.resolvedPlayMode else { return 0.7 }
+        guard case .normal? = gameModel?.runMode else { return 0.7 }
         let modifierBonus: Float = gameModel?.stats.modifier == .tokenSurge ? 0.16 : 0
         return min(0.98, 0.7 + (gameModel?.stats.risk.collectibleChanceBonus ?? 0) + modifierBonus)
     }
 
     private func biomeHazardChance(_ base: Float) -> Float {
-        guard case .normal? = gameModel?.resolvedPlayMode else { return base }
+        guard case .normal? = gameModel?.runMode else { return base }
         switch gameModel?.stats.risk ?? .stable {
         case .stable: return max(0.28, base - 0.22)
         case .charged: return base
@@ -2567,7 +2301,7 @@ final class GameWorld {
                 visualFX.spawnHitFlash(near: SIMD3(head.x, head.y, door.z))
                 if gameModel.absorbHitIfPossible() {
                     GameSFX.shared.playShieldBreak()
-                } else if !gameModel.isTutorialRun {
+                } else {
                     GameSFX.shared.playWallHit()
                     gameModel.endRun()
                     return
@@ -2620,7 +2354,7 @@ final class GameWorld {
                     visualFX.spawnHitFlash(near: SIMD3(head.x, head.y, ringZ))
                     if gameModel.absorbHitIfPossible() {
                         GameSFX.shared.playShieldBreak()
-                    } else if !gameModel.isTutorialRun {
+                    } else {
                         GameSFX.shared.playWallHit()
                         gameModel.endRun()
                         return
@@ -2975,21 +2709,6 @@ final class GameWorld {
     }
 
     // MARK: - Spawning
-
-    private func updateBiomeHint() {
-        let hint: String?
-        switch activeSpawnProfile.twist {
-        case .telekinesis:
-            hint = "Aim either hand to lock a shape · move each hand to guide"
-        case .orbitGate:
-            hint = "Pass through hoops · watch for the timed opening in flat rings"
-        default:
-            hint = nil
-        }
-        biomeHintRemaining = hint == nil ? 0
-            : (activeSpawnProfile.twist == .telekinesis ? 15 : 10)
-        if gameModel?.biomeHint != hint { gameModel?.biomeHint = hint }
-    }
 
     private func spawnNextPattern() {
         let profile = activeSpawnProfile
@@ -3403,7 +3122,7 @@ final class GameWorld {
     }
 
     private func randomWallLanes() -> Set<Lane> {
-        if case .normal? = gameModel?.resolvedPlayMode {
+        if case .normal? = gameModel?.runMode {
             if phraseQueue.isEmpty { refillPhraseQueue() }
             if !phraseQueue.isEmpty {
                 let beat = phraseQueue.removeFirst()
@@ -3917,7 +3636,6 @@ final class GameWorld {
         ]
         let handsWorld = leftHandContactsWorld + rightHandContactsWorld
         let hands = handsWorld.map { root.convert(position: $0, from: nil) }
-        let ignoreWallHits = gameModel.isTutorialRun && tutorialHitCooldown > 0
 
         let halfDepth = WallCollision.halfDepth(
             visualThickness: GameWorld.wallThickness,
@@ -4017,20 +3735,11 @@ final class GameWorld {
             }
 
             if hit {
-                if ignoreWallHits {
-                    continue
-                }
                 wall.hasResolvedHit = true
                 visualFX.spawnHitFlash(near: SIMD3(head.x, head.y, wall.playfieldZ))
-                // Quick squash so the hit reads before game-over UI.
+                // Quick squash to emphasize the impact.
                 wall.entity.scale = SIMD3(1.08, 0.92, 1.15)
                 dropHeldHalves()
-                if gameModel.isTutorialRun {
-                    // Soft fail — flash + SFX, keep the calibration run going.
-                    GameSFX.shared.playWallHit()
-                    tutorialHitCooldown = 0.45
-                    return
-                }
                 if gameModel.absorbHitIfPossible() {
                     GameSFX.shared.playShieldBreak()
                     return
@@ -4077,7 +3786,7 @@ final class GameWorld {
                 if distance(hand, coinPos) <= GameWorld.collectDistance + pickupBonus {
                     coins[index].collected = true
                     visualFX.spawnCoinBurst(at: coinPos)
-                    // Hide now; removeFromParent happens in prune. HUD/SFX after this tick.
+                    // Hide now; removeFromParent happens in prune. Scoring and sound follow this tick.
                     coins[index].entity.isEnabled = false
                     let model = gameModel
                     GameSFX.shared.playCoinCollect()

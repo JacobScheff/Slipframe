@@ -25,7 +25,6 @@ The obsolete runtime mesh/texture authoring files, `ProceduralGeometry.swift` an
 - `Art/Blender/Textures/`: six portable baked base-color textures.
 - `Endless Runner/ArtAssets/`: self-contained USDZ files plus `manifest.json`.
 - `Art/Previews/`: wall lineup, portal kit and eight environment review renders.
-- `Endless Runner/Assets.xcassets/Biome_*.imageset/`: shipped menu thumbnails.
 - `BiomeAssetCatalog.swift`: asynchronous prototype loading, cloning, role-based tinting and motion bindings.
 - `GameVisuals.swift` / `GameVisualsObstacles.swift`: assembly and lightweight animation, not mesh-authoring code.
 
@@ -62,7 +61,7 @@ All eight environments use inward-facing, opaque sky domes. Three separated skyl
 
 `refine_backgrounds.py` incrementally applies this pass once, preserving existing scene art except the backdrop boxes. Its guard prevents accidental reapplication. `refresh_distance()` rebuilds only the horizon/road additions, and `export()` updates only background/prop packages and their manifest records. Portal assets, hazard assets, collision, and teleportation logic are unchanged.
 
-`render_backgrounds.py` makes emission-only EEVEE reviews with no physical lights or environment fill and updates the six menu cards. The new `*-background.png` previews are the current background reviews; the older lit studio renders remain as historical art references. These reviews still do not replace RealityKit/on-device validation.
+`render_backgrounds.py` makes emission-only EEVEE reviews with no physical lights or environment fill. The new `*-background.png` previews are the current background reviews; the older lit studio renders remain as historical art references. These reviews still do not replace RealityKit/on-device validation.
 
 The second pass, `polish_backgrounds.py`, adds uneven cliff profiles, snow ledges, rubble, smaller distant sunlight, trail cables/pennants, forge vents, glass fragments, service panels, wind vanes, and mineral seams. New low scenery stays beyond 1.85 m from center. Existing animated rotor geometry and its pivot remain untouched.
 
@@ -91,7 +90,7 @@ The source before this pass is recoverable from `Art/Blender/Slipframe_ArtSource
 1. Open the saved source and edit an asset's mesh/materials in its named collection. Leave each asset root's origin contract intact; rack positions are display-only.
 2. Re-export with `Tools/Blender/export_from_source.py`. It scans existing collections and exports without rebuilding or discarding artist edits.
 3. Run `Tools/Blender/validate_assets.py` in Blender's Python.
-4. Re-render thumbnails with `Tools/Blender/render_previews.py`.
+4. Re-render art previews with `Tools/Blender/render_previews.py`.
 5. Build and test in Xcode.
 
 Example terminal commands, with `blender` on PATH:

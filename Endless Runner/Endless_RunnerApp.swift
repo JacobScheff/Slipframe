@@ -25,18 +25,14 @@ struct Endless_RunnerApp: App {
         ImmersiveSpace(id: "RunnerSpace") {
             ImmersiveView()
                 .environmentObject(gameModel)
-                .environmentObject(gameModel.personalBests)
-                .environmentObject(gameModel.gameCenter)
                 .onAppear {
                     gameModel.gameCenter.start()
                 }
         }
         .immersionStyle(selection: $immersionState, in: .mixed)
 
-        // Presentation anchor for GameKit sign-in (UIKit modal). Opened on demand.
-        WindowGroup(id: GameCenterAuthScene.id) {
-            GameCenterAuthWindow()
-                .environmentObject(gameModel.gameCenter)
+        WindowGroup("Game Center", id: GameCenterAuthWindow.id, for: String.self) { _ in
+            GameCenterAuthWindow(center: gameModel.gameCenter)
         }
         .windowStyle(.plain)
         .windowResizability(.contentSize)

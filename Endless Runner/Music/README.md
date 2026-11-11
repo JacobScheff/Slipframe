@@ -11,25 +11,6 @@ Put one audio file per environment in this folder. Filenames must match the biom
 | Storm Pass    | `stormPass`     | `stormPass.m4a`  |
 | Crystal Cave  | `crystalCave`   | `crystalCave.m4a`|
 
-## Tutorial master track
-
-| Cue        | Filename         | Notes                                      |
-|------------|------------------|--------------------------------------------|
-| Tutorial   | **`tutorial.m4a`** | Single continuous track (~2:51). Required. |
-
-Section timestamps (hard-coded in `TutorialScript.swift`):
-
-| Time        | Section            |
-|-------------|--------------------|
-| 0:00–0:26   | The Basics         |
-| 0:26–0:42   | Ducking Protocol   |
-| 0:42–1:11   | Moving Walls       |
-| 1:11–1:33   | Phantom Walls      |
-| 1:33–2:00   | Crystal Cave       |
-| 2:00–2:24   | Jumping Mechanic   |
-| 2:24–2:51   | System Overdrive   |
-| 2:51        | Dead silence baked into the file (app does not cut playback) |
-
 Supported extensions (first match wins): `.m4a`, `.mp3`, `.wav`, `.caf`, `.aiff`.
 
 ## Notes

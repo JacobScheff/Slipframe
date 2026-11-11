@@ -44,33 +44,6 @@ enum EnvironmentID: String, CaseIterable, Identifiable, Codable {
         default: return rawValue
         }
     }
-
-    var symbolName: String {
-        switch self {
-        case .emberRun: return "flame.fill"
-        case .summitStep: return "mountain.2.fill"
-        case .ghostGlass: return "sparkle"
-        case .lowCrawl: return "arrow.down.to.line"
-        case .stormPass: return "wind"
-        case .crystalCave: return "diamond.fill"
-        case .vectorFoundry: return "hand.raised.fill"
-        case .orbitGate: return "circle.hexagongrid.fill"
-        }
-    }
-
-    /// Short verb printed on biome tiles so the twist is readable at a glance.
-    var twistCaption: String {
-        switch self {
-        case .emberRun: return "Clear path"
-        case .summitStep: return "Hop hurdles"
-        case .ghostGlass: return "See-through"
-        case .lowCrawl: return "Duck low"
-        case .stormPass: return "Wind shove"
-        case .crystalCave: return "Combine"
-        case .vectorFoundry: return "Shape the lock"
-        case .orbitGate: return "Thread the rings"
-        }
-    }
 }
 
 enum EnvironmentTwist: Equatable {
@@ -148,29 +121,6 @@ enum RiftModifier: String, CaseIterable, Equatable, Codable {
         case .magnet: return "Magnet"
         case .closeCall: return "Close Call"
         case .bonusBank: return "Bonus Bank"
-        }
-    }
-
-    var effectDescription: String {
-        switch self {
-        case .tokenSurge: return "2× token value"
-        case .aegis: return "Blocks one hit"
-        case .overdrive: return "+25% score"
-        case .magnet: return "Longer pickup reach"
-        case .closeCall: return "Bigger close-slip rewards"
-        case .bonusBank: return "Bonus drains 2× slower"
-        }
-    }
-
-    var symbolName: String {
-        switch self {
-        case .tokenSurge: return "diamond.fill"
-        case .aegis: return "shield.fill"
-        case .overdrive: return "bolt.fill"
-        // UI draws this one itself; keep a safe fallback for any generic caller.
-        case .magnet: return "circle.hexagongrid.fill"
-        case .closeCall: return "scope"
-        case .bonusBank: return "lock.fill"
         }
     }
 

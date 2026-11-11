@@ -63,13 +63,8 @@ final class Endless_RunnerTests: XCTestCase {
 
         XCTAssertFalse(model.isPlaying)
         XCTAssertTrue(model.isGameOver)
-        XCTAssertFalse(model.isGameOverMenuVisible)
         XCTAssertEqual(model.score, 5)
         XCTAssertEqual(model.coinsCollected, 1)
-
-        model.revealGameOverMenu()
-        XCTAssertTrue(model.isGameOverMenuVisible)
-        XCTAssertTrue(model.pendingMenuReveal)
     }
 
     func testPersonalBestStoreRecordsIndependentScoreAndCoinBests() {
@@ -162,176 +157,10 @@ final class Endless_RunnerTests: XCTestCase {
         XCTAssertEqual(LeaderboardBoard.matching(.normal)?.categoryKey, "normal")
         XCTAssertEqual(LeaderboardBoard.matching(.solo(.stormPass))?.categoryKey, "stormPass")
         XCTAssertNil(LeaderboardBoard.matching(.playlist(environments: [.emberRun], start: nil)))
-        XCTAssertNil(LeaderboardBoard.matching(.tutorial))
         XCTAssertEqual(
             LeaderboardBoard.matching(.daily)?.categoryKey,
             "daily.\(dayKey)"
         )
-    }
-
-    func testTutorialScriptSectionOrderAndTimestamps() {
-        let sections = TutorialCatalog.sections
-        XCTAssertEqual(sections.map(\.id), [
-            .basics, .ducking, .movingWalls, .phantomWalls,
-            .crystalCave, .jumping, .overdrive, .outro
-        ])
-        XCTAssertEqual(sections[0].environment, .emberRun)
-        XCTAssertEqual(sections[1].environment, .lowCrawl)
-        XCTAssertEqual(sections[2].environment, .stormPass)
-        XCTAssertEqual(sections[3].environment, .ghostGlass)
-        XCTAssertEqual(sections[4].environment, .crystalCave)
-        XCTAssertEqual(sections[5].environment, .summitStep)
-        XCTAssertEqual(sections[6].environment, .emberRun)
-        XCTAssertGreaterThan(sections[6].speedMultiplier, 1.2)
-        XCTAssertTrue(sections[6].hidesOverlay)
-        XCTAssertTrue(sections[7].isOutro)
-
-        XCTAssertEqual(TutorialCatalog.section(at: 0).id, .basics)
-        XCTAssertEqual(TutorialCatalog.section(at: 26).id, .ducking)
-        XCTAssertEqual(TutorialCatalog.section(at: 42).id, .movingWalls)
-        XCTAssertEqual(TutorialCatalog.section(at: 71).id, .phantomWalls)
-        XCTAssertEqual(TutorialCatalog.section(at: 93).id, .crystalCave)
-        XCTAssertEqual(TutorialCatalog.section(at: 120).id, .jumping)
-        XCTAssertEqual(TutorialCatalog.section(at: 144).id, .overdrive)
-        XCTAssertEqual(TutorialCatalog.section(at: 171).id, .outro)
-        XCTAssertEqual(TutorialMusic.cue, "tutorial")
-    }
-
-    func testTutorialDirectorAdvancesAndFinishes() {
-        let director = TutorialDirector()
-        director.begin()
-        XCTAssertEqual(director.currentSection.id, .basics)
-
-        var frame = director.update(deltaTime: 26)
-        XCTAssertTrue(frame.didEnterSection)
-        XCTAssertEqual(frame.section.id, .ducking)
-
-        _ = director.update(deltaTime: 145) // past silence
-        frame = director.update(deltaTime: 0.05)
-        XCTAssertEqual(frame.section.id, .outro)
-        XCTAssertNotNil(frame.successBanner)
-        XCTAssertEqual(frame.successBanner?.text, "TEST RUN SUCCEEDED")
-        XCTAssertFalse(frame.shouldFinish)
-
-        // Appear + hold + exit is ~5.3s — step through it.
-        var finished = false
-        var sawFullAppear = false
-        for _ in 0..<80 {
-            let step = director.update(deltaTime: 0.1)
-            if let banner = step.successBanner, banner.appear > 0.95, banner.exit < 0.05 {
-                sawFullAppear = true
-            }
-            if step.shouldFinish {
-                finished = true
-                break
-            }
-        }
-        XCTAssertTrue(sawFullAppear)
-        XCTAssertTrue(finished)
-    }
-
-    func testTutorialFinishRequestsMenuRevealWithoutCuttingMusicCue() {
-        let suite = "test.tutorial.reveal.\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suite)!
-        defer { defaults.removePersistentDomain(forName: suite) }
-
-        let model = GameModel(
-            personalBests: makeIsolatedBestStore(),
-            scoreSubmitter: MockGameCenterSubmitter(),
-            defaults: defaults,
-            tutorialCompletedKey: suite
-        )
-        model.startTutorial()
-        model.finishTutorial(markCompleted: true, revealMenu: true)
-        XCTAssertTrue(model.pendingMenuReveal)
-        XCTAssertEqual(TutorialCatalog.sections.last?.title, "TEST RUN SUCCEEDED")
-    }
-
-    func testLazyLockHoldsWithinThresholdThenFollows() {
-        let origin = LazyLockPose(position: SIMD3(0, 1.5, -1.6), yaw: 0)
-        let tiny = LazyLockPose(position: SIMD3(0.02, 1.5, -1.6), yaw: 0.02)
-        let held = LazyLock.step(current: origin, desired: tiny, deltaTime: 1 / 60)
-        XCTAssertEqual(held.position.x, origin.position.x, accuracy: 0.0001)
-
-        let far = LazyLockPose(position: SIMD3(0.5, 1.5, -1.6), yaw: 0.5)
-        let moved = LazyLock.step(current: origin, desired: far, deltaTime: 0.25)
-        XCTAssertGreaterThan(moved.position.x, origin.position.x)
-        XCTAssertLessThan(moved.position.x, far.position.x)
-    }
-
-    func testTutorialRunDisablesScoringAndFinishesCleanly() {
-        let suite = "test.tutorial.\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suite)!
-        defer { defaults.removePersistentDomain(forName: suite) }
-
-        let model = GameModel(
-            personalBests: makeIsolatedBestStore(),
-            scoreSubmitter: MockGameCenterSubmitter(),
-            defaults: defaults,
-            tutorialCompletedKey: suite
-        )
-        XCTAssertFalse(model.hasCompletedTutorial)
-
-        model.startTutorial()
-        XCTAssertTrue(model.isTutorialRun)
-        XCTAssertEqual(model.resolvedPlayMode, .tutorial)
-
-        model.addScore(50)
-        model.collectCoin(count: 3)
-        XCTAssertEqual(model.score, 0)
-        XCTAssertEqual(model.coinsCollected, 0)
-
-        model.finishTutorial(markCompleted: true)
-        XCTAssertFalse(model.isPlaying)
-        XCTAssertFalse(model.isGameOver)
-        XCTAssertFalse(model.isTutorialRun)
-        XCTAssertTrue(model.hasCompletedTutorial)
-    }
-
-    func testSkipTutorialArmsGameOverClearThenFinalizes() {
-        let suite = "test.tutorial.skip.\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suite)!
-        defer { defaults.removePersistentDomain(forName: suite) }
-
-        let model = GameModel(
-            personalBests: makeIsolatedBestStore(),
-            scoreSubmitter: MockGameCenterSubmitter(),
-            defaults: defaults,
-            tutorialCompletedKey: suite
-        )
-        model.startTutorial()
-        XCTAssertEqual(model.tutorialOverlayOpacity, 1, accuracy: 0.001)
-
-        model.skipTutorial()
-        XCTAssertFalse(model.isPlaying)
-        XCTAssertTrue(model.isGameOver)
-        XCTAssertTrue(model.isTutorialRun)
-        XCTAssertFalse(model.pendingMenuReveal)
-
-        model.finalizeTutorialSkip()
-        XCTAssertFalse(model.isTutorialRun)
-        XCTAssertFalse(model.isGameOver)
-        XCTAssertTrue(model.hasCompletedTutorial)
-        XCTAssertTrue(model.pendingMenuReveal)
-    }
-
-    func testEnvironmentDirectorTutorialForcesSilentBiomeSwitches() {
-        let director = EnvironmentDirector()
-        director.beginRun(mode: .tutorial)
-        XCTAssertEqual(director.currentID, .emberRun)
-
-        director.forceEnvironment(.lowCrawl, telegraph: true)
-        XCTAssertEqual(director.currentID, .lowCrawl)
-
-        // Auto-rotate must not fire while in tutorial.
-        for _ in 0..<5 {
-            let frame = director.update(deltaTime: 30)
-            XCTAssertFalse(frame.didEnterEnvironment)
-            XCTAssertEqual(frame.currentID, .lowCrawl)
-        }
-
-        director.forceEnvironment(.summitStep, telegraph: true)
-        XCTAssertEqual(director.currentID, .summitStep)
     }
 
     func testGameCenterLeaderboardIDsAreStable() {
@@ -752,7 +581,9 @@ final class Endless_RunnerTests: XCTestCase {
     func testFoundryStopsSpawningEarlyEnoughForSlowDoors() {
         let director = EnvironmentDirector()
         director.beginRun(mode: .normal)
-        director.forceEnvironment(.vectorFoundry)
+        _ = director.update(deltaTime: director.currentSwitchInterval)
+        director.chooseNormalEnvironment(.vectorFoundry)
+        XCTAssertEqual(director.currentID, .vectorFoundry)
         let drainStart = director.currentSwitchInterval - 16
 
         XCTAssertFalse(director.update(deltaTime: drainStart - 0.01).requestsJunction)
@@ -1734,7 +1565,6 @@ final class Endless_RunnerTests: XCTestCase {
             personalBests: makeIsolatedBestStore(),
             scoreSubmitter: MockGameCenterSubmitter(),
             defaults: defaults,
-            tutorialCompletedKey: "\(suite).tutorial",
             showsTrackKey: "\(suite).track"
         )
         XCTAssertTrue(first.showsTrack)
@@ -1744,7 +1574,6 @@ final class Endless_RunnerTests: XCTestCase {
             personalBests: makeIsolatedBestStore(),
             scoreSubmitter: MockGameCenterSubmitter(),
             defaults: defaults,
-            tutorialCompletedKey: "\(suite).tutorial",
             showsTrackKey: "\(suite).track"
         )
         XCTAssertFalse(second.showsTrack)
@@ -1770,17 +1599,6 @@ final class Endless_RunnerTests: XCTestCase {
         music.resetPlaybackFlow()
         XCTAssertEqual(music.playbackFlow, 1, accuracy: 0.001)
         music.stop()
-    }
-
-    func testBiomeAndModeCardsExposeSymbols() {
-        for id in EnvironmentID.allCases {
-            XCTAssertFalse(id.symbolName.isEmpty)
-            XCTAssertFalse(id.twistCaption.isEmpty)
-        }
-        for kind in PlayModeKind.allCases {
-            XCTAssertFalse(kind.symbolName.isEmpty)
-            XCTAssertFalse(kind.cardBlurb.isEmpty)
-        }
     }
 
     func testNewBiomeProfilesAndPlaceholderResources() {
@@ -2142,8 +1960,7 @@ final class Endless_RunnerTests: XCTestCase {
         return GameModel(
             personalBests: makeIsolatedBestStore(),
             scoreSubmitter: MockGameCenterSubmitter(),
-            defaults: defaults,
-            tutorialCompletedKey: suite
+            defaults: defaults
         )
     }
 }

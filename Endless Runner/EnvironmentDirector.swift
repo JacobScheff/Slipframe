@@ -73,14 +73,22 @@ final class EnvironmentDirector {
         jumpGatesSpawnedThisVisit += 1
     }
 
-    func beginRun(mode: PlayMode) {
+    func preview(_ id: EnvironmentID) {
+        currentID = id
+        let palette = currentProfile.palette
+        displayedPalette = palette
+        targetPalette = palette
+        blendFrom = palette
+    }
+
+    func beginRun(mode: PlayMode, date: Date = Date(), playlistStart: EnvironmentID? = nil) {
         playMode = mode
         dailyRNG = nil
         isAwaitingNormalChoice = false
 
         let start: EnvironmentID
         switch mode {
-        case .normal, .tutorial:
+        case .normal:
             start = .emberRun
         case .solo(let id):
             start = id
@@ -88,64 +96,19 @@ final class EnvironmentDirector {
             let pool = Array(environments)
             if let preferredStart, environments.contains(preferredStart) {
                 start = preferredStart
+            } else if let playlistStart, environments.contains(playlistStart) {
+                start = playlistStart
             } else {
                 start = pool.randomElement() ?? .emberRun
             }
         case .daily:
-            let key = DailyChallenge.dayKey()
+            let key = DailyChallenge.dayKey(for: date)
             var rng = DailyChallenge.makeGenerator(dayKey: key)
             start = EnvironmentID.allCases.randomElement(using: &rng) ?? .emberRun
             dailyRNG = rng
         }
 
-        // Tutorial owns the master track — biomes switch silently.
-        let announceMusic = mode != .tutorial
-        enter(start, telegraph: false, announceMusic: announceMusic)
-        if mode == .tutorial {
-            // TutorialDirector advances sections; never auto-rotate biomes.
-            currentSwitchInterval = .greatestFiniteMagnitude
-        }
-    }
-
-    /// Idle preview when the player changes mode selection (no music hitch).
-    func previewMode(_ mode: PlayMode) {
-        playMode = mode
-        let start: EnvironmentID
-        switch mode {
-        case .normal, .tutorial:
-            start = .emberRun
-        case .solo(let id):
-            start = id
-        case .playlist(let environments, let preferredStart):
-            if let preferredStart, environments.contains(preferredStart) {
-                start = preferredStart
-            } else {
-                start = environments.first ?? .emberRun
-            }
-        case .daily:
-            let preview = DailyChallenge.previewSequence(dayKey: DailyChallenge.dayKey(), count: 1)
-            start = preview.first ?? .emberRun
-        }
-        if start != currentID {
-            enter(start, telegraph: false, announceMusic: false)
-        }
-    }
-
-    /// Tutorial section change — palette / twist only (music stays on the master track).
-    func forceEnvironment(_ id: EnvironmentID, telegraph: Bool = true) {
-        guard id != currentID else {
-            // Re-enter teaching counters when the finale revisits Ember.
-            duckGatesSpawnedThisVisit = 0
-            jumpGatesSpawnedThisVisit = 0
-            if telegraph {
-                telegraphRemaining = EnvironmentCatalog.telegraphSeconds
-            }
-            return
-        }
-        enter(id, telegraph: telegraph, announceMusic: false)
-        if playMode == .tutorial {
-            currentSwitchInterval = .greatestFiniteMagnitude
-        }
+        enter(start, telegraph: false)
     }
 
     /// Reveals the destination colors while the committed portal obscures the view.
@@ -163,7 +126,7 @@ final class EnvironmentDirector {
     func chooseNormalEnvironment(_ id: EnvironmentID) {
         guard case .normal = playMode, isAwaitingNormalChoice else { return }
         isAwaitingNormalChoice = false
-        enter(id, telegraph: true, announceMusic: true)
+        enter(id, telegraph: true)
         // The destination was revealed behind the crossing gate. Keep it there
         // instead of visibly blending from the old biome after the gate clears.
         displayedPalette = targetPalette
@@ -182,12 +145,10 @@ final class EnvironmentDirector {
             telegraphRemaining = max(0, telegraphRemaining - deltaTime)
         }
 
-        if case .tutorial = playMode {
-            // Section advances are driven by TutorialDirector via `forceEnvironment`.
-        } else if case .solo(let forced) = playMode {
+        if case .solo(let forced) = playMode {
             if forced != currentID {
                 previous = currentID
-                enter(forced, telegraph: true, announceMusic: true)
+                enter(forced, telegraph: true)
                 didEnter = true
             }
         } else if case .normal = playMode {
@@ -203,7 +164,7 @@ final class EnvironmentDirector {
         } else if elapsedInEnvironment >= currentSwitchInterval {
             if let next = pickNextEnvironment(), next != currentID {
                 previous = currentID
-                enter(next, telegraph: true, announceMusic: true)
+                enter(next, telegraph: true)
                 didEnter = true
             } else {
                 // Singleton playlist (or empty pool): hold the current biome another interval.
@@ -266,7 +227,7 @@ final class EnvironmentDirector {
 
     private func pickNextEnvironment() -> EnvironmentID? {
         switch playMode {
-        case .solo, .tutorial:
+        case .solo:
             return nil
         case .normal:
             return Self.randomNext(excluding: currentID)
@@ -284,7 +245,7 @@ final class EnvironmentDirector {
         }
     }
 
-    private func enter(_ id: EnvironmentID, telegraph: Bool, announceMusic: Bool) {
+    private func enter(_ id: EnvironmentID, telegraph: Bool) {
         currentID = id
         elapsedInEnvironment = 0
         duckGatesSpawnedThisVisit = 0
@@ -293,15 +254,11 @@ final class EnvironmentDirector {
         targetPalette = EnvironmentCatalog.profile(for: id).palette
         blendElapsed = 0
         telegraphRemaining = telegraph ? EnvironmentCatalog.telegraphSeconds : 0
-        if announceMusic {
-            let trackDuration = playMusic(for: id)
-            currentSwitchInterval = Self.switchInterval(
-                forTrackDuration: trackDuration,
-                crossfade: EnvironmentCatalog.ambienceLerpSeconds
-            )
-        } else {
-            currentSwitchInterval = EnvironmentCatalog.fallbackSwitchInterval
-        }
+        let trackDuration = playMusic(for: id)
+        currentSwitchInterval = Self.switchInterval(
+            forTrackDuration: trackDuration,
+            crossfade: EnvironmentCatalog.ambienceLerpSeconds
+        )
     }
 
     @discardableResult

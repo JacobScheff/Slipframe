@@ -2,13 +2,13 @@
 //  GameModel.swift
 //  Slipframe
 //
-//  Shared UI / run state for the endless-runner loop.
+//  Shared run state for the endless-runner loop.
 //
 
 import Foundation
 import SwiftUI
 
-/// Score / coin counters observed by the HUD only.
+/// Live run metrics.
 /// Kept off `GameModel.objectWillChange` so RealityView is not invalidated mid-tick.
 @MainActor
 final class RunStats: ObservableObject {
@@ -26,56 +26,36 @@ final class RunStats: ObservableObject {
 
 @MainActor
 final class GameModel: ObservableObject {
-    /// HUD metrics — do not mark these `@Published` on `GameModel` itself.
+    /// Run metrics — do not mark these `@Published` on `GameModel` itself.
     let stats = RunStats()
 
-    /// Local personal bests for Normal / Loop / Daily. Observed separately by the leaderboard panel.
+    /// Local personal bests for Normal / Loop / Daily.
     let personalBests: PersonalBestStore
 
     /// Game Center submit/load. Tests may override submission via `scoreSubmitter`.
     let gameCenter: GameCenterService
     private let scoreSubmitterOverride: (any GameCenterSubmitting)?
     private let defaults: UserDefaults
-    private let tutorialCompletedKey: String
     private let showsTrackKey: String
     /// Carries fractional risk/Flow rewards so per-meter score ticks stay mathematically fair.
     private var scoreRemainder: Float = 0
 
     @Published var isPlaying: Bool = false
     @Published var isGameOver: Bool = false
-    /// Delayed until the crash hold and field-collapse animation have completed.
-    @Published private(set) var isGameOverMenuVisible: Bool = false
-    @Published var immersiveSpaceOpen: Bool = false
     /// True during Normal mode's wordless three-rift recovery/choice event.
     @Published var isChoosingPortal: Bool = false
+    @Published var portalOptions: [RiftPortalOption] = []
 
     /// Floor track slab is visual-only — play volume is unchanged when this is off.
     @Published var showsTrack: Bool {
         didSet { defaults.set(showsTrack, forKey: showsTrackKey) }
     }
+    @Published var showsRoomGrid: Bool {
+        didSet { defaults.set(showsRoomGrid, forKey: "settings.showsRoomGrid.v1") }
+    }
 
     /// True while the headset is outside the logical play rectangle during a run.
     @Published var isOffPlayfield: Bool = false
-    @Published var biomeHint: String? = nil
-
-    /// True while a guided tutorial run is active (soft hits, no score).
-    @Published private(set) var isTutorialRun: Bool = false
-
-    // MARK: - Tutorial overlay (lazy-locked attachment)
-
-    @Published var tutorialOverlayTitle: String = ""
-    @Published var tutorialOverlayBody: String = ""
-    @Published var tutorialOverlayOpacity: Float = 0
-    @Published var tutorialBannerText: String? = nil
-    @Published var tutorialBannerScale: Float = 1
-    @Published var tutorialBannerOpacity: Float = 0
-    @Published var tutorialBannerGlow: Float = 0
-    @Published var tutorialBannerExit: Float = 0
-    /// After tutorial outro, menu chrome rises into place once.
-    @Published var pendingMenuReveal: Bool = false
-
-    // MARK: - Level select draft (committed via resolvedPlayMode on Start)
-
     @Published var playKind: PlayModeKind = .normal
     @Published var soloEnvironment: EnvironmentID = .emberRun
     @Published var playlistEnvironments: Set<EnvironmentID> = [.emberRun, .summitStep, .lowCrawl]
@@ -87,6 +67,12 @@ final class GameModel: ObservableObject {
 
     /// Bumped on each restart so the immersive session can reset run content (not pose).
     @Published private(set) var runID: Int = 0
+    @Published private(set) var fieldIsClear = true
+    @Published private(set) var activeEnvironment: EnvironmentID = .emberRun
+    private(set) var runDate = Date()
+    private(set) var runMode: PlayMode = .normal
+    private(set) var runPlaylistStart: EnvironmentID?
+    private var playlistPreviewSeed = Int.random(in: 0..<1024)
 
     /// Which metrics improved on the most recent finished run (nil if playlist / no board).
     @Published private(set) var lastPersonalBestUpdate: PersonalBestUpdate?
@@ -98,7 +84,6 @@ final class GameModel: ObservableObject {
         gameCenter: GameCenterService? = nil,
         scoreSubmitter: (any GameCenterSubmitting)? = nil,
         defaults: UserDefaults? = nil,
-        tutorialCompletedKey: String = "tutorial.completed.v1",
         showsTrackKey: String = "settings.showsTrack.v1"
     ) {
         let bests = personalBests ?? PersonalBestStore()
@@ -107,8 +92,8 @@ final class GameModel: ObservableObject {
         self.gameCenter = center
         self.scoreSubmitterOverride = scoreSubmitter
         self.defaults = defaults ?? .standard
-        self.tutorialCompletedKey = tutorialCompletedKey
         self.showsTrackKey = showsTrackKey
+        self.showsRoomGrid = self.defaults.object(forKey: "settings.showsRoomGrid.v1") as? Bool ?? true
         if self.defaults.object(forKey: showsTrackKey) == nil {
             self.showsTrack = true
         } else {
@@ -132,14 +117,8 @@ final class GameModel: ObservableObject {
         set { stats.coinsCollected = newValue }
     }
 
-    var hasCompletedTutorial: Bool {
-        get { defaults.bool(forKey: tutorialCompletedKey) }
-        set { defaults.set(newValue, forKey: tutorialCompletedKey) }
-    }
-
     /// Mode used for the active / next run.
     var resolvedPlayMode: PlayMode {
-        if isTutorialRun { return .tutorial }
         switch playKind {
         case .normal:
             return .normal
@@ -155,7 +134,6 @@ final class GameModel: ObservableObject {
     }
 
     var canStartRun: Bool {
-        if isTutorialRun { return true }
         switch playKind {
         case .playlist:
             return !playlistEnvironments.isEmpty
@@ -164,69 +142,72 @@ final class GameModel: ObservableObject {
         }
     }
 
+    func previewEnvironment(on date: Date = Date()) -> EnvironmentID? {
+        switch resolvedPlayMode {
+        case .normal:
+            return .emberRun
+        case .solo(let id):
+            return id
+        case .playlist(let selected, let start):
+            if let start { return start }
+            let choices = EnvironmentID.allCases.filter { selected.contains($0) }
+            guard !choices.isEmpty else { return nil }
+            return choices[playlistPreviewSeed % choices.count]
+        case .daily:
+            return DailyChallenge.previewSequence(dayKey: DailyChallenge.dayKey(for: date), count: 1).first
+        }
+    }
+
+    func togglePlaylistBiome(_ id: EnvironmentID) {
+        if playlistEnvironments.contains(id) {
+            playlistEnvironments.remove(id)
+            if playlistStart == id { playlistStart = nil }
+        } else {
+            playlistEnvironments.insert(id)
+        }
+    }
+
+    func enterBiome(_ id: EnvironmentID) {
+        guard activeEnvironment != id else { return }
+        activeEnvironment = id
+    }
+
+    func markFieldClear() {
+        fieldIsClear = true
+    }
+
     func startRun() {
-        guard canStartRun else { return }
-        beginPlayback(tutorial: false)
-    }
-
-    func startTutorial() {
-        beginPlayback(tutorial: true)
-    }
-
-    /// Soft exit from tutorial — returns to Ready (not game-over).
-    func finishTutorial(markCompleted: Bool = true, revealMenu: Bool = true) {
-        guard isTutorialRun else { return }
-        isPlaying = false
-        isGameOver = false
-        isTutorialRun = false
-        prefersRoomDimming = false
-        isOffPlayfield = false
-        biomeHint = nil
-        clearTutorialOverlay()
-        pendingMenuReveal = revealMenu
-        if markCompleted {
-            hasCompletedTutorial = true
-        }
-    }
-
-    /// Stop playback and arm the normal game-over field clear; menu returns after dissolve.
-    func skipTutorial() {
-        guard isTutorialRun, isPlaying else { return }
-        // Leaving mid-track — stop the master cue so the menu isn't under a half-song.
-        if GameMusic.shared.currentCue == TutorialMusic.cue {
-            GameMusic.shared.stop()
-        }
-        clearTutorialOverlay()
-        isPlaying = false
-        isGameOver = true
+        guard canStartRun, !isPlaying else { return }
+        runDate = Date()
+        runMode = resolvedPlayMode
+        let startingBiome = previewEnvironment(on: runDate) ?? .emberRun
+        runPlaylistStart = playKind == .playlist ? startingBiome : nil
+        playlistPreviewSeed = Int.random(in: 0..<1024)
+        activeEnvironment = startingBiome
+        fieldIsClear = false
+        stats.score = 0
+        stats.coinsCollected = 0
+        stats.flow = 0
+        stats.shieldCharges = 0
+        stats.risk = .stable
+        stats.modifier = nil
+        stats.highestFlow = 0
+        stats.nearMisses = 0
+        stats.portalsCrossed = 0
+        stats.shieldsBroken = 0
+        scoreRemainder = 0
         isChoosingPortal = false
-        prefersRoomDimming = false
-        isOffPlayfield = false
-        biomeHint = nil
-        // Keep `isTutorialRun` true so HUD/panels stay in tutorial-skip mode until
-        // `finalizeTutorialSkip()` runs after walls/coins dissolve.
-    }
-
-    /// Called by GameWorld once the post-skip dissolve finishes.
-    func finalizeTutorialSkip() {
-        guard isTutorialRun else { return }
-        isTutorialRun = false
+        portalOptions = []
+        isPlaying = true
         isGameOver = false
-        isPlaying = false
         prefersRoomDimming = false
         isOffPlayfield = false
-        biomeHint = nil
-        hasCompletedTutorial = true
-        pendingMenuReveal = true
-        clearTutorialOverlay()
-    }
-
-    func consumeMenuReveal() {
-        pendingMenuReveal = false
+        lastPersonalBestUpdate = nil
+        runID += 1
     }
 
     func addScore(_ points: Int) {
-        guard isPlaying, !isTutorialRun else { return }
+        guard isPlaying else { return }
         let flowMultiplier = 1 + Float(stats.flow) / 100
         let modifierMultiplier: Float = stats.modifier == .overdrive ? 1.25 : 1
         let reward = Float(points) * stats.risk.scoreMultiplier * flowMultiplier * modifierMultiplier
@@ -238,7 +219,7 @@ final class GameModel: ObservableObject {
 
     /// Tokens remain a separate leaderboard counter while also feeding Flow.
     func collectCoin(count: Int = 1) {
-        guard isPlaying, !isTutorialRun else { return }
+        guard isPlaying else { return }
         let tokenValue = stats.modifier == .tokenSurge ? 2 : 1
         stats.coinsCollected += count * tokenValue
         addFlow((stats.modifier == .overdrive ? 8 : 5) * count)
@@ -251,18 +232,18 @@ final class GameModel: ObservableObject {
     }
 
     func addFlow(_ amount: Int) {
-        guard isPlaying, !isTutorialRun else { return }
+        guard isPlaying else { return }
         stats.flow = min(100, stats.flow + max(0, amount))
         stats.highestFlow = max(stats.highestFlow, stats.flow)
     }
 
     func decayFlow(_ amount: Int = 1) {
-        guard isPlaying, !isTutorialRun else { return }
+        guard isPlaying else { return }
         stats.flow = max(0, stats.flow - max(0, amount))
     }
 
     func registerNearMiss() {
-        guard isPlaying, !isTutorialRun else { return }
+        guard isPlaying else { return }
         stats.nearMisses += 1
         let bonusGain: Int
         if stats.modifier == .closeCall {
@@ -286,105 +267,24 @@ final class GameModel: ObservableObject {
     }
 
     func recordPortalCrossing() {
-        guard isPlaying, !isTutorialRun else { return }
+        guard isPlaying else { return }
         stats.portalsCrossed += 1
     }
 
     func endRun() {
         guard isPlaying else { return }
-        // Tutorial never hard-fails into game-over.
-        if isTutorialRun {
-            finishTutorial(markCompleted: false)
-            return
-        }
-        isGameOverMenuVisible = false
         isGameOver = true
         isPlaying = false
         isChoosingPortal = false
+        portalOptions = []
         prefersRoomDimming = false
         isOffPlayfield = false
-        biomeHint = nil
         recordPersonalBestsIfNeeded()
-    }
-
-    /// Called by GameWorld after all failed-run geometry has moved out of view.
-    func revealGameOverMenu() {
-        guard isGameOver, !isGameOverMenuVisible else { return }
-        pendingMenuReveal = true
-        isGameOverMenuVisible = true
-    }
-
-    func applyTutorialOverlay(
-        title: String,
-        body: String,
-        opacity: Float,
-        banner: TutorialSuccessBanner?
-    ) {
-        if tutorialOverlayTitle != title { tutorialOverlayTitle = title }
-        if tutorialOverlayBody != body { tutorialOverlayBody = body }
-        if tutorialOverlayOpacity != opacity { tutorialOverlayOpacity = opacity }
-        if let banner {
-            if tutorialBannerText != banner.text { tutorialBannerText = banner.text }
-            if tutorialBannerScale != banner.scale { tutorialBannerScale = banner.scale }
-            if tutorialBannerOpacity != banner.opacity { tutorialBannerOpacity = banner.opacity }
-            if tutorialBannerGlow != banner.pulse { tutorialBannerGlow = banner.pulse }
-            if tutorialBannerExit != banner.exit { tutorialBannerExit = banner.exit }
-        } else {
-            if tutorialBannerText != nil { tutorialBannerText = nil }
-            if tutorialBannerOpacity != 0 { tutorialBannerOpacity = 0 }
-            if tutorialBannerGlow != 0 { tutorialBannerGlow = 0 }
-            if tutorialBannerExit != 0 { tutorialBannerExit = 0 }
-            if tutorialBannerScale != 1 { tutorialBannerScale = 1 }
-        }
-    }
-
-    func clearTutorialOverlay() {
-        tutorialOverlayTitle = ""
-        tutorialOverlayBody = ""
-        tutorialOverlayOpacity = 0
-        tutorialBannerText = nil
-        tutorialBannerScale = 1
-        tutorialBannerOpacity = 0
-        tutorialBannerGlow = 0
-        tutorialBannerExit = 0
-    }
-
-    private func beginPlayback(tutorial: Bool) {
-        if !tutorial {
-            guard canStartRun else { return }
-        }
-        stats.score = 0
-        stats.coinsCollected = 0
-        stats.flow = 0
-        stats.shieldCharges = 0
-        stats.risk = .stable
-        stats.modifier = nil
-        stats.highestFlow = 0
-        stats.nearMisses = 0
-        stats.portalsCrossed = 0
-        stats.shieldsBroken = 0
-        scoreRemainder = 0
-        isGameOverMenuVisible = false
-        isChoosingPortal = false
-        isPlaying = true
-        isGameOver = false
-        isTutorialRun = tutorial
-        prefersRoomDimming = false
-        isOffPlayfield = false
-        biomeHint = nil
-        lastPersonalBestUpdate = nil
-        pendingMenuReveal = false
-        clearTutorialOverlay()
-        // Seed coaching opacity immediately so Skip isn't hidden for a frame on auto-start.
-        if tutorial {
-            tutorialOverlayOpacity = 1
-        }
-        runID += 1
     }
 
     /// Persists local bests and submits to Game Center for Normal, Loop, and Daily.
     private func recordPersonalBestsIfNeeded() {
-        guard let board = LeaderboardBoard.matching(resolvedPlayMode) else {
+        guard let board = LeaderboardBoard.matching(runMode, on: runDate) else {
             lastPersonalBestUpdate = nil
             return
         }

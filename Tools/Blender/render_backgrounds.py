@@ -43,9 +43,6 @@ def render(keys=None):
         scene = setup(key)
         scene.render.filepath = str(ROOT / 'Art/Previews' / (key + '-background.png'))
         bpy.ops.render.render(write_still=True)
-        # Refresh the shipped selection cards to match the revised scenery.
-        dest = ROOT / 'Endless Runner/Assets.xcassets' / ('Biome_' + key + '.imageset') / (key + '.png')
-        bpy.data.images['Render Result'].save_render(str(dest), scene=scene)
         print('BACKGROUND PREVIEW', key, flush=True)
 
 

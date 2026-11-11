@@ -1,4 +1,4 @@
-"""Render the authored library, environments and menu thumbnails in Blender."""
+"""Render the authored library and environments in Blender."""
 from pathlib import Path
 import bpy
 import math
@@ -70,11 +70,6 @@ def render_environments():
         for y in [2.6,3.3,4]: copy_asset(scene,pickup,(.75,y,.05))
         camera_at(scene,(2.5,-6.3,2.2),(0,6,.5),36)
         scene.render.filepath=str(OUT/(key+'.png')); bpy.ops.render.render(write_still=True)
-        # Same render is shipped as UI art, with text rendered natively by SwiftUI.
-        dest=ROOT/'Endless Runner'/'Assets.xcassets'/('Biome_'+key+'.imageset')
-        dest.mkdir(parents=True,exist_ok=True)
-        image=bpy.data.images.get('Render Result')
-        image.save_render(str(dest/(key+'.png')),scene=scene)
 
 
 def render_lineup():

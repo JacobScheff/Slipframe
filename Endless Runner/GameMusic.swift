@@ -43,49 +43,12 @@ final class GameMusic {
         for id in EnvironmentID.allCases {
             _ = loadPlayer(for: id.musicCue)
         }
-        _ = loadPlayer(for: TutorialMusic.cue)
         isPrepared = true
     }
 
     /// Current playback time of the active player, if any.
     var playbackTime: Float {
         Float(activePlayer?.currentTime ?? 0)
-    }
-
-    /// Start a cue from the beginning (no crossfade). Used by the tutorial master track.
-    @discardableResult
-    func playFromStart(_ cue: String, loop: Bool = false, volume: Float = 1) -> Float {
-        prepareSessionIfNeeded()
-        fadeTask?.cancel()
-        fadeTask = nil
-        outgoingPlayer?.stop()
-        outgoingPlayer = nil
-
-        currentCue = cue
-        let trackDuration = trackDuration(for: cue)
-        guard let next = loadPlayer(for: cue) else {
-            activePlayer?.stop()
-            activePlayer = nil
-            activeBaseVolume = 0
-            return trackDuration
-        }
-
-        activePlayer?.stop()
-        next.stop()
-        next.currentTime = 0
-        next.numberOfLoops = loop ? -1 : 0
-        activeBaseVolume = volume
-        outgoingBaseVolume = 0
-        isFlowPaused = false
-        next.prepareToPlay()
-        activePlayer = next
-        applyPlaybackFlow()
-        if playbackFlow > StreamFlow.stopThreshold {
-            next.play()
-        } else {
-            isFlowPaused = true
-        }
-        return trackDuration
     }
 
     /// Drive playback rate + gain from the off-track flow (1 = normal, 0 = stopped).
@@ -100,26 +63,11 @@ final class GameMusic {
         applyPlaybackFlow()
     }
 
-    /// Restore full-speed playback (new run, teardown, returning to the menu).
+    /// Restore full-speed playback (new run, teardown, returning to idle).
     func resetPlaybackFlow() {
         playbackFlow = 1
         isFlowPaused = false
         applyPlaybackFlow()
-    }
-
-    /// Immediate stop — used at the tutorial silence cut.
-    func stopAbruptly() {
-        fadeTask?.cancel()
-        fadeTask = nil
-        activePlayer?.stop()
-        outgoingPlayer?.stop()
-        activePlayer = nil
-        outgoingPlayer = nil
-        currentCue = nil
-        activeBaseVolume = 0
-        outgoingBaseVolume = 0
-        isFlowPaused = false
-        playbackFlow = 1
     }
 
     /// Duration of the biome track in seconds (fallback if the file is missing).
