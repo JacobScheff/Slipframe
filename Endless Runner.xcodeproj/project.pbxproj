@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+        C0DE50112C72000100B00101 /* SpatialTutorial.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE50012C72000100B00101 /* SpatialTutorial.swift */; };
 		C0DE30012C72000100B00001 /* BiomeAssetCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DE30002C72000100B00000 /* BiomeAssetCatalog.swift */; };
 		C0DE30032C72000100B00003 /* ArtAssets in Resources */ = {isa = PBXBuildFile; fileRef = C0DE30022C72000100B00002 /* ArtAssets */; };
 		3A9B45272C503B710080BBBE /* RealityKitContent in Frameworks */ = {isa = PBXBuildFile; productRef = 3A9B45262C503B710080BBBE /* RealityKitContent */; };
@@ -57,6 +58,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+        C0DE50012C72000100B00101 /* SpatialTutorial.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpatialTutorial.swift; sourceTree = "<group>"; };
 		C0DE30002C72000100B00000 /* BiomeAssetCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BiomeAssetCatalog.swift; sourceTree = "<group>"; };
 		C0DE30022C72000100B00002 /* ArtAssets */ = {isa = PBXFileReference; lastKnownFileType = folder; path = ArtAssets; sourceTree = "<group>"; };
 		3A9B45212C503B710080BBBE /* Slipframe.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Slipframe.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -149,6 +151,7 @@
 				B01A10022C72000100A00003 /* GameModel.swift */,
 				B01A10042C72000100A00005 /* GameWorld.swift */,
 				C0DE40012C72000100B00101 /* RunConsole.swift */,
+                C0DE50012C72000100B00101 /* SpatialTutorial.swift */,
 				C0DE40022C72000100B00102 /* SlipframeStyle.swift */,
 				C0DE40032C72000100B00103 /* RunFeedback.swift */,
 				C0DE40042C72000100B00104 /* RoomGrid.swift */,
@@ -317,6 +320,7 @@
 				B01A10032C72000100A00004 /* GameModel.swift in Sources */,
 				B01A10052C72000100A00006 /* GameWorld.swift in Sources */,
 				C0DE40112C72000100B00101 /* RunConsole.swift in Sources */,
+                C0DE50112C72000100B00101 /* SpatialTutorial.swift in Sources */,
 				C0DE40122C72000100B00102 /* SlipframeStyle.swift in Sources */,
 				C0DE40132C72000100B00103 /* RunFeedback.swift in Sources */,
 				C0DE40142C72000100B00104 /* RoomGrid.swift in Sources */,

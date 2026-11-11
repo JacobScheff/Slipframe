@@ -36,7 +36,12 @@ struct RunConsole: View {
                 case .biomes:
                     biomeRoster
                 case .guide:
-                    RiftGuide()
+                    VStack(alignment: .leading, spacing: 12) {
+                        Button("Watch How to play") { model.showsTutorial = true }
+                            .buttonStyle(ConsoleButtonStyle(prominent: true))
+                            .disabled(!model.fieldIsClear)
+                        RiftGuide()
+                    }
                 case .scores:
                     ScoresPanel(center: model.gameCenter, bests: model.personalBests,
                                 preferredMode: model.resolvedPlayMode, signIn: signIn)
@@ -114,6 +119,9 @@ struct RunConsole: View {
                 Label("Stand at the start marker and face the rift.", systemImage: "figure.stand")
             }
             Spacer()
+            Button("How to play") { model.showsTutorial = true }
+                .buttonStyle(ConsoleButtonStyle())
+                .disabled(!model.fieldIsClear)
             Button {
                 guard model.fieldIsClear else { return }
                 model.startRun()

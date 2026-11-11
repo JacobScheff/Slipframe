@@ -41,6 +41,7 @@ final class GameModel: ObservableObject {
     private var scoreRemainder: Float = 0
 
     @Published var isPlaying: Bool = false
+    @Published var showsTutorial = false
     @Published var isGameOver: Bool = false
     /// True during Normal mode's wordless three-rift recovery/choice event.
     @Published var isChoosingPortal: Bool = false
@@ -177,7 +178,7 @@ final class GameModel: ObservableObject {
     }
 
     func startRun() {
-        guard canStartRun, !isPlaying else { return }
+        guard canStartRun, !isPlaying, !showsTutorial else { return }
         runDate = Date()
         runMode = resolvedPlayMode
         let startingBiome = previewEnvironment(on: runDate) ?? .emberRun

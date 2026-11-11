@@ -789,8 +789,25 @@ final class GameWorld {
         placePlayfield()
     }
 
+    func tutorialTracking() -> TutorialTracking {
+        guard worldTracking.state == .running else { return TutorialTracking() }
+        let head = hasTrackedDeviceAnchor ? playfieldHeadPosition() : nil
+        let hands = [leftHandGripWorld, rightHandGripWorld].compactMap { $0 }.map {
+            root.convert(position: $0, from: nil)
+        }
+        return TutorialTracking(head: head, hands: hands)
+    }
+
+    func pulseTutorialRoom() { roomGrid.scan() }
+
+    func setTutorialVisible(_ visible: Bool) {
+        portalWorld.isEnabled = !visible
+        portalRoot.isEnabled = !visible
+        trackRoot.isEnabled = !visible && gameModel?.showsTrack == true
+    }
+
     func setTrackVisible(_ visible: Bool) {
-        trackRoot.isEnabled = visible
+        trackRoot.isEnabled = visible && gameModel?.showsTutorial != true
     }
 
     func syncInterface(console: Entity?, hud: Entity?, reduceMotion: Bool) {

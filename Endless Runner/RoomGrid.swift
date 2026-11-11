@@ -16,6 +16,8 @@ final class RoomGrid {
 
     private var surfaces: [UUID: Surface] = [:]
     private var pulseRemaining: Float = 0
+    private var scanRemaining: Float = 0
+    private var scanLines: [UUID: ModelEntity] = [:]
     private var lastOpacity = -1
     private let color = UIColor(red: 0.40, green: 0.80, blue: 1, alpha: 1)
 
@@ -53,7 +55,10 @@ final class RoomGrid {
         }
     }
 
+    func scan() { scanRemaining = 1.8; pulse() }
+
     func remove(_ id: UUID) {
+        scanLines.removeValue(forKey: id)?.removeFromParent()
         surfaces.removeValue(forKey: id)?.entity.removeFromParent()
     }
 
@@ -62,6 +67,8 @@ final class RoomGrid {
             surface.entity.removeFromParent()
         }
         surfaces.removeAll()
+        scanLines.removeAll()
+        scanRemaining = 0
         pulseRemaining = 0
         lastOpacity = -1
     }
@@ -72,6 +79,21 @@ final class RoomGrid {
 
     func tick(deltaTime: Float, playing: Bool) {
         pulseRemaining = max(0, pulseRemaining - deltaTime)
+        scanRemaining = max(0, scanRemaining - deltaTime)
+        for (id, surface) in surfaces {
+            if scanRemaining > 0, !reduceMotion, root.isEnabled {
+                let line: ModelEntity
+                if let existing = scanLines[id] { line = existing }
+                else {
+                    line = ModelEntity(mesh: .generateBox(size: 1), materials: [UnlitMaterial(color: color)])
+                    surface.entity.addChild(line)
+                    scanLines[id] = line
+                }
+                line.isEnabled = true
+                line.scale = [max(0.01, surface.size.x - 0.16), 0.003, 0.006]
+                line.position = [0, 0.012, (0.5 - scanRemaining / 1.8) * (surface.size.y - 0.16)]
+            } else { scanLines[id]?.isEnabled = false }
+        }
         let base: Float = playing ? 0.13 : 0.24
         let lift: Float = reduceMotion ? 0 : 0.16 * sin((pulseRemaining / 1.2) * .pi)
         let step = Int((base + lift) * 50)

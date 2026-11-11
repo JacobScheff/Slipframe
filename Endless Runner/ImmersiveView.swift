@@ -16,9 +16,11 @@ struct ImmersiveView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var gameWorld = GameWorld()
     @State private var isWorldReady = false
+    @StateObject private var tutorial = SpatialTutorial()
+    @State private var tutorialSubscription: EventSubscription?
 
     private enum Panel: Hashable {
-        case console, hud
+        case console, hud, tutorial
     }
 
     var body: some View {
@@ -26,6 +28,10 @@ struct ImmersiveView: View {
             await BiomeAssetCatalog.preload()
             guard !Task.isCancelled else { return }
             gameWorld.attach(to: content, gameModel: gameModel)
+            tutorialSubscription = content.subscribe(to: SceneEvents.Update.self) { event in
+                guard gameModel.showsTutorial else { return }
+                tutorial.tick(event.deltaTime, tracking: gameWorld.tutorialTracking())
+            }
             gameWorld.syncRun(with: gameModel)
             syncPanels(attachments)
             isWorldReady = true
@@ -42,16 +48,37 @@ struct ImmersiveView: View {
                     openWindow(id: GameCenterAuthWindow.id, value: "sign-in")
                 })
             }
+            Attachment(id: Panel.tutorial) {
+                TutorialControls(tutorial: tutorial) { gameModel.showsTutorial = false }
+            }
             Attachment(id: Panel.hud) {
                 RunHUD(model: gameModel, stats: gameModel.stats)
             }
         }
+        .gesture(SpatialTapGesture().targetedToAnyEntity().onEnded { value in
+            guard gameModel.showsTutorial else { return }
+            tutorial.tap(value.entity)
+        })
+        .onChange(of: tutorial.index) { _, _ in
+            if gameModel.showsTutorial { gameWorld.pulseTutorialRoom() }
+        }
+        .onChange(of: gameModel.showsTutorial) { _, showing in
+            if showing {
+                tutorial.begin(head: gameWorld.tutorialTracking().head)
+                gameWorld.pulseTutorialRoom()
+            }
+            else { tutorial.stop() }
+        }
         .preferredSurroundingsEffect(gameModel.prefersRoomDimming ? .dark : nil)
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { gameModel.gameCenter.refreshAuthState() }
+            else if gameModel.showsTutorial { tutorial.paused = true }
         }
         .onDisappear {
             isWorldReady = false
+            tutorialSubscription = nil
+            tutorial.remove()
+            gameModel.showsTutorial = false
             gameModel.isPlaying = false
             gameModel.isOffPlayfield = false
             dismissWindow(id: GameCenterAuthWindow.id)
@@ -60,6 +87,12 @@ struct ImmersiveView: View {
     }
 
     private func syncPanels(_ attachments: RealityViewAttachments) {
+        tutorial.reduceMotion = reduceMotion
+        tutorial.mount(in: gameWorld.root, panel: attachments.entity(for: Panel.tutorial))
+        tutorial.root.isEnabled = gameModel.showsTutorial
+        tutorial.controls.isEnabled = gameModel.showsTutorial
+        attachments.entity(for: Panel.console)?.isEnabled = !gameModel.showsTutorial
+        gameWorld.setTutorialVisible(gameModel.showsTutorial)
         gameWorld.syncInterface(
             console: attachments.entity(for: Panel.console),
             hud: attachments.entity(for: Panel.hud),
