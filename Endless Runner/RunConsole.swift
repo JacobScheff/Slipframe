@@ -6,6 +6,8 @@ struct RunConsole: View {
     let recenter: () -> Void
     let signIn: () -> Void
 
+    @AppStorage("tutorial.completed.v2") private var completedTutorial = false
+    @AppStorage("tutorial.offerDismissed.v2") private var dismissedTutorialOffer = false
     @State private var tab = Tab.run
     @State private var configuringAfterRun = false
     @State private var inspectedBiome = EnvironmentID.emberRun
@@ -24,7 +26,26 @@ struct RunConsole: View {
             Group {
                 switch tab {
                 case .run:
-                    if showsResults {
+                    if !completedTutorial && !dismissedTutorialOffer && !model.isGameOver {
+                        VStack(alignment: .leading, spacing: 18) {
+                            Text("One room. Eight worlds.")
+                                .font(.system(size: 34, weight: .semibold))
+                            Text("Explore Slipframe in a miniature animated tour. Learn every biome, rift, and run mode, with a few moments to try the controls.")
+                                .font(.system(size: 20))
+                                .foregroundStyle(SlipframeStyle.muted)
+                            HStack {
+                                Button("Watch How to play") {
+                                    dismissedTutorialOffer = true
+                                    model.showsTutorial = true
+                                }
+                                .buttonStyle(ConsoleButtonStyle(prominent: true))
+                                Button("Choose a run") { dismissedTutorialOffer = true }
+                                    .buttonStyle(ConsoleButtonStyle())
+                            }
+                            Text("Pause or skip at any time. Replay it from Rift guide.")
+                                .foregroundStyle(SlipframeStyle.muted)
+                        }
+                    } else if showsResults {
                         RunResults(model: model, stats: model.stats) {
                             configuringAfterRun = true
                         }
@@ -71,6 +92,9 @@ struct RunConsole: View {
                 .strokeBorder(.linearGradient(colors: [SlipframeStyle.ice.opacity(0.36), SlipframeStyle.line],
                                               startPoint: .topLeading, endPoint: .bottomTrailing))
                 .allowsHitTesting(false)
+        }
+        .onChange(of: model.showsTutorial) { _, showing in
+            if !showing { tab = .run; configuringAfterRun = true }
         }
         .onChange(of: model.isGameOver) { _, isGameOver in
             if isGameOver {
@@ -119,7 +143,7 @@ struct RunConsole: View {
                 Label("Stand at the start marker and face the rift.", systemImage: "figure.stand")
             }
             Spacer()
-            Button("How to play") { model.showsTutorial = true }
+            Button(completedTutorial ? "How to play" : "New? How to play") { model.showsTutorial = true }
                 .buttonStyle(ConsoleButtonStyle())
                 .disabled(!model.fieldIsClear)
             Button {

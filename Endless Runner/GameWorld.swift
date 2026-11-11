@@ -792,10 +792,16 @@ final class GameWorld {
     func tutorialTracking() -> TutorialTracking {
         guard worldTracking.state == .running else { return TutorialTracking() }
         let head = hasTrackedDeviceAnchor ? playfieldHeadPosition() : nil
-        let hands = [leftHandGripWorld, rightHandGripWorld].compactMap { $0 }.map {
-            root.convert(position: $0, from: nil)
+        let hands = [leftHandGripWorld, rightHandGripWorld].map { hand in
+            hand.map { root.convert(position: $0, from: nil) }
         }
         return TutorialTracking(head: head, hands: hands)
+    }
+
+    func tutorialSurfacePoint() -> SIMD3<Float>? {
+        guard gameModel?.showsRoomGrid == true else { return nil }
+        let headWorld = root.convert(position: playfieldHeadPosition(), to: nil)
+        return roomGrid.nearestSurfacePoint(to: headWorld).map { root.convert(position: $0, from: nil) }
     }
 
     func pulseTutorialRoom() { roomGrid.scan() }
@@ -1814,7 +1820,7 @@ final class GameWorld {
         // from head-anchor / eye-height fallbacks once WorldTracking or a
         // floor plane becomes available (full re-place while idle; Y-only
         // during a run so a late floor detection can un-bury the track).
-        upgradePlayfieldIfNeeded()
+        if gameModel?.showsTutorial != true { upgradePlayfieldIfNeeded() }
 
         guard let gameModel else { return }
         syncAegisAura(gameModel: gameModel)
@@ -1822,7 +1828,7 @@ final class GameWorld {
 
         // Calibrate standing height while idle — freeze during play
         // so a jump cannot raise the baseline mid-hurdle.
-        if !gameModel.isPlaying {
+        if !gameModel.isPlaying, !gameModel.showsTutorial {
             updateStandingHeightCalibration(deltaTime: deltaTime)
             if elapsedTime >= nextPreviewCheck {
                 nextPreviewCheck = elapsedTime + 1

@@ -55,6 +55,13 @@ final class RoomGrid {
         }
     }
 
+    func nearestSurfacePoint(to point: SIMD3<Float>) -> SIMD3<Float>? {
+        guard root.isEnabled else { return nil }
+        return surfaces.values.map { $0.entity.position(relativeTo: nil) }
+            .filter { distance($0, point) < 4 }
+            .min { distance($0, point) < distance($1, point) }
+    }
+
     func scan() { scanRemaining = 1.8; pulse() }
 
     func remove(_ id: UUID) {

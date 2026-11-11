@@ -49,7 +49,14 @@ struct ImmersiveView: View {
                 })
             }
             Attachment(id: Panel.tutorial) {
-                TutorialControls(tutorial: tutorial) { gameModel.showsTutorial = false }
+                TutorialControls(tutorial: tutorial, close: {
+                    gameModel.showsTutorial = false
+                }, startNormal: {
+                    tutorial.stop()
+                    gameModel.showsTutorial = false
+                    gameModel.playKind = .normal
+                    gameModel.startRun()
+                })
             }
             Attachment(id: Panel.hud) {
                 RunHUD(model: gameModel, stats: gameModel.stats)
@@ -64,7 +71,7 @@ struct ImmersiveView: View {
         }
         .onChange(of: gameModel.showsTutorial) { _, showing in
             if showing {
-                tutorial.begin(head: gameWorld.tutorialTracking().head)
+                tutorial.begin(head: gameWorld.tutorialTracking().head, surface: gameWorld.tutorialSurfacePoint())
                 gameWorld.pulseTutorialRoom()
             }
             else { tutorial.stop() }
