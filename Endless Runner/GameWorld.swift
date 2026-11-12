@@ -792,16 +792,12 @@ final class GameWorld {
     func tutorialTracking() -> TutorialTracking {
         guard worldTracking.state == .running else { return TutorialTracking() }
         let head = hasTrackedDeviceAnchor ? playfieldHeadPosition() : nil
-        let hands = [leftHandGripWorld, rightHandGripWorld].map { hand in
-            hand.map { root.convert(position: $0, from: nil) }
+        var forward = SIMD3<Float>(0, 0, -1)
+        if let anchor = worldTracking.queryDeviceAnchor(atTimestamp: CACurrentMediaTime()), anchor.isTracked {
+            let column = anchor.originFromAnchorTransform.columns.2
+            forward = root.convert(direction: SIMD3(-column.x, -column.y, -column.z), from: nil)
         }
-        return TutorialTracking(head: head, hands: hands)
-    }
-
-    func tutorialSurfacePoint() -> SIMD3<Float>? {
-        guard gameModel?.showsRoomGrid == true else { return nil }
-        let headWorld = root.convert(position: playfieldHeadPosition(), to: nil)
-        return roomGrid.nearestSurfacePoint(to: headWorld).map { root.convert(position: $0, from: nil) }
+        return TutorialTracking(head: head, forward: forward)
     }
 
     func pulseTutorialRoom() { roomGrid.scan() }
@@ -1284,6 +1280,7 @@ final class GameWorld {
         if lastArtPalette != palette || lastArtTelegraph != pulseStep {
             lastArtPalette = palette
             lastArtTelegraph = pulseStep
+            roomGrid.setTint(EnvironmentMaterials.uiColor(palette.portalRim))
             BiomeAssetCatalog.tint(trackRoot, role: "tint_lane",
                                    color: EnvironmentMaterials.uiColor(palette.laneStripe))
             if let rim = portalRoot.children.first(where: { $0.name == "portalRim" }) {
@@ -1824,7 +1821,8 @@ final class GameWorld {
 
         guard let gameModel else { return }
         syncAegisAura(gameModel: gameModel)
-        roomGrid.tick(deltaTime: deltaTime, playing: gameModel.isPlaying)
+        let roomHead = hasTrackedDeviceAnchor ? root.convert(position: playfieldHeadPosition(), to: nil) : nil
+        roomGrid.tick(deltaTime: deltaTime, playing: gameModel.isPlaying, head: roomHead)
 
         // Calibrate standing height while idle — freeze during play
         // so a jump cannot raise the baseline mid-hurdle.

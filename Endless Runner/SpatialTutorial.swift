@@ -1,1289 +1,930 @@
 import SwiftUI
 import RealityKit
 import UIKit
-import AVFoundation
+import simd
 
-struct TutorialChapter: Identifiable {
-    let id: Int
-    let title: String
-    let text: String
-    let asset: String
-    let seconds: Double
-
-    static let all: [Self] = {
-        var chapters: [Self] = []
-        func add(_ title: String, _ text: String, _ asset: String = "token", _ seconds: Double = 9) {
-            chapters.append(Self(id: chapters.count, title: title, text: text, asset: asset, seconds: seconds))
-        }
-        add("Find your opening", "A room. Three lanes. Endless possibilities. Follow the gold token through the rift, then discover how every world changes the game.", "rift_frame", 7)
-        add("The track comes to you", "Stand at the start marker and face the rift. Lean or step left and right into open lanes. Your head and hands can hit walls. Try a small sideways lean. The miniature runner follows your head.", "wall_emberRun_0", 12)
-        add("Reach for gold", "Reach into tokens with your hands to collect them. Reach toward the floating gold token to collect it in this demonstration. Your score rises with distance. Tokens have their own counter and rankings.", "token", 10)
-        add("Build your bonus", "Tokens and close slips build a bonus up to +100%. It slowly drains during play. A close slip also awards score. Watch the bonus in the HUD alongside score and tokens.")
-        add("Take a breath", "Move outside the play area and obstacles and music slow to a stop. Return to the start area to resume. A reminder appears in your HUD.")
-        add("Choose your next world", "Normal starts in Ember Run. At a junction, three different destinations approach during a ten-second recovery. Move into the left, center, or right lane and hold it as the gates arrive. The world inside each gate shows its destination.", "rift_frame", 12)
-        add("Read the diamonds", "One diamond means Stable, with 1× distance score. Two mean Charged, with 1.5×. Three mean Unstable, with 2×. Higher difficulty adds denser patterns and more reward opportunities. Each gate rolls its own difficulty.", "glyph_risk", 13)
-        for modifier in RiftModifier.allCases {
-            let assets: [RiftModifier: String] = [.tokenSurge: "token", .aegis: "glyph_aegis", .overdrive: "glyph_overdrive", .magnet: "glyph_magnet", .closeCall: "glyph_precision", .bonusBank: "glyph_lock"]
-            add(modifier.displayName, modifier.effect + " The glyph below a portal identifies its modifier for that visit.", assets[modifier] ?? "token", 7)
-        }
-        add("Your active modifier", "A gate can also have no modifier. The HUD explains the active effect. Aegis shows Shield ready until it absorbs a hit, then Shield spent. Lattice Forge offers Token Surge, Aegis, Overdrive, Bonus Bank, or no modifier.", "glyph_aegis", 12)
-        for biome in EnvironmentID.allCases {
-            var detail = biome.mechanic
-            switch biome {
-            case .emberRun: detail = "Your starting world in Normal. Dodge standard walls across three lanes and reach for tokens. Clear visibility makes this the place to learn the rhythm."
-            case .summitStep: detail = "Make a small rise or hop to clear low hurdles while continuing to dodge side walls. The game calibrates standing height between runs."
-            case .ghostGlass: detail = "Some walls are almost transparent. Look for their edges and keep finding open lanes. These walls still collide with your head and hands."
-            case .stormPass: detail += " A gust warns you before the obstacles shift sideways. Adjust to the new opening."
-            case .crystalCave: detail = "Close a fist around a half-crystal. Hold one in each hand and bring DIFFERENT types together. Open your hand to drop one. Same types do not merge. Normal pairs award 5 tokens, one charged half awards 50, and two charged halves award 10,000 before modifiers."
-            case .vectorFoundry: detail += " Each hand can guide its own shape. Fill every matching slot to open the approaching door. Higher difficulties can add more shapes and faster doors."
-            case .orbitGate: detail += " Your head must pass through each opening. Hoops can tilt and rotate on different axes."
-            default: break
-            }
-            add(biome.displayName, detail, "preview_" + biome.rawValue, biome == .crystalCave || biome == .vectorFoundry ? 16 : 10)
-        }
-        add("Normal", "Start in Ember Run and choose your route at each junction. Every destination combines a biome, difficulty, and optional modifier. Normal has separate score and token leaderboards.", "rift_frame")
-        add("Loop", "Pick any one biome and play it continuously. Each Loop biome has its own score and token rankings. Browse Biomes to learn its mechanic, then choose Set up Loop.")
-        add("Playlist", "Select one or more biomes. Pick the first biome or choose Random. Later visits shuffle within your selection. Removing the chosen first biome returns the start to Random. Select at least one biome to enable Start. Playlist runs are unranked.", "token", 14)
-        add("Daily", "Everyone receives the same seeded biome sequence and obstacle patterns for the day. The console shows the challenge date, countdown to midnight Eastern Time, and your best score and tokens for today.", "token", 11)
-        add("Preview your run", "Changing the mode or starting biome updates the live portal preview. Biomes explains all eight mechanics. Rift guide explains difficulty and modifiers. Short hints also appear when entering Lattice Forge and Gyre Gate.", "rift_frame", 11)
-        add("Every run tells a story", "A collision ends the run unless Aegis absorbs it. Results show score, tokens, peak bonus, close slips, and rifts crossed. New personal bests are marked independently for score and tokens. Play again becomes available after the field clears.", "token", 12)
-        add("Earn your grade", "Your grade uses peak bonus percentage + 4 per close slip + 10 per rift crossed. S begins at 150, A at 100, B at 65, and C at 30. Below 30 earns D. Build bonus, slip close, and cross rifts.", "glyph_risk", 12)
-        add("Find your place", "Scores has separate Score and Tokens rankings for Normal, each Loop biome, and today's Daily. Switch between All Players and Friends. Your own rank and ranked value appear above the list. Local bests remain available while signed out.", "token", 12)
-        add("Connect and share", "Sign in to Game Center from Scores, or in visionOS Settings, to load rankings and submit eligible bests. Rankings show loading, empty, or unavailable states. Share best on the Daily board opens Messages with your score and challenge date filled in.", "token", 12)
-        add("Make room for your run", "Settings lets you show or hide the floor track and light-blue room grid. Both preferences persist. Hiding the track keeps the same playable boundaries. Recenter track aligns it with your current position. The privacy policy opens from Settings.", "rift_frame", 13)
-        add("Your next opening", "You know the worlds, the choices, and the rewards. Return to the console to choose your mode and start. You can replay any chapter of How to play whenever you want.", "rift_frame", 8)
-        return chapters
-    }()
+enum TutorialSection: String, CaseIterable, Identifiable {
+    case basics = "Start here", biomes = "Biomes", reference = "Rifts & modes"
+    var id: Self { self }
+    var lessons: [TutorialLesson] { TutorialLesson.allCases.filter { $0.section == self } }
 }
 
-extension TutorialChapter {
-    /// Speech, captions, and choreography advance through the same cues. The full
-    /// explanation remains available from Details while the film is paused.
-    var cues: [String] {
-        switch title {
-        case "Find your opening": return ["One room. Eight worlds. Find your opening.", "Follow the gold token. The track comes to you."]
-        case "The track comes to you": return ["Stand at the start marker. Walls approach across three lanes.", "Try a small sideways lean. Your miniature follows you.", "Keep your head and hands in the opening as the wall passes."]
-        case "Reach for gold": return ["Reach toward this token. Touch collects it during a run.", "Gold adds tokens and builds your score bonus.", "Your score grows with distance. Tokens have their own rankings."]
-        case "Build your bonus": return ["Catch tokens and slip close to walls to build bonus.", "The meter can add up to one hundred percent to distance score.", "It gradually drains during play. Close slips also award points."]
-        case "Take a breath": return ["Outside the play area, obstacles and music slow to a stop.", "Return to the start area to resume."]
-        case "Choose your next world": return ["In Normal, each junction gives you three different destinations.", "Look inside the gates. Lean into the lane of your chosen world.", "Hold that lane as your gate arrives. The others peel away."]
-        case "Read the diamonds": return ["One diamond is Stable, with normal distance score.", "Two are Charged, with one and a half times the score.", "Three are Unstable, with double score and denser patterns."]
-        case "Token Surge": return ["Token Surge creates extra chains.", "Every token counts twice."]
-        case "Aegis": return ["Aegis gives you one shield for this visit.", "A collision breaks the shield and halves your bonus.", "The HUD now says shield spent. The run continues."]
-        case "Overdrive": return ["Overdrive adds twenty-five percent to distance rewards.", "Tokens and close slips build your bonus faster."]
-        case "Magnet": return ["Magnet extends your pickup reach.", "Tokens and crystal halves can be collected from farther away."]
-        case "Close Call": return ["Close Call gives you a wider close-slip window.", "Each close slip earns double points and bonus gain."]
-        case "Bonus Bank": return ["Watch these two meters drain.", "Bonus Bank drains half as fast, preserving your score bonus."]
-        case "Your active modifier": return ["The lower glyph identifies a gate's modifier. An empty position means none.", "Your HUD explains the active effect and tracks Aegis's shield.", "Forge offers Token Surge, Aegis, Overdrive, Bonus Bank, or none."]
-        case "Ember Run": return ["Ember Run opens every Normal run.", "Read the walls, slip into open lanes, and catch gold."]
-        case "Summit Step": return ["Summit Step adds low hurdles.", "Make a small rise or hop to clear them. Keep dodging side walls."]
-        case "Low Crawl": return ["Low Crawl brings hanging barriers.", "Duck beneath them and reach for the low tokens."]
-        case "Ghost Glass": return ["Ghost Glass makes some walls almost transparent.", "Follow their faint edges. They still collide with your head and hands."]
-        case "Storm Pass": return ["A gust warns you before the obstacles move.", "Watch the opening shift sideways, then adjust your lane."]
-        case "Crystal Cave": return ["Close your fists around two different crystal halves. Bring them together for five tokens.", "Same types stay separate.", "Open your hand to release a half.", "Each hand holds one half. Pick different types to merge.", "A rare charged half raises the pair to fifty tokens.", "Two charged halves award ten thousand before modifiers."]
-        case "Lattice Forge": return ["Aim a raised hand at a floating shape. Hold briefly to lock on.", "Move your hand to guide it into the matching slot. Try the final cube.", "Each hand can guide a shape. Fill every slot to open the door.", "Higher difficulty adds shapes and can make the door approach faster."]
-        case "Gyre Gate": return ["Guide your head through each hoop.", "Some hoops tilt. Watch their openings as they approach.", "Time the rotating shutter so your head passes through its open wedge."]
-        case "Normal": return ["Normal begins in Ember Run and branches at every junction.", "Choose your next biome, difficulty, and modifier by moving into a lane."]
-        case "Loop": return ["Loop stays in one biome. Choose any of the eight.", "Every Loop biome has separate score and token rankings."]
-        case "Playlist": return ["Build a Playlist from one or more biomes. Later visits shuffle within your selection.", "Choose the first biome or leave it Random.", "Remove that first biome and the start returns to Random. Empty playlists cannot start.", "Playlist runs are unranked."]
-        case "Daily": return ["Daily gives everyone the same route and obstacle patterns.", "Check today's date, bests, and the countdown to midnight Eastern Time."]
-        case "Preview your run": return ["Your starting portal updates as you choose a mode or biome.", "Biomes explains each mechanic. Rift guide explains the gates.", "Forge and Gyre also show short hints during your run."]
-        case "Every run tells a story": return ["A collision ends your run unless Aegis absorbs it.", "Review score, tokens, peak bonus, close slips, and rifts crossed.", "Score and token personal bests are independent. Play again when the field clears."]
-        case "Earn your grade": return ["Peak bonus plus four per close slip plus ten per rift gives your grade.", "S starts at one hundred fifty. A at one hundred. B at sixty-five. C at thirty.", "Below thirty earns D. Every close slip and rift counts."]
-        case "Find your place": return ["Choose Normal, a Loop biome, or today's Daily leaderboard.", "Switch Score or Tokens, and All Players or Friends. Your rank appears above the list.", "Loading, empty, and unavailable states explain missing rankings. Local bests remain while signed out."]
-        case "Connect and share": return ["Sign in to Game Center from Scores or visionOS Settings to compete.", "Share your Daily best to open Messages with the score and date filled in."]
-        case "Make room for your run": return ["Toggle the floor track and room grid in Settings. Both choices are saved.", "Hiding the track keeps the same play boundaries.", "Recenter aligns the track with you. The privacy policy also opens from Settings."]
-        default: return ["The next opening is yours.", "Start Normal, choose a mode, or replay any chapter whenever you like."]
+struct TutorialStep {
+    let title: String
+    let instruction: String
+    let detail: String
+}
+
+/// Stable identities drive both the lesson and its choreography. Editing copy
+/// cannot accidentally select a different animation or break an interaction.
+enum TutorialLesson: String, CaseIterable, Identifiable {
+    case space, dodge, tokens, pause, rifts, ready
+    case emberRun, lowCrawl, summitStep, ghostGlass, stormPass, crystalCave, vectorFoundry, orbitGate
+    case difficulty, modifiers, modes
+
+    var id: Self { self }
+    var section: TutorialSection {
+        switch self {
+        case .space, .dodge, .tokens, .pause, .rifts, .ready: return .basics
+        case .difficulty, .modifiers, .modes: return .reference
+        default: return .biomes
+        }
+    }
+    var biome: EnvironmentID? {
+        switch self {
+        case .emberRun: return .emberRun
+        case .lowCrawl: return .lowCrawl
+        case .summitStep: return .summitStep
+        case .ghostGlass: return .ghostGlass
+        case .stormPass: return .stormPass
+        case .crystalCave: return .crystalCave
+        case .vectorFoundry: return .vectorFoundry
+        case .orbitGate: return .orbitGate
+        default: return nil
+        }
+    }
+    var title: String {
+        switch self {
+        case .space: return "Meet your track"
+        case .dodge: return "Find the clear lane"
+        case .tokens: return "Reach for tokens"
+        case .pause: return "Take a breather"
+        case .rifts: return "Choose your next world"
+        case .ready: return "You're ready to run"
+        case .difficulty: return "Read a rift"
+        case .modifiers: return "A bonus for the visit"
+        case .modes: return "Find your run"
+        default: return biome?.displayName ?? ""
+        }
+    }
+    var subtitle: String {
+        switch self {
+        case .space: return "Your room is the play space."
+        case .dodge, .emberRun: return "Move your body into the opening."
+        case .tokens: return "Touch gold. Build your bonus."
+        case .pause: return "The track waits when you step away."
+        case .rifts: return "Your lane chooses the destination."
+        case .ready: return "Start simple. Discover the rest as you go."
+        case .lowCrawl: return "Get below the hanging barrier."
+        case .summitStep: return "A small rise clears a low hurdle."
+        case .ghostGlass: return "Follow the edges of the glass."
+        case .stormPass: return "Read the opening after the gust."
+        case .crystalCave: return "Two different halves. One reward."
+        case .vectorFoundry: return "Aim, hold, then guide."
+        case .orbitGate: return "Put your head through the opening."
+        case .difficulty: return "Destination, difficulty, then modifier."
+        case .modifiers: return "Your HUD explains the active effect."
+        case .modes: return "Four ways to follow the track."
+        }
+    }
+    var steps: [TutorialStep] {
+        switch self {
+        case .space:
+            return [
+                .init(title: "Start at the marker", instruction: "Stand at the start marker and face the portal. The track has three lanes.", detail: "Keep enough clear space to lean, reach, and move a little to either side."),
+                .init(title: "Let the track come to you", instruction: "Walls and tokens move toward you. You stay near the start of the track.", detail: "The pale figure in this miniature represents you. You can watch every example without moving.")
+            ]
+        case .dodge, .emberRun:
+            return [
+                .init(title: "Look for the opening", instruction: "This wall blocks the middle lane. Either side is clear.", detail: "In the next step, watch the figure lean into the left lane before the wall arrives."),
+                .init(title: "Lean or step sideways", instruction: "Move your head into a clear lane. Keep your hands clear of the wall too.", detail: "Small, deliberate movements are enough. You don't steer with a controller."),
+                .init(title: "Let the wall pass", instruction: "Hold the opening until the whole wall is past you, then look ahead for the next one.", detail: "A hit to your head or hands ends the run, unless a shield absorbs it.")
+            ]
+        case .tokens:
+            return [
+                .init(title: "Reach into the gold", instruction: "Touch a gold token with either hand to collect it. You don't need to pinch.", detail: "The example hand reaches sideways while the head stays in the clear lane."),
+                .init(title: "Watch the two rewards", instruction: "Collecting a token raises your token count and builds your score bonus.", detail: "Score grows with distance. Tokens have their own counter and rankings."),
+                .init(title: "Keep the bonus going", instruction: "Tokens and close slips build a bonus of up to +100%. It gradually drains between rewards.", detail: "Close slips also award points. Focus on finding clear openings while you learn.")
+            ]
+        case .pause:
+            return [
+                .init(title: "Step outside the track", instruction: "When you leave the play area, obstacles and music slow to a stop.", detail: "The HUD asks you to return to the start area."),
+                .init(title: "Return when you're ready", instruction: "Step back into the start area to resume the run.", detail: "Watch the miniature leave the lanes, wait, and return.")
+            ]
+        case .rifts:
+            return [
+                .init(title: "Three gates, three worlds", instruction: "Normal starts in Ember Run. At a junction, three destinations approach during a recovery break.", detail: "Look inside each portal to see the world it leads to."),
+                .init(title: "Line up with your choice", instruction: "Move into the left, middle, or right lane of the world you want.", detail: "Choose a lane below to preview the decision. In a run, your head position makes the choice."),
+                .init(title: "Stay with your gate", instruction: "Hold that lane as the gates arrive. Your chosen world becomes the next part of the run.", detail: "Open Rifts & modes whenever you want to learn about difficulty and modifiers.")
+            ]
+        case .ready:
+            return [
+                .init(title: "Your first run", instruction: "Find the clear lane. Reach for gold. Pick a world when the gates arrive.", detail: "That's enough to begin. The biome guides are here whenever you want to learn another mechanic."),
+                .init(title: "Go at your own pace", instruction: "Start Normal, or return to setup to choose a different mode.", detail: "Replay any lesson from How to play. Your room decorations and floor track can be adjusted in Settings.")
+            ]
+        case .lowCrawl:
+            return [
+                .init(title: "Notice the hanging barrier", instruction: "Low Crawl adds barriers with a clear opening underneath.", detail: "Read the bottom edge as the barrier comes toward you."),
+                .init(title: "Lower your head", instruction: "Duck beneath the barrier and keep your head low until it passes.", detail: "Side walls still need a sideways dodge. Watch for both kinds of opening.")
+            ]
+        case .summitStep:
+            return [
+                .init(title: "Notice the low hurdle", instruction: "Summit Step adds low barriers across the track.", detail: "The game measures your standing height between runs."),
+                .init(title: "Rise as it reaches you", instruction: "A small rise or hop lifts your head above the calibrated height and clears the hurdle.", detail: "You only need a little height. Continue to dodge ordinary side walls.")
+            ]
+        case .ghostGlass:
+            return [
+                .init(title: "Find the faint outline", instruction: "Some walls are almost transparent. Their edges still show where the opening is.", detail: "Glass walls can hit your head and hands, just like solid walls."),
+                .init(title: "Move into clear space", instruction: "Follow the edges and shift into the open lane before the glass reaches you.", detail: "The miniature highlights the wall outline so you can see the route.")
+            ]
+        case .stormPass:
+            return [
+                .init(title: "Watch for a gust", instruction: "A wind cue warns you that an approaching obstacle is about to shift sideways.", detail: "The gust moves the obstacle. Watch its new position."),
+                .init(title: "Read the new opening", instruction: "Adjust your lane after the shift, then let the obstacle pass.", detail: "Don't assume an opening will stay where it first appeared.")
+            ]
+        case .crystalCave:
+            return [
+                .init(title: "Grab a half in each hand", instruction: "Close a fist around a crystal half to hold it. Take a different type in the other hand.", detail: "Blue and coral halves combine. Two of the same type do not."),
+                .init(title: "Bring your hands together", instruction: "Bring the two different halves together to merge them into a token reward.", detail: "A normal pair gives 5 tokens. Open a hand to drop a half."),
+                .init(title: "Look for charged halves", instruction: "Charged halves glow more brightly and make a bigger reward when merged.", detail: "One charged half gives 50 tokens; two give 10,000, before any modifier.")
+            ]
+        case .vectorFoundry:
+            return [
+                .init(title: "Aim through your hand", instruction: "Raise a hand toward a floating shape. Hold your aim briefly to lock onto it.", detail: "Each hand can guide its own shape. You don't need to pinch."),
+                .init(title: "Guide it to the matching slot", instruction: "Move your hand to move the shape into the opening with the same outline.", detail: "Once locked, movement guides the shape; turning your wrist doesn't release it."),
+                .init(title: "Fill every slot", instruction: "Fit all the shapes into their matching slots to open the approaching door.", detail: "Watch both shapes settle before the two door panels slide apart.")
+            ]
+        case .orbitGate:
+            return [
+                .init(title: "Find the center opening", instruction: "Guide your head through the inside of the approaching hoop.", detail: "The opening can shift or tilt. Follow the space inside the rim."),
+                .init(title: "Watch the rotating gap", instruction: "Some gates have a rotating shutter. Move your head into its open section as it arrives.", detail: "The miniature shows the opening lining up with the pale head marker.")
+            ]
+        case .difficulty:
+            return [
+                .init(title: "Look inside first", instruction: "The world inside the portal identifies the destination. The diamonds show its difficulty.", detail: "Each of the three gates gets its own difficulty and optional modifier."),
+                .init(title: "Count the diamonds", instruction: "One is Stable: ×1 distance score. Two are Charged: ×1.5. Three are Unstable: ×2.", detail: "Higher difficulty brings denser patterns and more opportunities for rewards."),
+                .init(title: "Check the modifier", instruction: "The lower emblem identifies a bonus for that visit. A gate can also have no modifier.", detail: "The HUD names and explains the active effect, so you don't need to memorize symbols.")
+            ]
+        case .modifiers:
+            return [
+                .init(title: "Token Surge", instruction: "Each token counts twice, and more token chains appear.", detail: "Watch one pickup add two tokens in the example below."),
+                .init(title: "Aegis", instruction: "A shield absorbs one collision. That hit halves your current bonus, and the shield is spent.", detail: "Watch Shield ready change to Shield spent. A new visit can give you a new shield."),
+                .init(title: "Overdrive", instruction: "Distance points increase by 25%. Tokens and close slips also build bonus faster.", detail: "The comparison below shows the same distance with and without Overdrive."),
+                .init(title: "Magnet", instruction: "Collect tokens and crystal halves from farther away.", detail: "Watch the token curve toward the example hand. Your head can stay in its lane."),
+                .init(title: "Close Call", instruction: "A wider close-slip window gives double points and bonus gain for each close slip.", detail: "Keep clear of the wall. This modifier rewards a close pass; it does not protect you from a hit."),
+                .init(title: "Bonus Bank", instruction: "Your score bonus drains half as fast.", detail: "Watch both meters start at the same value. Bonus Bank preserves more of the bonus between rewards.")
+            ]
+        case .modes:
+            return [
+                .init(title: "Normal", instruction: "Start in Ember Run and choose a new world at each junction.", detail: "Three gates approach. Move into a lane and stay with your destination."),
+                .init(title: "Loop", instruction: "Choose one biome and stay in it for the whole run.", detail: "Each Loop biome has its own score and token rankings. It is a useful way to learn one mechanic."),
+                .init(title: "Playlist", instruction: "Select one or more biomes, choose the first world or start at random, and let the route shuffle within your selection.", detail: "Playlist runs are unranked. At least one biome must be selected to start."),
+                .init(title: "Daily", instruction: "Everyone gets the same seeded biome route and obstacle patterns for the day.", detail: "Daily resets at midnight Eastern Time. Setup shows the date, countdown, and your bests for today.")
+            ]
         }
     }
 }
 
 struct TutorialTracking {
     var head: SIMD3<Float>?
-    var hands: [SIMD3<Float>?] = [nil, nil]
+    var forward = SIMD3<Float>(0, 0, -1)
 }
 
 @MainActor
-final class SpatialTutorial: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
-    @Published var index = 0
-    @Published var paused = false {
-        didSet {
-            if paused { speaker.pauseSpeaking(at: .immediate); audio.pause() }
-            else if speaker.isPaused { speaker.continueSpeaking() }
-            else if active { speak() }
-        }
-    }
-    @Published var progress: Double = 0
-    @Published private(set) var cueIndex = 0
-    @Published private(set) var sceneRevision = 0
-    @Published var interaction = ""
-    @Published var narration = true {
-        didSet {
-            expectedUtterance = nil
-            speaker.stopSpeaking(at: .immediate)
-            spokenCue = -1
-            speechFinished = !narration
-            if narration && !paused { speak() }
-        }
-    }
-    @Published private(set) var demonstrationBeat = 0
+final class SpatialTutorial: ObservableObject {
+    @Published private(set) var lesson = TutorialLesson.space
+    @Published private(set) var stepIndex = 0
+    @Published var paused = false
+    @Published private(set) var progress: Double = 0
+    @Published private(set) var selectedLane = 0
+    @Published private(set) var completedLessons: Set<TutorialLesson> = []
     let root = Entity()
     let controls = Entity()
     let theater = TutorialTheater()
-    var reduceMotion = false
-    private let speaker = AVSpeechSynthesizer()
-    private let audio = TutorialAudio()
-    private var tokenDeparture: SIMD3<Float>?
-    private var openingSurface: SIMD3<Float>?
-    private var expectedUtterance: AVSpeechUtterance?
-    private var spokenCue = -1
-    private var speechFinished = false
-    private var cueElapsed: Double = 0
-    override init() {
-        super.init()
-        speaker.delegate = self
+    var reduceMotion = false {
+        didSet { if oldValue != reduceMotion { render(Float(progress)) } }
     }
-
-    nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
-        Task { @MainActor [weak self] in
-            guard let self, self.expectedUtterance === utterance else { return }
-            self.speechFinished = true
-        }
-    }
-
-    nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
-        Task { @MainActor [weak self] in
-            guard let self, self.expectedUtterance === utterance else { return }
-            self.speechFinished = true
-        }
-    }
-    private var elapsed: Double = 0
-    private var renderedIndex = -1
-    private var reportedProgress = -1
-    private var originHead: SIMD3<Float>?
-    private var handLock: SIMD3<Float>?
-    private var shapeStart = SIMD3<Float>.zero
-    private var aimTime: Double = 0
-    private var lastHandTime: Double = 0
-    private var lockedHandIndex: Int?
-    private var transition: Entity?
-    private var transitionTime: Double = 0
-    private var succeeded = false
-    private var playerSteering = false
-    private var trackingInterrupted = false
-    private var gateCommitted = false
-    private var forgeDemonstrating = false
     private var active = false
-    var chapter: TutorialChapter { TutorialChapter.all[index] }
-    var caption: String { chapter.cues[cueIndex] }
-    private var cueDuration: Double {
-        max(chapter.seconds / Double(chapter.cues.count), Double(caption.split(separator: " ").count) / 2.5 + 0.6)
+    private var elapsed: Double = 0
+    private var lastProgress = -1
+    private let duration: Double = 5.5
+    private var rememberedSteps: [TutorialLesson: Int] = [:]
+    private var rememberedLessons: [TutorialSection: TutorialLesson] = [:]
+    var step: TutorialStep { lesson.steps[stepIndex] }
+    var index: Int { TutorialLesson.allCases.firstIndex(of: lesson) ?? 0 }
+    var isLastStep: Bool { stepIndex == lesson.steps.count - 1 }
+    var lessonNumber: Int { (lesson.section.lessons.firstIndex(of: lesson) ?? 0) + 1 }
+    var isFinished: Bool { progress >= 1 }
+    var modifier: RiftModifier? {
+        guard lesson == .modifiers else { return nil }
+        let modifiers: [RiftModifier] = [.tokenSurge, .aegis, .overdrive, .magnet, .closeCall, .bonusBank]
+        return modifiers[stepIndex]
     }
+    var playheadSeconds: Double { elapsed }
 
     func mount(in parent: Entity, panel: Entity?) {
-        if root.parent !== parent {
-            parent.addChild(root)
-            root.addChild(theater.root)
-            parent.addChild(controls)
-        }
-        if let panel, panel.parent !== controls { controls.addChild(panel) }
+        if controls.parent !== parent { parent.addChild(controls) }
+        if root.parent !== controls { controls.addChild(root); root.addChild(theater.root) }
+        guard let panel else { return }
+        if panel.parent !== controls { controls.addChild(panel) }
+        // Derive the miniature's placement from the real attachment dimensions,
+        // keeping it in the left-hand viewport at every attachment pixel density.
+        let bounds = panel.visualBounds(relativeTo: controls)
+        guard bounds.extents.x > 0 else { return }
+        root.position = bounds.center + [-bounds.extents.x * 0.19, bounds.extents.y * 0.12, bounds.extents.x * 0.22]
+        root.scale = SIMD3(repeating: bounds.extents.x * 0.35)
+        root.orientation = simd_quatf(angle: 0.35, axis: [1, 0, 0])
     }
 
-    func begin(head: SIMD3<Float>?, surface: SIMD3<Float>?) {
-        active = false
-        originHead = head
-        let position = head ?? SIMD3<Float>(0, 1.5, 0)
-        root.position = position + [0, -0.16, -1.1]
-        openingSurface = surface.map { root.convert(position: $0, from: root.parent) }
-        controls.position = position + [0, -0.62, -1.3]
-        seek(0)
+    func begin(tracking: TutorialTracking, lesson: TutorialLesson = .space) {
+        let position = tracking.head ?? SIMD3<Float>(0, 1.5, 0)
+        let horizontal = SIMD3(tracking.forward.x, 0, tracking.forward.z)
+        let forward = length(horizontal) > 0.01 ? normalize(horizontal) : SIMD3(0, 0, -1)
+        controls.position = position + forward * 1.65 + [0, -0.12, 0]
+        controls.orientation = simd_quatf(angle: atan2(-forward.x, -forward.z), axis: [0, 1, 0])
         active = true
-        paused = false
+        select(lesson)
     }
 
-    func stop() {
-        transition?.removeFromParent()
-        transition = nil
-        active = false
-        audio.stop()
-        expectedUtterance = nil
-        speaker.stopSpeaking(at: .immediate)
+    func selectSection(_ section: TutorialSection) {
+        guard section != lesson.section else { return }
+        select(rememberedLessons[section] ?? section.lessons[0], resume: true)
     }
 
-    func seek(_ newIndex: Int) {
-        expectedUtterance = nil
-        speaker.stopSpeaking(at: .immediate)
-        index = min(max(0, newIndex), TutorialChapter.all.count - 1)
+    func select(_ lesson: TutorialLesson, resume: Bool = false) {
+        rememberedSteps[self.lesson] = stepIndex
+        rememberedLessons[self.lesson.section] = self.lesson
+        self.lesson = lesson
+        stepIndex = resume ? min(rememberedSteps[lesson] ?? 0, lesson.steps.count - 1) : 0
+        selectedLane = lesson == .rifts ? 2 : 0
+        theater.build(lesson)
+        replay()
+    }
+
+    func selectStep(_ index: Int) {
+        stepIndex = min(max(0, index), lesson.steps.count - 1)
+        replay()
+    }
+
+    func replay() {
         elapsed = 0
-        cueElapsed = 0
-        cueIndex = 0
-        spokenCue = -1
-        speechFinished = !narration
         progress = 0
-        reportedProgress = -1
-        interaction = ""
-        renderedIndex = -1
-        handLock = nil
-        lockedHandIndex = nil
-        aimTime = 0
-        succeeded = false
-        playerSteering = false
-        trackingInterrupted = false
-        gateCommitted = false
-        forgeDemonstrating = false
-        demonstrationBeat = 0
+        lastProgress = -1
+        paused = false
+        render(0)
     }
 
-    private func speak() {
-        guard narration, active, renderedIndex == index, spokenCue != cueIndex else { return }
-        spokenCue = cueIndex
-        speechFinished = false
-        let utterance = AVSpeechUtterance(string: caption)
-        utterance.rate = 0.47
-        expectedUtterance = utterance
-        speaker.speak(utterance)
+    func chooseLane(_ lane: Int) {
+        selectedLane = min(2, max(0, lane))
+        replay()
     }
 
-    func tap(_ entity: Entity) {
-        guard !paused else { return }
-        var candidate: Entity? = entity
-        while let target = candidate {
-            if target.name == "tutorialToken", chapter.title == "Reach for gold" { reward("Token collected. Reach into tokens during a run."); return }
-            if target.name == "tutorialRunner" {
-                playerSteering = true
-                theater.selectedLane = (theater.selectedLane + 1) % 3
-                interaction = "Your head position selects the lane in a run."
-                return
-            }
-            candidate = target.parent
+    func scrub(_ value: Double) {
+        guard value.isFinite else { return }
+        paused = true
+        progress = min(1, max(0, value))
+        elapsed = progress * duration
+        lastProgress = Int(progress * 60)
+        render(Float(progress))
+    }
+
+    func previous() {
+        if stepIndex > 0 { selectStep(stepIndex - 1) }
+        else if lessonNumber > 1 {
+            let previous = lesson.section.lessons[lessonNumber - 2]
+            select(previous)
+            selectStep(previous.steps.count - 1)
         }
     }
 
-    private func reward(_ message: String) {
-        guard !succeeded else { return }
-        succeeded = true
-        interaction = message
-        GameSFX.shared.playCoinCollect()
-    }
-
-    func tick(_ delta: Double, tracking: TutorialTracking) {
-        guard active else { return }
-        if renderedIndex != index {
-            tokenDeparture = theater.token.parent == nil ? nil : theater.token.position(relativeTo: root)
-            transition?.removeFromParent()
-            if !reduceMotion, !theater.root.children.isEmpty {
-                let outgoing = theater.root.clone(recursive: true)
-                func removeInput(_ entity: Entity) {
-                    entity.components.remove(InputTargetComponent.self)
-                    entity.components.remove(CollisionComponent.self)
-                    for child in entity.children { removeInput(child) }
-                }
-                removeInput(outgoing)
-                outgoing.findEntity(named: "tutorialToken")?.removeFromParent()
-                root.addChild(outgoing)
-                transition = outgoing
-                transitionTime = 0
-            }
-            theater.build(chapter)
-            audio.setBiome(EnvironmentID.allCases.first { $0.displayName == chapter.title } ?? .emberRun)
-            renderedIndex = index
-            sceneRevision += 1
-            if paused { audio.pause() }
-            if !paused { speak() }
-            GameSFX.shared.playJunctionOpen()
-        }
-        guard !paused else { return }
-        let dt = min(delta, 0.1)
-        elapsed += dt
-        if let transition {
-            transitionTime += dt
-            let fade = Float(min(1, transitionTime / 0.6))
-            transition.components.set(OpacityComponent(opacity: 1 - fade))
-            if fade >= 1 { transition.removeFromParent(); self.transition = nil }
-        }
-        cueElapsed += dt
-        let cueProgress = min(1, cueElapsed / cueDuration)
-        let p = (Double(cueIndex) + cueProgress) / Double(chapter.cues.count)
-        let step = Int(p * 50)
-        if step != reportedProgress { progress = p; reportedProgress = step }
-        let beat = min(3, Int(p * 4))
-        if beat != demonstrationBeat {
-            demonstrationBeat = beat
-            if chapter.title == "Storm Pass" { GameSFX.shared.playWindWhoosh() }
-            else if chapter.title == "Aegis", beat == 2 { GameSFX.shared.playShieldBreak() }
-            else if ["The track comes to you", "Close Call"].contains(chapter.title), beat == 2 { GameSFX.shared.playNearMiss() }
-        }
-        if originHead == nil, let head = tracking.head { originHead = head }
-        let headDelta = tracking.head.flatMap { head in originHead.map { head - $0 } }
-        if chapter.title == "The track comes to you" || chapter.title == "Choose your next world" {
-            if let headDelta, !gateCommitted {
-                if abs(headDelta.x) > 0.06 { playerSteering = true }
-                if playerSteering {
-                    theater.selectedLane = headDelta.x < -0.06 ? 0 : headDelta.x > 0.06 ? 2 : 1
-                    if chapter.title == "The track comes to you", theater.selectedLane != 1 {
-                        reward("Opening found. Keep your head and hands in the clear lane.")
-                    }
-                }
-            }
-            if chapter.title == "Choose your next world", p >= 0.82, !gateCommitted {
-                gateCommitted = true
-                interaction = ["Left", "Center", "Right"][theater.selectedLane] + " rift selected."
-                GameSFX.shared.playJunctionCommit(risk: .stable, laneIndex: theater.selectedLane)
-            }
-        }
-        let localHands = tracking.hands.map { hand in hand.map { root.convert(position: $0, from: root.parent) } }
-        if chapter.title == "Reach for gold", !succeeded {
-            if localHands.compactMap({ $0 }).contains(where: { distance($0, theater.token.position) < 0.11 }) {
-                reward("Caught! Your token count and score bonus increase.")
-            }
-        }
-        if chapter.title == "Lattice Forge", !succeeded, !forgeDemonstrating {
-            let headLocal = tracking.head.map { root.convert(position: $0, from: root.parent) }
-            let candidateIndex = lockedHandIndex ?? localHands.indices.filter { localHands[$0] != nil }.max { a, b in
-                guard let headLocal, let left = localHands[a], let right = localHands[b] else { return false }
-                let target = normalize(theater.shape.position - headLocal)
-                let leftDirection = left - headLocal
-                let rightDirection = right - headLocal
-                guard length(leftDirection) > 0.1 else { return true }
-                guard length(rightDirection) > 0.1 else { return false }
-                return dot(normalize(leftDirection), target) < dot(normalize(rightDirection), target)
-            }
-            if let headLocal, let candidateIndex, localHands.indices.contains(candidateIndex), let hand = localHands[candidateIndex] {
-                if trackingInterrupted, handLock != nil {
-                    handLock = hand
-                    shapeStart = theater.shape.position
-                }
-                trackingInterrupted = false
-                lastHandTime = elapsed
-                let direction = hand - headLocal
-                let target = theater.shape.position - headLocal
-                let aligned = length(direction) > 0.1 && dot(normalize(direction), normalize(target)) > 0.96
-                if handLock == nil {
-                    aimTime = aligned ? aimTime + dt : 0
-                    if aimTime > 0.3 {
-                        handLock = hand
-                        lockedHandIndex = candidateIndex
-                        shapeStart = theater.shape.position
-                        interaction = "Locked. Move your hand to guide the shape into the glowing slot."
-                    }
-                }
-                if let handLock {
-                    var desired = shapeStart + (hand - handLock) * 2.5
-                    desired.x = min(0.38, max(-0.38, desired.x))
-                    desired.y = min(0.25, max(-0.15, desired.y))
-                    desired.z = theater.slot.position.z
-                    theater.shape.position += (desired - theater.shape.position) * min(1, Float(dt) * 10)
-                    if distance(theater.shape.position, theater.slot.position) < 0.07 {
-                        reward("Perfect fit. Filling every slot opens the door.")
-                    }
-                }
-            } else {
-                trackingInterrupted = true
-                if elapsed - lastHandTime > 2 {
-                    handLock = nil
-                    lockedHandIndex = nil
-                    aimTime = 0
-                }
-            }
-        }
-        // Complete a watchable example after the invitation, even if a player
-        // acquired a shape but left it outside the slot.
-        if chapter.title == "Lattice Forge", cueIndex >= 2, !succeeded {
-            if !forgeDemonstrating {
-                forgeDemonstrating = true
-                handLock = nil
-                theater.beginForgeDemonstration()
-                interaction = "Watch the final shape settle into its matching slot."
-            }
-        }
-        theater.animate(time: Float(elapsed), progress: Float(p), reduced: reduceMotion,
-                        interactive: handLock != nil, succeeded: succeeded, steering: playerSteering)
-        if index == 0, let openingSurface, p < 0.5, !reduceMotion {
-            let u = Float(p * 2)
-            let smooth = u * u * (3 - 2 * u)
-            let destination = SIMD3<Float>(0, 0, -0.53)
-            var position = openingSurface * (1 - smooth) + destination * smooth
-            position.y += sin(u * .pi) * 0.12
-            theater.token.setPosition(position, relativeTo: root)
-        }
-        if index > 0, let departure = tokenDeparture, elapsed < 0.6, !reduceMotion {
-            let u = Float(elapsed / 0.6)
-            let ease = u * u * (3 - 2 * u)
-            let destination = theater.token.position(relativeTo: root)
-            var position = departure * (1 - ease) + destination * ease
-            position.y += sin(u * .pi) * 0.06
-            theater.token.setPosition(position, relativeTo: root)
-        }
-        var audioFlow: Float = 1
-        if chapter.title == "Take a breath" {
-            audioFlow = p < 0.3 ? Float(max(0, 1 - p / 0.3)) : p < 0.65 ? 0 : Float(min(1, (p - 0.65) / 0.2))
-        }
-        audio.tick(delta: Float(dt), flow: audioFlow, speaking: narration && speaker.isSpeaking)
-        if cueProgress >= 1 && (!narration || speechFinished) {
-            if cueIndex + 1 < chapter.cues.count {
-                cueIndex += 1
-                cueElapsed = 0
-                speak()
-            } else if index + 1 < TutorialChapter.all.count {
-                seek(index + 1)
-            } else {
-                UserDefaults.standard.set(true, forKey: "tutorial.completed.v2")
-                paused = true
-            }
+    func next() {
+        if !isLastStep { selectStep(stepIndex + 1) }
+        else {
+            completedLessons.insert(lesson)
+            if lessonNumber < lesson.section.lessons.count { select(lesson.section.lessons[lessonNumber]) }
         }
     }
 
+    func completeBasics() {
+        completedLessons.formUnion(TutorialSection.basics.lessons)
+        UserDefaults.standard.set(true, forKey: "tutorial.completed.v3")
+    }
+    func stop() { active = false; paused = true }
     func remove() { stop(); root.removeFromParent(); controls.removeFromParent() }
+
+    func tick(_ delta: Double) {
+        guard active, !paused, !isFinished, delta.isFinite, delta > 0 else { return }
+        elapsed = min(duration, elapsed + min(delta, 0.1))
+        let p = elapsed / duration
+        let quantized = Int(p * 60)
+        if quantized != lastProgress {
+            progress = p
+            lastProgress = quantized
+        }
+        // A held final pose never jumps to another mechanic or loops under text
+        // the player is still reading. Step changes happen only on user input.
+        render(Float(p))
+    }
+
+    private func render(_ p: Float) {
+        theater.animate(lesson: lesson, step: stepIndex, progress: p,
+                        reduced: reduceMotion, selectedLane: selectedLane, modifier: modifier)
+    }
+
+    var demoStatus: String {
+        let resolved = progress >= 0.72
+        switch lesson {
+        case .space: return stepIndex == 0 ? "Three lanes · You start here" : "The track moves toward you"
+        case .dodge, .emberRun, .ghostGlass: return stepIndex == 0 ? "Middle lane blocked · Both sides open" : resolved ? "Clear of the wall" : "Head and hands move together"
+        case .tokens:
+            if stepIndex == 2 { return "Bonus +\(60 - Int(progress * 10))% · Gradually drains between rewards" }
+            return resolved ? "Collected · +1 token · Bonus increased" : "Touch with either hand · No pinch"
+        case .pause: return stepIndex == 0 ? (resolved ? "Outside the track · Paused" : "Stepping out · Slowing down") : (resolved ? "Back in the start area · Moving" : "Returning to the start area")
+        case .rifts: return ["Left: Ghost Glass", "Middle: Crystal Cave", "Right: Storm Pass"][selectedLane] + (stepIndex == 2 && resolved ? " · Chosen" : "")
+        case .crystalCave: return stepIndex == 0 ? "Blue + coral · Different types" : resolved ? (stepIndex == 2 ? "One charged half · 50 tokens" : "Merged · 5 tokens") : "Bring the different halves together"
+        case .vectorFoundry: return stepIndex == 0 ? (resolved ? "Shape locked" : "Aim and hold briefly") : stepIndex == 1 ? (resolved ? "Cube fitted · One slot remains" : "Move your hand toward the square slot") : resolved ? "Every slot filled · Door open" : "Fit the remaining sphere"
+        case .lowCrawl: return stepIndex == 0 ? "Opening below the barrier" : "Head stays below until the barrier passes"
+        case .summitStep: return stepIndex == 0 ? "Low hurdle approaching" : "Small rise as the hurdle passes"
+        case .stormPass: return stepIndex == 0 ? "Wind shifts the obstacle right" : "New opening on the left"
+        case .orbitGate: return stepIndex == 0 ? "Head inside the hoop" : "Head inside the rotating gap"
+        case .difficulty: return stepIndex == 2 ? "Left: Token Surge · Middle: Aegis · Right: None" : "Left: Stable · Middle: Charged · Right: Unstable"
+        case .modifiers:
+            switch modifier {
+            case .aegis: return resolved ? "Shield spent · Your run continues" : "Shield ready · One collision protected"
+            case .tokenSurge: return resolved ? "One pickup · Two tokens" : "Token Surge · Double token value"
+            case .overdrive: return "The same distance · 25% more points"
+            case .magnet: return "Wider reach · Your head stays in its lane"
+            case .closeCall: return resolved ? "Close slip · Double points and bonus gain" : "Keep your head and hands clear of the wall"
+            case .bonusBank: return "Same starting bonus · Half the drain"
+            case nil: return ""
+            }
+        case .modes: return ["Choose one of three destinations", "Crystal Cave · The same biome throughout", "Your selection · A shuffled route", "The same seeded route for every player"][stepIndex]
+        case .ready: return "Clear lane. Gold tokens. Your next world."
+        }
+    }
 }
 
 struct TutorialControls: View {
-    @State private var details = false
     @ObservedObject var tutorial: SpatialTutorial
     let close: () -> Void
+    let returnToSetup: () -> Void
     let startNormal: () -> Void
+
+    private var lesson: TutorialLesson { tutorial.lesson }
+    private var section: TutorialSection { lesson.section }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("HOW TO PLAY").font(.caption.monospaced()).foregroundStyle(SlipframeStyle.ice)
+        VStack(spacing: 0) {
+            HStack(spacing: 20) {
+                HStack(spacing: 10) {
+                    SlipframeMark().frame(width: 27, height: 30)
+                    Text("How to play").font(.system(size: 21, weight: .semibold))
+                }
                 Spacer()
-                Toggle("Narration", isOn: $tutorial.narration).toggleStyle(.button)
-                Button("Done", action: close).buttonStyle(ConsoleButtonStyle())
-            }
-            Text(tutorial.chapter.title).font(.system(size: 27, weight: .semibold))
-            Text(tutorial.caption)
-                .font(.system(size: 21, weight: .medium))
-                .frame(maxWidth: .infinity, minHeight: 74, alignment: .leading)
-                .accessibilityAddTraits(.updatesFrequently)
-            if !tutorial.interaction.isEmpty {
-                Text(tutorial.interaction).foregroundStyle(SlipframeStyle.ice)
-            }
-            DisclosureGroup("Full explanation", isExpanded: $details) {
-                ScrollView { Text(tutorial.chapter.text).font(.system(size: 16)) }.frame(height: 110)
-            }
-            .onChange(of: details) { _, expanded in
-                if expanded { tutorial.paused = true }
-            }
-            .onChange(of: tutorial.index) { _, _ in details = false }
-            if tutorial.index == TutorialChapter.all.count - 1 {
-                HStack {
-                    Button("Start Normal", action: startNormal).buttonStyle(ConsoleButtonStyle(prominent: true))
-                    Button("Choose a mode", action: close).buttonStyle(ConsoleButtonStyle())
-                    Button("Replay from beginning") { tutorial.seek(0); tutorial.paused = false }
-                        .buttonStyle(ConsoleButtonStyle())
+                ForEach(TutorialSection.allCases) { item in
+                    Button(item.rawValue) { tutorial.selectSection(item) }
+                        .buttonStyle(ConsoleButtonStyle(selected: section == item))
+                        .accessibilityAddTraits(section == item ? .isSelected : [])
                 }
+                Button(action: close) { Image(systemName: "xmark").frame(width: 20) }
+                    .buttonStyle(ConsoleButtonStyle())
+                    .accessibilityLabel("Close How to play")
             }
-            ScrollView {
-                TutorialExamplePanel(tutorial: tutorial)
-            }
-            .frame(height: 180)
-            ProgressView(value: tutorial.progress).tint(SlipframeStyle.ice)
-            HStack {
-                Button("Previous") { tutorial.seek(tutorial.index - 1) }.disabled(tutorial.index == 0)
-                Button(tutorial.paused ? "Resume" : "Pause") { tutorial.paused.toggle() }
-                Button("Replay") { tutorial.seek(tutorial.index); tutorial.paused = false }
-                Button("Next") { tutorial.seek(tutorial.index + 1) }.disabled(tutorial.index == TutorialChapter.all.count - 1)
-            }.buttonStyle(ConsoleButtonStyle())
-            ScrollView(.horizontal) {
-                HStack {
-                    ForEach(TutorialChapter.all) { chapter in
-                        Button(chapter.title) { tutorial.seek(chapter.id) }
-                            .buttonStyle(ConsoleButtonStyle(selected: chapter.id == tutorial.index))
+            .padding(.horizontal, 24).padding(.vertical, 16)
+            Rectangle().fill(SlipframeStyle.line).frame(height: 1)
+
+            HStack(alignment: .top, spacing: 24) {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        ConsoleCaption(title: "Miniature demonstration")
+                        Spacer()
+                        Text(tutorial.reduceMotion ? "Still poses" : tutorial.isFinished ? "Final pose" : tutorial.paused ? "Paused" : "Playing")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(SlipframeStyle.muted)
                     }
+                    // The RealityKit miniature is placed in front of this region.
+                    // No duplicate RealityView, invisible gesture targets, or
+                    // physical reaching into an attachment is needed.
+                    Color.clear.frame(height: 224)
+                        .accessibilityLabel("Miniature example: " + tutorial.demoStatus)
+                    Slider(value: Binding(get: { tutorial.progress }, set: { tutorial.scrub($0) }), in: 0...1)
+                        .tint(SlipframeStyle.ice)
+                        .frame(height: 20)
+                        .accessibilityLabel("Demonstration timeline")
+                        .accessibilityValue("\(Int(tutorial.progress * 100)) percent")
+                    demonstrationReadout
+                        .frame(maxWidth: .infinity, minHeight: 40, maxHeight: 40, alignment: .leading)
+                        .accessibilityLabel(tutorial.demoStatus)
+                    HStack(spacing: 8) {
+                        Button { tutorial.replay() } label: { Label("Replay", systemImage: "arrow.counterclockwise") }
+                        Button {
+                            if tutorial.isFinished { tutorial.replay() }
+                            else { tutorial.paused.toggle() }
+                        } label: {
+                            Label(tutorial.paused || tutorial.isFinished ? "Play" : "Pause",
+                                  systemImage: tutorial.paused || tutorial.isFinished ? "play.fill" : "pause.fill")
+                        }
+                        Spacer()
+                        if lesson == .rifts, tutorial.stepIndex > 0 {
+                            ForEach(0..<3) { lane in
+                                Button(["Left", "Middle", "Right"][lane]) { tutorial.chooseLane(lane) }
+                                    .buttonStyle(ConsoleButtonStyle(selected: tutorial.selectedLane == lane))
+                            }
+                        }
+                    }
+                    .buttonStyle(ConsoleButtonStyle())
+                    .labelStyle(.titleAndIcon)
+                }
+                .frame(width: 456)
+
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack {
+                        ConsoleCaption(title: "\(section == .basics ? "Lesson" : "Guide") \(tutorial.lessonNumber) of \(section.lessons.count)", color: SlipframeStyle.ice)
+                        Spacer()
+                        Menu {
+                            ForEach(section.lessons) { item in
+                                Button { tutorial.select(item, resume: true) } label: {
+                                    if tutorial.completedLessons.contains(item) {
+                                        Label(item.title, systemImage: "checkmark")
+                                    } else { Text(item.title) }
+                                }
+                            }
+                        } label: {
+                            Label("Lessons", systemImage: "list.bullet")
+                                .font(.system(size: 13, weight: .medium))
+                                .frame(minHeight: 36)
+                        }
+                        .accessibilityLabel("Choose a lesson")
+                    }
+                    Text(lesson.title).font(.system(size: 28, weight: .semibold))
+                        .accessibilityAddTraits(.isHeader)
+                    Text(lesson.subtitle).font(.system(size: 15))
+                        .foregroundStyle(SlipframeStyle.muted)
+                    HStack(spacing: 6) {
+                        ForEach(lesson.steps.indices, id: \.self) { index in
+                            Button { tutorial.selectStep(index) } label: {
+                                Text("\(index + 1)").frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(ConsoleButtonStyle(selected: index == tutorial.stepIndex))
+                            .accessibilityLabel("Step \(index + 1): \(lesson.steps[index].title)")
+                            .accessibilityAddTraits(index == tutorial.stepIndex ? .isSelected : [])
+                        }
+                    }
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text(tutorial.step.title).font(.system(size: 20, weight: .semibold))
+                            Text(tutorial.step.instruction).font(.system(size: 18))
+                                .fixedSize(horizontal: false, vertical: true)
+                            Text(tutorial.step.detail).font(.system(size: 15))
+                                .foregroundStyle(SlipframeStyle.muted)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .id("\(lesson.rawValue)-\(tutorial.stepIndex)")
+                    Spacer(minLength: 0)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(24)
+            .frame(maxHeight: .infinity, alignment: .top)
+
+            Rectangle().fill(SlipframeStyle.line).frame(height: 1)
+            HStack(spacing: 12) {
+                Button { tutorial.previous() } label: { Label("Back", systemImage: "chevron.left") }
+                    .buttonStyle(ConsoleButtonStyle())
+                    .disabled(tutorial.lessonNumber == 1 && tutorial.stepIndex == 0)
+                Text("Step \(tutorial.stepIndex + 1) of \(lesson.steps.count)")
+                    .font(.system(size: 13)).foregroundStyle(SlipframeStyle.muted)
+                Spacer()
+                if lesson == .ready {
+                    Button("Choose a mode") { tutorial.completeBasics(); returnToSetup() }
+                        .buttonStyle(ConsoleButtonStyle())
+                    Button("Start Normal") { tutorial.completeBasics(); startNormal() }
+                        .buttonStyle(ConsoleButtonStyle(prominent: true))
+                } else if tutorial.isLastStep && tutorial.lessonNumber == section.lessons.count {
+                    Button("Done") { tutorial.next(); close() }.buttonStyle(ConsoleButtonStyle(prominent: true))
+                } else {
+                    Button {
+                        tutorial.next()
+                    } label: {
+                        Label(tutorial.isLastStep ? "Next: \(section.lessons[tutorial.lessonNumber].title)" : "Next step", systemImage: "chevron.right")
+                            .lineLimit(1)
+                    }
+                    .buttonStyle(ConsoleButtonStyle(prominent: true))
                 }
             }
+            .padding(.horizontal, 24).padding(.vertical, 14)
         }
-        .padding(20).frame(width: 620)
+        .frame(width: 920, height: 600)
         .foregroundStyle(.white)
-        .background(SlipframeStyle.ink, in: RoundedRectangle(cornerRadius: 22))
-        .glassBackgroundEffect(in: RoundedRectangle(cornerRadius: 22))
+        .environment(\.colorScheme, .dark)
+        .background {
+            RoundedRectangle(cornerRadius: 28)
+                .fill(.linearGradient(colors: [SlipframeStyle.panel, SlipframeStyle.ink],
+                                      startPoint: .topLeading, endPoint: .bottomTrailing))
+        }
+        .glassBackgroundEffect(in: RoundedRectangle(cornerRadius: 28))
+        .overlay { RoundedRectangle(cornerRadius: 28).strokeBorder(SlipframeStyle.line).allowsHitTesting(false) }
+    }
+
+    @ViewBuilder
+    private var demonstrationReadout: some View {
+        let collected = tutorial.progress >= 0.72
+        if lesson == .tokens, tutorial.stepIndex < 2 {
+            HStack(spacing: 36) {
+                ConsoleMetric(title: "Example tokens", value: collected ? "1" : "0", color: SlipframeStyle.amber, size: 20)
+                ConsoleMetric(title: "Example bonus", value: collected ? "+25%" : "+20%", color: SlipframeStyle.ice, size: 20)
+            }
+        } else if lesson == .tokens {
+            bonusComparison(title: "Bonus between pickups", amount: 60 - Int(tutorial.playheadSeconds / 0.75))
+        } else if let modifier = tutorial.modifier {
+            switch modifier {
+            case .tokenSurge:
+                HStack(spacing: 36) {
+                    ConsoleMetric(title: "Normal", value: collected ? "1 token" : "0 tokens", size: 20)
+                    ConsoleMetric(title: "Token Surge", value: collected ? "2 tokens" : "0 tokens", color: SlipframeStyle.amber, size: 20)
+                }
+            case .aegis:
+                HStack(spacing: 36) {
+                    ConsoleMetric(title: "Aegis", value: collected ? "Shield spent" : "Shield ready", color: SlipframeStyle.ice, size: 20)
+                    ConsoleMetric(title: "Example bonus", value: collected ? "+40%" : "+80%", size: 20)
+                }
+            case .overdrive:
+                HStack(spacing: 36) {
+                    ConsoleMetric(title: "Normal distance points", value: "\(Int(tutorial.progress * 100))", size: 20)
+                    ConsoleMetric(title: "With Overdrive", value: "\(Int(tutorial.progress * 125))", color: SlipframeStyle.ice, size: 20)
+                }
+            case .bonusBank:
+                HStack(spacing: 24) {
+                    bonusComparison(title: "Normal · 30s comparison", amount: 80 - Int(tutorial.progress * 30 / 0.75))
+                    bonusComparison(title: "Bonus Bank · Same interval", amount: 80 - Int(tutorial.progress * 30 / 1.5))
+                }
+            default:
+                Text(tutorial.demoStatus).font(.system(size: 14, weight: .medium)).foregroundStyle(SlipframeStyle.ice)
+            }
+        } else {
+            Text(tutorial.demoStatus).font(.system(size: 14, weight: .medium)).foregroundStyle(SlipframeStyle.ice)
+        }
+    }
+
+    private func bonusComparison(title: String, amount: Int) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(title).font(.system(size: 12)).foregroundStyle(SlipframeStyle.muted)
+                Spacer(minLength: 6)
+                Text("+\(amount)%").font(.system(size: 15, weight: .semibold)).monospacedDigit()
+            }
+            GeometryReader { geometry in
+                Capsule().fill(.white.opacity(0.08))
+                Capsule().fill(SlipframeStyle.ice)
+                    .frame(width: geometry.size.width * CGFloat(min(100, max(0, amount))) / 100)
+            }
+            .frame(height: 4)
+        }
     }
 }
 
-/// A deterministic miniature stage. Seeking reconstructs a chapter without leaving
-/// particles, interactions, or animation callbacks from the previous chapter alive.
+/// Small, deliberately diagrammatic geometry. Every frame is computed from the
+/// current lesson, step, and progress; no callbacks or accumulated transforms.
 @MainActor
 final class TutorialTheater {
     let root = Entity()
-    let token = Entity()
-    let shape = Entity()
-    let slot = Entity()
-    private let runner = Entity()
-    private let portal = Entity()
-    private let track = Entity()
+    private let actor = Entity()
+    private let leftHand = Entity()
+    private let rightHand = Entity()
+    private let hazards = Entity()
     private let props = Entity()
+    private let portal = Entity()
+    private let token = Entity()
     private let shield = Entity()
-    private let glow = Entity()
-    private let room = Entity()
-    private let demoHands = Entity()
-    private let burst = Entity()
+    private let shape = Entity()
+    private let secondShape = Entity()
+    private let reward = Entity()
     private var walls: [Entity] = []
-    private var pickups: [Entity] = []
     private var gates: [Entity] = []
     private var halves: [Entity] = []
-    private var bonusBars: [Entity] = []
-    private var title = ""
-    private var recenterStarted: Float?
-    private var currentTime: Float = 0
-    private var previewDestinations: [EnvironmentID] = []
-    private var forgeDemoStart: SIMD3<Float>?
-    var selectedLane = 1
+    private var slots: [Entity] = []
+    private let pale = UIColor(red: 0.87, green: 0.94, blue: 0.96, alpha: 1)
+    private let blue = UIColor(red: 0.39, green: 0.71, blue: 0.81, alpha: 1)
+    private let gold = UIColor(red: 0.98, green: 0.73, blue: 0.38, alpha: 1)
+    private let coral = UIColor(red: 0.94, green: 0.43, blue: 0.36, alpha: 1)
 
     private func box(_ size: SIMD3<Float>, _ color: UIColor) -> ModelEntity {
-        ModelEntity(mesh: .generateBox(size: size), materials: [UnlitMaterial(color: color)])
+        ModelEntity(mesh: .generateBox(size: size, cornerRadius: min(0.006, min(size.x, min(size.y, size.z)) / 3)),
+                    materials: [SimpleMaterial(color: color, roughness: 0.72, isMetallic: false)])
     }
-
-    private func asset(_ name: String, size: Float, color: UIColor = .systemCyan) -> Entity {
+    private func sphere(_ radius: Float, _ color: UIColor) -> ModelEntity {
+        ModelEntity(mesh: .generateSphere(radius: radius), materials: [UnlitMaterial(color: color)])
+    }
+    private func asset(_ name: String, size: Float, fallback: UIColor) -> Entity {
         let holder = Entity()
-        let model = BiomeAssetCatalog.clone(name) ?? box([size, size, size], color)
+        guard let model = BiomeAssetCatalog.clone(name) else {
+            holder.addChild(sphere(size * 0.5, fallback)); return holder
+        }
+        // Tutorial assets are visual only. Imported input / collision components
+        // must not intercept buttons on the attachment behind the miniature.
+        func stripInput(_ entity: Entity) {
+            entity.components.remove(CollisionComponent.self)
+            entity.components.remove(InputTargetComponent.self)
+            for child in entity.children { stripInput(child) }
+        }
+        stripInput(model)
         let bounds = model.visualBounds(relativeTo: model)
         let scale = size / max(0.001, max(bounds.extents.x, max(bounds.extents.y, bounds.extents.z)))
-        model.scale = SIMD3(repeating: scale)
-        model.position = -bounds.center * scale
+        model.scale *= SIMD3(repeating: scale)
+        model.position -= bounds.center * scale
         holder.addChild(model)
         return holder
     }
-
-    private func ring(radius: Float, color: UIColor, gap: Int = 0) -> Entity {
-        let ring = Entity()
-        for i in gap..<48 {
-            let a = Float(i) / 48 * 2 * Float.pi
-            let bar = box([0.008, radius * 0.14, 0.008], color)
+    private func outline(width: Float, height: Float, color: UIColor) -> Entity {
+        let entity = Entity()
+        for side in 0..<4 {
+            let bar = box(side < 2 ? [width, 0.004, 0.005] : [0.004, height, 0.005], color)
+            bar.position = side < 2 ? [0, Float(side * 2 - 1) * height / 2, 0]
+                : [Float((side - 2) * 2 - 1) * width / 2, 0, 0]
+            entity.addChild(bar)
+        }
+        return entity
+    }
+    private func ring(_ radius: Float, color: UIColor, gap: Range<Int>? = nil) -> Entity {
+        let entity = Entity()
+        for i in 0..<64 {
+            if let gap, gap.contains(i) { continue }
+            let a = Float(i) / 64 * 2 * Float.pi
+            let bar = box([0.006, radius * 0.105, 0.006], color)
             bar.position = [cos(a) * radius, sin(a) * radius, 0]
             bar.orientation = simd_quatf(angle: a, axis: [0, 0, 1])
-            ring.addChild(bar)
+            entity.addChild(bar)
         }
-        return ring
+        return entity
+    }
+    private func add(_ entity: Entity, to parent: Entity, at position: SIMD3<Float>) {
+        parent.addChild(entity); entity.position = position
     }
 
-    private func destinationWindow(_ biome: EnvironmentID, risk: RiftRisk, modifier: RiftModifier?) -> Entity {
-        let window = GameVisualBuilders.makeJunctionPortal(
-            option: RiftPortalOption(environment: biome, risk: risk, modifier: modifier), seed: 42
-        )
-        window.scale = SIMD3(repeating: 0.12)
-        return window
-    }
-
-    private func interactive(_ entity: Entity, name: String) {
-        entity.name = name
-        entity.generateCollisionShapes(recursive: true)
-        entity.components.set(InputTargetComponent())
-        entity.components.set(HoverEffectComponent())
-    }
-
-    func build(_ chapter: TutorialChapter) {
-        root.transform = .identity
-        for child in root.children { child.removeFromParent() }
-        for container in [token, shape, slot, runner, portal, track, props, shield, glow, room, demoHands, burst] {
-            for child in container.children { child.removeFromParent() }
+    func build(_ lesson: TutorialLesson) {
+        for child in Array(root.children) { child.removeFromParent() }
+        for container in [actor, leftHand, rightHand, hazards, props, portal, token, shield, shape, secondShape, reward] {
+            for child in Array(container.children) { child.removeFromParent() }
             container.transform = .identity
             container.isEnabled = true
             container.components.set(OpacityComponent(opacity: 1))
             root.addChild(container)
         }
-        walls = []; pickups = []; gates = []; halves = []; bonusBars = []
-        title = chapter.title
-        recenterStarted = nil
-        forgeDemoStart = nil
-        previewDestinations = []
-        for i in -4...4 {
-            let horizontal = box([0.9, 0.002, 0.002], .systemCyan)
-            horizontal.position = [0, Float(i) * 0.1, -0.55]
-            room.addChild(horizontal)
-            let vertical = box([0.002, 0.8, 0.002], .systemCyan)
-            vertical.position = [Float(i) * 0.1, 0, -0.55]
-            room.addChild(vertical)
+        walls = []; gates = []; halves = []; slots = []
+        let base = box([0.73, 0.012, 0.89], UIColor(red: 0.055, green: 0.09, blue: 0.12, alpha: 1))
+        add(base, to: root, at: [0, -0.15, 0])
+        for x: Float in [-0.315, -0.105, 0.105, 0.315] {
+            add(box([0.0015, 0.001, 0.85], blue), to: root, at: [x, -0.143, 0])
         }
-        room.components.set(OpacityComponent(opacity: 0.13))
-        for i in 0..<2 {
-            let hand = Entity()
-            hand.addChild(box([0.04, 0.015, 0.055], .systemCyan))
-            for finger in 0..<4 {
-                let part = box([0.007, 0.008, 0.035], .systemCyan)
-                part.position = [Float(finger) * 0.01 - 0.015, 0, -0.04]
-                hand.addChild(part)
+        let marker = ring(0.07, color: blue)
+        marker.orientation = simd_quatf(angle: -.pi / 2, axis: [1, 0, 0])
+        add(marker, to: root, at: [0, -0.142, 0.30])
+        actor.addChild(sphere(0.025, pale))
+        add(box([0.033, 0.065, 0.022], pale), to: actor, at: [0, -0.052, 0])
+        for x: Float in [-0.012, 0.012] {
+            add(box([0.013, 0.048, 0.014], pale), to: actor, at: [x, -0.103, 0])
+        }
+        for hand in [leftHand, rightHand] {
+            hand.addChild(box([0.020, 0.009, 0.030], pale))
+            for i in 0..<4 {
+                add(box([0.003, 0.005, 0.014], pale), to: hand, at: [Float(i) * 0.005 - 0.0075, 0, -0.021])
             }
-            hand.position = [Float(i * 2 - 1) * 0.2, -0.04, 0.22]
-            demoHands.addChild(hand)
         }
-        for i in 0..<16 {
-            let shard = asset("fx_shard", size: 0.012, color: .systemYellow)
-            shard.name = "spark_" + String(i)
-            burst.addChild(shard)
+        portal.addChild(outline(width: 0.36, height: 0.27, color: blue))
+        portal.position = [0, -0.005, -0.405]
+        if let biome = lesson.biome {
+            let preview = asset("preview_" + biome.rawValue, size: 0.26, fallback: blue)
+            add(preview, to: portal, at: [0, 0, -0.045])
         }
-        burst.isEnabled = false
-        if title == "Find your opening" {
-            let blocker = box([0.025, 0.15, 0.025], .systemRed)
-            blocker.name = "hookBlocker"
-            blocker.position = [-0.16, 0.03, -0.2]
-            props.addChild(blocker)
-        }
-        demoHands.isEnabled = ["Reach for gold", "Crystal Cave", "Lattice Forge", "Magnet"].contains(title)
-        selectedLane = 1
-        for lane in -1...1 {
-            let rail = box([0.003, 0.003, 0.85], .systemCyan)
-            rail.position = [Float(lane) * 0.19, -0.21, 0]
-            track.addChild(rail)
-        }
-        let pad = asset("start_pad", size: 0.18)
-        pad.position = [0, -0.21, 0.3]
-        track.addChild(pad)
-        runner.addChild(ModelEntity(mesh: .generateSphere(radius: 0.025), materials: [UnlitMaterial(color: .white)]))
-        let torso = box([0.027, 0.06, 0.018], .systemCyan)
-        torso.position.y = -0.046
-        runner.addChild(torso)
-        interactive(runner, name: "tutorialRunner")
-        portal.addChild(asset("rift_frame", size: 0.37))
-        portal.position = [0, 0.01, -0.43]
-        portal.addChild(ring(radius: 0.145, color: .systemCyan))
-        token.addChild(asset("token", size: 0.07, color: .systemYellow))
-        interactive(token, name: "tutorialToken")
-        token.position = [0.18, 0, 0.32]
-        glow.addChild(ring(radius: 0.06, color: .systemYellow))
-        glow.isEnabled = false
-        shield.addChild(ring(radius: 0.065, color: .systemMint))
+        token.addChild(asset("token", size: 0.045, fallback: gold))
+        reward.addChild(ring(0.045, color: gold))
+        shield.addChild(ring(0.065, color: blue))
+        reward.isEnabled = false
         shield.isEnabled = false
 
-        let biome = EnvironmentID.allCases.first { $0.displayName == title }
-        if let biome {
-            // Preview meshes retain their authored landscape composition.
-            let scenery = asset("preview_" + biome.rawValue, size: 0.36)
-            scenery.position = [0, 0.03, -0.46]
-            portal.addChild(scenery)
-            if biome == .crystalCave {
-                for (i, name) in ["crystal_azure", "crystal_coral"].enumerated() {
-                    let half = Entity()
-                    let normal = asset(name, size: 0.11)
-                    normal.name = "normal"
-                    half.addChild(normal)
-                    let charged = asset(name + "_charged", size: 0.11)
-                    charged.name = "charged"
-                    charged.isEnabled = false
-                    half.addChild(charged)
-                    let matching = asset("crystal_azure", size: 0.11)
-                    matching.name = "matching"
-                    matching.isEnabled = false
-                    half.addChild(matching)
-                    half.position = [Float(i * 2 - 1) * 0.19, 0, 0]
-                    props.addChild(half); halves.append(half)
-                }
-            } else if biome == .vectorFoundry {
-                shape.addChild(asset("foundry_shape_cube", size: 0.075))
-                shape.position = [-0.23, 0.02, 0.2]
-                for side in 0..<4 {
-                    let edge = box(side < 2 ? [0.09, 0.006, 0.006] : [0.006, 0.09, 0.006], .systemMint)
-                    edge.position = side < 2 ? [0, Float(side * 2 - 1) * 0.045, 0] : [Float((side - 2) * 2 - 1) * 0.045, 0, 0]
-                    slot.addChild(edge)
-                }
-                slot.position = [0.17, 0.1, 0.2]
-                let secondSlot = ring(radius: 0.045, color: .systemCyan)
-                secondSlot.position = [-0.17, 0.1, 0.2]
-                props.addChild(secondSlot)
-                let secondShape = asset("foundry_shape_sphere", size: 0.06)
-                secondShape.name = "secondShape"
-                props.addChild(secondShape)
-                for x in [Float(-0.16), 0.16] {
-                    let panel = asset("foundry_door_panel", size: 0.28)
-                    panel.position = [x, 0, -0.1]
-                    props.addChild(panel); walls.append(panel)
-                }
-            } else if biome == .orbitGate {
-                for i in 0..<3 {
-                    let hoop = ring(radius: 0.1, color: .systemOrange)
-                    if i == 2 {
-                        var vertices: [SIMD3<Float>] = [[0, 0, 0]]
-                        for segment in 12...48 {
-                            let angle = Float(segment) / 48 * 2 * Float.pi
-                            vertices.append([cos(angle) * 0.095, sin(angle) * 0.095, 0])
-                        }
-                        var indices: [UInt32] = []
-                        for triangle in 1..<(vertices.count - 1) {
-                            let n = UInt32(triangle)
-                            indices += [0, n, n + 1, 0, n + 1, n]
-                        }
-                        var descriptor = MeshDescriptor(name: "Tutorial shutter")
-                        descriptor.positions = MeshBuffers.Positions(vertices)
-                        descriptor.primitives = .triangles(indices)
-                        if let mesh = try? MeshResource.generate(from: [descriptor]) {
-                            hoop.addChild(ModelEntity(mesh: mesh, materials: [UnlitMaterial(color: .systemOrange)]))
-                        }
-                    }
-                    hoop.position = [0, -0.07, -Float(i) * 0.23]
-                    props.addChild(hoop); gates.append(hoop)
-                }
+        switch lesson {
+        case .space, .dodge, .emberRun, .ghostGlass, .stormPass, .pause, .modifiers:
+            let wall = Entity()
+            if lesson == .ghostGlass {
+                let glass = box([0.19, 0.255, 0.018], blue)
+                glass.components.set(OpacityComponent(opacity: 0.12))
+                wall.addChild(glass)
+                wall.addChild(outline(width: 0.19, height: 0.255, color: blue))
+            } else { wall.addChild(box([0.19, 0.255, 0.028], coral)) }
+            hazards.addChild(wall); walls.append(wall)
+        case .lowCrawl:
+            let wall = box([0.62, 0.14, 0.035], coral)
+            hazards.addChild(wall); walls.append(wall)
+        case .summitStep:
+            let wall = box([0.62, 0.035, 0.035], coral)
+            hazards.addChild(wall); walls.append(wall)
+        case .crystalCave:
+            for name in ["crystal_azure", "crystal_coral"] {
+                let half = Entity()
+                let normal = asset(name, size: 0.065, fallback: name == "crystal_azure" ? blue : coral)
+                normal.name = "normal"
+                let charged = asset(name + "_charged", size: 0.065, fallback: gold)
+                charged.name = "charged"
+                half.addChild(normal); half.addChild(charged)
+                props.addChild(half); halves.append(half)
             }
-        }
-        let isWallScene = ["The track comes to you", "Ember Run", "Summit Step", "Low Crawl", "Ghost Glass", "Storm Pass", "Take a breath", "Aegis", "Close Call", "Every run tells a story"].contains(title)
-        if isWallScene {
-            for i in 0..<3 {
-                let name = title == "Summit Step" ? "hazard_jump" : title == "Low Crawl" ? "hazard_duck" : "wall_" + (biome?.rawValue ?? "emberRun") + "_0"
-                let wall = asset(name, size: title == "Low Crawl" || title == "Summit Step" ? 0.4 : 0.19, color: .systemRed)
-                wall.position = [Float(i % 2) * 0.19, title == "Low Crawl" ? -0.08 : title == "Summit Step" ? -0.195 : -0.12, -Float(i) * 0.3]
-                if title == "Ghost Glass" { wall.components.set(OpacityComponent(opacity: 0.12)) }
-                props.addChild(wall); walls.append(wall)
+        case .vectorFoundry:
+            shape.addChild(asset("foundry_shape_cube", size: 0.06, fallback: blue))
+            secondShape.addChild(asset("foundry_shape_sphere", size: 0.052, fallback: gold))
+            let square = outline(width: 0.075, height: 0.075, color: blue)
+            let circle = ring(0.037, color: gold)
+            for (i, slot) in [square, circle].enumerated() {
+                add(slot, to: props, at: [Float(i * 2 - 1) * 0.12, 0.025, -0.12]); slots.append(slot)
             }
-        }
-        if ["Choose your next world", "Read the diamonds", "Normal", "Loop", "Playlist", "Daily", "Preview your run"].contains(title) {
+            // Separate lintel/posts leave honest holes, rather than painting
+            // slot outlines over solid panels that shapes appear to pass through.
+            for side in 0..<2 {
+                let panel = Entity()
+                for x: Float in [-0.075, 0.075] { add(box([0.035, 0.22, 0.018], coral), to: panel, at: [x, 0, 0]) }
+                for y: Float in [-0.09, 0.09] { add(box([0.16, 0.04, 0.018], coral), to: panel, at: [0, y, 0]) }
+                add(panel, to: hazards, at: [Float(side * 2 - 1) * 0.12, 0.025, -0.14]); walls.append(panel)
+            }
+        case .orbitGate:
+            let hoop = ring(0.10, color: gold)
+            props.addChild(hoop); gates.append(hoop)
+            // A real annular shutter with a radial opening; no solid fan drawn
+            // across the center and no rotating whole-hoop proxy.
+            let shutter = Entity()
+            for radius: Float in [0.047, 0.057, 0.067, 0.077, 0.087, 0.097] {
+                shutter.addChild(ring(radius, color: coral, gap: 0..<14))
+            }
+            props.addChild(shutter); gates.append(shutter)
+        case .rifts, .difficulty, .modes:
+            portal.isEnabled = false
+            let biomes: [EnvironmentID] = [.ghostGlass, .crystalCave, .stormPass]
             for i in 0..<3 {
-                let gate = Entity()
-                gate.position = [Float(i - 1) * 0.25, 0.02, -0.1]
-                let biome: EnvironmentID = [.emberRun, .crystalCave, .stormPass][i]
-                let preview = destinationWindow(biome, risk: [.stable, .charged, .unstable][i],
-                                                modifier: ([.tokenSurge, .aegis, nil] as [RiftModifier?])[i])
-                preview.name = "destination"
-                gate.addChild(preview)
-                if title == "Read the diamonds" {
-                    for row in 0..<(i + 1) * 2 {
-                        let hazard = box([0.028, 0.05, 0.015], [.systemMint, .systemOrange, .systemRed][i])
-                        hazard.position = [Float(row % 2) * 0.045 - 0.023, -0.15, Float(row) * 0.037]
-                        gate.addChild(hazard)
-                    }
-                }
+                let modifiers: [RiftModifier?] = lesson == .difficulty ? [.tokenSurge, .aegis, nil] : [nil, nil, nil]
+                let gate = GameVisualBuilders.makeJunctionPortal(
+                    option: RiftPortalOption(environment: biomes[i], risk: [.stable, .charged, .unstable][i], modifier: modifiers[i]), seed: 42)
+                gate.scale = SIMD3(repeating: 0.085)
                 props.addChild(gate); gates.append(gate)
             }
-            portal.isEnabled = false
-        }
-        if ["Token Surge", "Magnet", "Overdrive", "Bonus Bank", "Build your bonus"].contains(title) {
-            for i in 0..<5 {
-                let pickup = asset("token", size: 0.045)
-                pickup.position = [0.19, -0.1, -Float(i) * 0.15]
-                props.addChild(pickup); pickups.append(pickup)
-            }
-        }
-        if ["Bonus Bank", "Overdrive", "Build your bonus", "Aegis"].contains(title) {
-            for i in 0..<2 {
-                let bar = box([0.25, 0.015, 0.012], i == 0 ? .white : .systemCyan)
-                bar.position = [0.32, 0.16 - Float(i) * 0.04, 0]
-                props.addChild(bar)
-                bonusBars.append(bar)
-            }
-        }
-        if let modifier = RiftModifier.allCases.first(where: { $0.displayName == title }) {
-            let glyph = asset(chapter.asset, size: 0.11)
-            glyph.position = [-0.38, 0.13, 0]
-            props.addChild(glyph)
-            shield.isEnabled = modifier == .aegis
+        case .tokens, .ready: break
         }
     }
 
-    func setModePreview(_ mode: PlayModeKind, selection: Set<EnvironmentID>, start: EnvironmentID?) {
-        var destinations: [EnvironmentID]
-        switch mode {
-        case .normal: destinations = [.emberRun, .crystalCave, .stormPass]
-        case .solo: destinations = [start ?? selection.first ?? .emberRun]
-        case .playlist:
-            destinations = EnvironmentID.allCases.filter { selection.contains($0) }
-            if let start, let index = destinations.firstIndex(of: start) {
-                destinations.remove(at: index)
-                destinations.insert(start, at: 0)
-            }
-        case .daily: destinations = DailyChallenge.previewSequence(dayKey: DailyChallenge.dayKey(), count: 3)
-        }
-        guard destinations != previewDestinations else { return }
-        previewDestinations = destinations
-        for (i, gate) in gates.enumerated() {
-            gate.isEnabled = i < destinations.count
-            guard i < destinations.count else { continue }
-            gate.children.first(where: { $0.name == "destination" })?.removeFromParent()
-            let preview = destinationWindow(destinations[i], risk: .stable, modifier: nil)
-            preview.name = "destination"
-            gate.addChild(preview)
-        }
+    private func ease(_ t: Float, _ start: Float = 0, _ end: Float = 1) -> Float {
+        let v = min(1, max(0, (t - start) / max(0.001, end - start)))
+        return v * v * (3 - 2 * v)
     }
 
-    func previewRecenter() { recenterStarted = currentTime }
+    func animate(lesson: TutorialLesson, step: Int, progress: Float, reduced: Bool, selectedLane: Int, modifier: RiftModifier?) {
+        // Still poses cover setup, action, and result without spatial animation.
+        let p: Float = reduced ? (progress < 0.28 ? 0 : progress < 0.72 ? 0.55 : 1) : progress
+        let travel = ease(p, 0.12, 0.92)
+        let dodge = ease(p, 0.10, 0.42)
+        let collected = p >= 0.72
+        actor.position = [0, -0.005, 0.28]
+        actor.scale = SIMD3(repeating: 1)
+        leftHand.position = [-0.052, -0.065, 0.26]
+        rightHand.position = [0.052, -0.065, 0.26]
+        leftHand.orientation = simd_quatf()
+        rightHand.orientation = simd_quatf()
+        token.isEnabled = false
+        token.transform = .identity
+        reward.isEnabled = false
+        reward.transform = .identity
+        reward.components.set(OpacityComponent(opacity: 1))
+        shield.isEnabled = false
+        shape.isEnabled = lesson == .vectorFoundry
+        secondShape.isEnabled = lesson == .vectorFoundry
+        hazards.isEnabled = true
+        for wall in walls {
+            wall.transform = .identity
+            wall.isEnabled = true
+            wall.components.set(OpacityComponent(opacity: 1))
+        }
+        for gate in gates { gate.isEnabled = true }
 
-    func beginForgeDemonstration() { forgeDemoStart = shape.position }
-
-    func showTrack(_ visible: Bool) { track.isEnabled = visible }
-    func showGrid(_ visible: Bool) { room.isEnabled = visible }
-
-    private func ease(_ value: Float) -> Float {
-        let x = min(1, max(0, value))
-        return x * x * (3 - 2 * x)
-    }
-
-    private func interval(_ p: Float, _ start: Float, _ end: Float) -> Float {
-        ease((p - start) / max(0.001, end - start))
-    }
-
-    func animate(time: Float, progress: Float, reduced: Bool, interactive: Bool, succeeded: Bool, steering: Bool) {
-        currentTime = time
-        if let recenterStarted {
-            root.position.x = reduced ? 0 : 0.15 * (1 - interval(time - recenterStarted, 0, 0.8))
-        }
-        let p = min(1, progress)
-        // Reduced Motion still teaches every state, with discrete pose changes.
-        let t = reduced ? min(1, floor(p * 6) / 6) : p
-        root.components.set(OpacityComponent(opacity: reduced ? 1 : ease(time / 0.6)))
-        root.scale = SIMD3(repeating: title == "The track comes to you" && !reduced ? 1 + 0.12 * sin(t * .pi) : 1)
-        token.isEnabled = true
-        token.scale = SIMD3(repeating: 1)
-        token.position = [0.19, -0.1, 0.26]
-        token.orientation = simd_quatf(angle: reduced ? 0 : t * 2 * .pi, axis: [0, 1, 0])
-        let dodge = interval(t, 0.2, 0.4)
-        let targetX = steering ? Float(selectedLane - 1) * 0.19 : -0.19 * dodge
-        let smoothX = runner.position.x + (targetX - runner.position.x) * (reduced ? 1 : 0.18)
-        runner.position = [smoothX, -0.1, 0.29]
-        glow.isEnabled = succeeded
-        glow.position = title == "Lattice Forge" ? slot.position : token.position
-        glow.scale = SIMD3(repeating: 1)
-        shield.position = runner.position
-        for (i, wall) in walls.enumerated() {
-            let u = interval(t, 0.12 + Float(i) * 0.17, 0.55 + Float(i) * 0.17)
-            wall.position.z = -0.45 + u * 0.9
-            wall.components.set(OpacityComponent(opacity: title == "Ghost Glass" ? 0.12 : 1 - interval(u, 0.9, 1)))
-            if title == "The track comes to you" {
-                // Either outer lane is a valid first dodge.
-                wall.position.x = 0
+        switch lesson {
+        case .space:
+            actor.position.x = 0
+            walls.first?.position = [0.21, -0.01, step == 0 ? -0.24 : -0.36 + travel * 0.77]
+            token.isEnabled = step > 0
+            token.position = [-0.21, -0.055, -0.36 + travel * 0.77]
+        case .dodge, .emberRun, .ghostGlass:
+            walls.first?.position = [0, -0.01, step == 0 ? -0.24 : -0.36 + travel * 0.88]
+            actor.position.x = step == 0 ? 0 : -0.21 * (step == 2 ? 1 : dodge)
+            if step == 2 { walls.first?.position.z = 0.12 + travel * 0.40 }
+        case .tokens:
+            token.isEnabled = !collected && step < 2
+            token.position = [0.14, -0.045, -0.26 + ease(p, 0.05, 0.72) * 0.48]
+            rightHand.position = [0.052 + ease(p, 0.20, 0.65) * 0.088, -0.045, 0.22]
+            reward.isEnabled = collected && step < 2
+            reward.position = token.position
+            reward.scale = SIMD3(repeating: 1 + ease(p, 0.72, 1) * 0.35)
+            reward.components.set(OpacityComponent(opacity: 1 - ease(p, 0.82, 1) * 0.7))
+            if step == 2 { rightHand.position = [0.052, -0.065, 0.26] }
+        case .pause:
+            let outside: Float = step == 0 ? ease(p, 0.12, 0.48) : 1 - ease(p, 0.18, 0.55)
+            actor.position.x = -0.43 * outside
+            // Braking and return start at the same depth; replaying a new step
+            // never advances a wall through a paused player.
+            let z: Float = step == 0 ? -0.30 + ease(p, 0.05, 0.50) * 0.247 : -0.053 + ease(p, 0.55, 1) * 0.45
+            walls.first?.position = [0.21, -0.01, z]
+        case .rifts, .difficulty, .modes:
+            let normalExample = lesson == .modes && step == 0
+            let choose = (lesson == .rifts && step > 0) || normalExample
+            let choice = normalExample ? 2 : selectedLane
+            let arriving = (lesson == .rifts && step == 2) || normalExample
+            actor.position.x = choose ? Float(choice - 1) * 0.21 * (lesson == .rifts && step == 2 ? 1 : dodge) : 0
+            for (i, gate) in gates.enumerated() {
+                gate.position = [Float(i - 1) * 0.21, -0.01, arriving ? -0.31 + travel * 0.76 : -0.27]
+                var opacity: Float = choose && i != choice ? 0.28 : 1
+                if lesson == .modes, step == 1 { gate.isEnabled = i == 1 }
+                if lesson == .modes, step >= 2 { opacity = i == min(2, Int(p * 3)) ? 1 : 0.23 }
+                gate.components.set(OpacityComponent(opacity: opacity))
             }
-            if title == "Storm Pass" { wall.position.x = 0.19 * interval(t, 0.24, 0.52) }
-            if title == "Take a breath" {
-                let travel: Float = t < 0.3 ? t : t < 0.65 ? 0.3 : t - 0.35
-                wall.position.z = -0.4 + travel * 0.9 - Float(i) * 0.18
-                runner.position.x = 0.36 * (interval(t, 0.16, 0.3) - interval(t, 0.65, 0.8))
+        case .lowCrawl:
+            walls.first?.position = [0, 0.045, step == 0 ? -0.24 : -0.36 + travel * 0.88]
+            if step > 0 {
+                let crouch = ease(p, 0.12, 0.36) * (1 - ease(p, 0.90, 1))
+                actor.position.y -= crouch * 0.085
+                actor.scale.y = 1 - crouch * 0.45
             }
-            if title == "Aegis" {
-                wall.position.x = runner.position.x
-                wall.scale = SIMD3(repeating: max(0.001, 1 - interval(t, 0.48, 0.65)))
-                wall.position.z = -0.45 + min(0.74, t * 1.5)
+        case .summitStep:
+            walls.first?.position = [0, -0.12, step == 0 ? -0.24 : -0.36 + travel * 0.88]
+            if step > 0 { actor.position.y += sin(ease(p, 0.47, 0.91) * .pi) * 0.075 }
+        case .stormPass:
+            walls.first?.position = [ease(p, 0.15, 0.55) * 0.21, -0.01, step == 0 ? -0.24 : -0.36 + travel * 0.88]
+            actor.position.x = step == 0 ? 0 : -0.21 * ease(p, 0.25, 0.55)
+        case .crystalCave:
+            let merge = step == 0 ? Float(0) : ease(p, 0.18, 0.72)
+            for (i, half) in halves.enumerated() {
+                half.findEntity(named: "normal")?.isEnabled = step != 2 || i != 0
+                half.findEntity(named: "charged")?.isEnabled = step == 2 && i == 0
+                half.position = [Float(i * 2 - 1) * (0.15 * (1 - merge) + 0.012), -0.03, 0.18]
+                half.isEnabled = step == 0 || !collected
+                half.components.set(OpacityComponent(opacity: step == 2 && i == 0 ? 1 : 0.85))
             }
-            if title == "Every run tells a story" {
-                runner.position.x = 0
-                wall.position.z = min(0.29, -0.45 + t * 2.4)
-                wall.position.y = -0.12 - interval(t, 0.35, 0.7) * 0.3
-                wall.scale.y = max(0.001, 1 - interval(t, 0.35, 0.7))
-            }
-        }
-        if title == "Aegis" { shield.isEnabled = p < 0.5 }
-        if title == "Summit Step" { runner.position = [0, -0.1 + sin(interval(t, 0.25, 0.65) * .pi) * 0.13, 0.29] }
-        if title == "Low Crawl" { runner.position = [0, -0.1 - sin(interval(t, 0.25, 0.65) * .pi) * 0.06, 0.29] }
-        if title == "Close Call" { runner.position.x = 0.12; glow.isEnabled = p > 0.5; glow.position = runner.position }
-        for (i, pickup) in pickups.enumerated() {
-            let u = interval(t, Float(i) * 0.1, 0.48 + Float(i) * 0.1)
-            pickup.position = [title == "Magnet" ? 0.35 * (1 - u) : 0.19, -0.1, -0.4 + u * 0.69]
-            pickup.scale = SIMD3(repeating: max(0.001, 1 - interval(u, 0.85, 1)))
-        }
-        for (i, bar) in bonusBars.enumerated() {
-            let amount: Float
-            switch title {
-            case "Bonus Bank": amount = 1 - p * (i == 0 ? 1 : 0.5)
-            case "Aegis": amount = p < 0.5 ? 0.8 : 0.4
-            case "Overdrive": amount = p * (i == 0 ? 0.75 : 0.9375)
-            default: amount = p < 0.65 ? 0.2 + p : 0.85 - (p - 0.65) * 0.4
-            }
-            bar.scale.x = max(0.001, min(1, amount))
-            bar.position.x = 0.2 + 0.125 * amount
-        }
-        for (i, gate) in gates.enumerated() {
-            if title == "Gyre Gate" {
-                let segment = min(2, Int(p * 3))
-                let local = p * 3 - Float(segment)
-                gate.isEnabled = i == segment
-                let u = interval(reduced ? floor(local * 3) / 3 : local, 0.05, 0.95)
-                gate.position.z = -0.45 + u * 0.9
-                // Keep the first opening head-on, tilt the next hoop, then
-                // bring the shutter wedge to the runner at the crossing.
-                let angle = i == 2 ? (1 - u) * .pi : i == 1 ? sin(u * .pi * 2) * 0.55 : 0
-                gate.orientation = simd_quatf(angle: angle, axis: i == 2 ? [0, 0, 1] : [0, 1, 0])
-                runner.position.x = i == 2 ? 0.045 : 0
-                runner.position.y = i == 2 ? -0.025 : -0.07
-            } else {
-                let chosen = title == "Loop" ? 0 : steering ? selectedLane : 1
-                let commitment = interval(t, 0.65, 0.9)
-                gate.position.x = Float(i - 1) * 0.25
-                gate.scale = SIMD3(repeating: i == chosen ? 1 : 1 - commitment * 0.35)
-                if title == "Choose your next world" {
-                    gate.position.z = -0.35 + t * 0.75
-                    if i != chosen { gate.position.x += Float(i < chosen ? -1 : 1) * commitment * 0.3 }
-                    token.position = [Float(chosen - 1) * 0.25, 0, -0.35 + t * 0.75]
-                }
-            }
-        }
-        for (i, half) in halves.enumerated() {
-            let phase = min(5, Int(p * 6))
-            let local = (p * 6) - Float(phase)
-            let merge = interval(local, 0.15, 0.75)
-            let sameType = phase == 1
-            let dropping = phase == 2
-            half.children.first(where: { $0.name == "normal" })?.isEnabled = !sameType && phase < 4
-            half.children.first(where: { $0.name == "matching" })?.isEnabled = sameType
-            half.children.first(where: { $0.name == "charged" })?.isEnabled = phase >= 4 && (i == 0 || phase == 5)
-            if phase == 4 && i == 1 { half.children.first(where: { $0.name == "normal" })?.isEnabled = true }
-            half.position = [Float(i * 2 - 1) * (sameType ? max(0.06, 0.2 * (1 - merge)) : 0.2 * (1 - merge)), dropping ? -merge * 0.17 : 0, 0.08]
-            let vanish = sameType ? Float(0) : interval(local, 0.75, 0.9)
-            half.scale = SIMD3(repeating: max(0.001, 1 - vanish))
-            token.isEnabled = !sameType && !dropping && local > 0.75
-            token.position = [0, 0, 0.08]
-            glow.isEnabled = token.isEnabled
-            glow.position = token.position
-        }
-        for (i, hand) in demoHands.children.enumerated() {
-            if title == "Crystal Cave" {
-                let phase = min(5, Int(p * 6))
-                let local = p * 6 - Float(phase)
-                let opening = phase == 2
+            leftHand.position = [-0.15 * (1 - merge) - 0.012, -0.05, 0.20]
+            rightHand.position = [0.15 * (1 - merge) + 0.012, -0.05, 0.20]
+            for hand in [leftHand, rightHand] {
                 for finger in hand.children.dropFirst() {
-                    finger.orientation = simd_quatf(angle: opening ? 0 : 1.2, axis: [1, 0, 0])
-                }
-                let separation = phase == 1 ? max(0.06, 0.2 * (1 - interval(local, 0.15, 0.75))) : 0.2 * (1 - interval(local, 0.15, 0.75))
-                hand.position = [Float(i * 2 - 1) * separation, -0.04, 0.12]
-            } else if title == "Lattice Forge" {
-                hand.position = [-0.23 + interval(t, 0.55, 0.8) * 0.4, -0.05, 0.32]
-            } else {
-                hand.position = [0.16, -0.1, 0.9 - interval(t, 0.5, 0.8) * 0.25]
-            }
-        }
-        if title == "Lattice Forge" {
-            if let second = props.children.first(where: { $0.name == "secondShape" }) {
-                let u = interval(t, 0.05, 0.22)
-                second.position = [-0.17, -0.1 + u * 0.2, 0.2]
-            }
-            if !interactive && !succeeded {
-                let u = interval(t, 0.5, 0.72)
-                let from = forgeDemoStart ?? SIMD3<Float>(-0.23, 0.02, 0.2)
-                shape.position = from * (1 - u) + slot.position * u
-            }
-            if succeeded { shape.position = slot.position }
-            let opening = succeeded ? Float(1) : interval(t, 0.8, 0.95)
-            for (i, wall) in walls.enumerated() {
-                wall.position = [Float(i * 2 - 1) * (0.16 + opening * 0.15), 0, -0.1]
-                wall.components.set(OpacityComponent(opacity: 1))
-            }
-            glow.isEnabled = interactive || succeeded || t > 0.8
-            glow.position = shape.position
-        }
-        let sparkTime = interval(t, 0.5, 0.72)
-        burst.isEnabled = ["Aegis", "Close Call", "Crystal Cave", "Reach for gold"].contains(title) && sparkTime > 0 && sparkTime < 1
-        burst.position = title == "Aegis" || title == "Close Call" ? runner.position : token.position
-        for (i, shard) in burst.children.enumerated() {
-            let angle = Float(i) / 16 * 2 * Float.pi
-            shard.position = [cos(angle) * sparkTime * 0.1, sin(angle) * sparkTime * 0.1, 0]
-            shard.scale = SIMD3(repeating: max(0.001, 1 - sparkTime))
-        }
-        if title == "Find your opening" {
-            let u = interval(t, 0, 0.5)
-            token.position = [-0.4 + u * 0.4, sin(u * .pi) * 0.15, -0.53 * u]
-            portal.scale = SIMD3(repeating: max(0.001, interval(t, 0.3, 0.7)))
-            track.scale.z = max(0.001, interval(t, 0.55, 0.85))
-            room.components.set(OpacityComponent(opacity: 0.13 + sin(t * .pi) * 0.2))
-        } else if title == "Reach for gold" {
-            token.position = [0.16, -0.1, 0.65]
-            let caught = succeeded ? Float(1) : interval(t, 0.8, 0.95)
-            token.scale = SIMD3(repeating: max(0.001, 1 - caught))
-            glow.isEnabled = caught > 0
-            glow.position = token.position
-        } else if title == "Your next opening" {
-            let u = interval(t, 0.1, 0.8)
-            token.position = [0.19 * (1 - u), -0.1 + u * 0.23, 0.26 - u * 0.69]
-            portal.scale = SIMD3(repeating: 1 + u * 0.15)
-        }
-    }
-
-}
-
-/// Interactive examples share the console's labels and styling. Their draft values
-/// belong to this view, so following the film cannot submit a score or change a run.
-struct TutorialExamplePanel: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @ObservedObject var tutorial: SpatialTutorial
-    @State private var mode = PlayModeKind.normal
-    @State private var selected: Set<EnvironmentID> = [.emberRun, .crystalCave]
-    @State private var start: EnvironmentID?
-    @State private var metric = LeaderboardMetric.score
-    @State private var audience = LeaderboardAudience.allPlayers
-    @State private var board = LeaderboardBoard.normal
-    @State private var floor = true
-    @State private var grid = true
-    @State private var message = ""
-    @State private var userEditedExample = false
-
-    private var title: String { tutorial.chapter.title }
-    private var beat: Int { tutorial.demonstrationBeat }
-    private let modeChapters = ["Normal", "Loop", "Playlist", "Daily", "Preview your run"]
-
-    var body: some View {
-        Group {
-            if modeChapters.contains(title) {
-                modeExample
-            } else if title == "Every run tells a story" || title == "Earn your grade" {
-                resultsExample
-            } else if title == "Find your place" || title == "Connect and share" {
-                rankingExample
-            } else if title == "Make room for your run" {
-                settingsExample
-            } else if title == "Your next opening" {
-                Text("Choose Done to return to your run setup, or select a chapter below to explore again.")
-                    .foregroundStyle(SlipframeStyle.ice)
-            } else {
-                feedbackExample
-            }
-        }
-        .font(.system(size: 14))
-        .contentTransition(.numericText())
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.35), value: beat)
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 12))
-        .onChange(of: tutorial.sceneRevision) { _, _ in
-            floor = true
-            grid = true
-            if modeChapters.contains(title) { updatePreview() }
-        }
-        .onChange(of: tutorial.index) { _, _ in
-            message = ""
-            userEditedExample = false
-            if let value = PlayModeKind.allCases.first(where: { $0.title == title }) { mode = value }
-        }
-        .onChange(of: mode) { _, _ in updatePreview() }
-        .onChange(of: selected) { _, _ in updatePreview() }
-        .onChange(of: start) { _, _ in updatePreview() }
-        .onChange(of: tutorial.cueIndex) { _, cue in
-            guard !userEditedExample else { return }
-            switch title {
-            case "Playlist":
-                if cue == 0 { selected = [.emberRun, .crystalCave, .stormPass]; start = nil }
-                if cue == 1 { start = .crystalCave }
-                if cue == 2 { selected.remove(.crystalCave); start = nil }
-            case "Loop": selected = [.crystalCave]; start = .crystalCave
-            case "Find your place":
-                if cue == 0 { board = .loop(.crystalCave) }
-                if cue == 1 { metric = .coins; audience = .friends }
-            case "Connect and share":
-                if cue == 1 { message = DailyScoreShare.message(score: 1240) }
-            case "Make room for your run":
-                if cue == 0 { grid = false }
-                if cue == 1 { floor = false }
-                if cue == 2 { tutorial.theater.previewRecenter() }
-            default: break
-            }
-            if modeChapters.contains(title) { updatePreview() }
-        }
-    }
-
-    private func updatePreview() {
-        tutorial.theater.setModePreview(mode, selection: selected, start: start)
-    }
-
-    private var feedbackExample: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 25) {
-                ConsoleMetric(title: "Example score", value: "\(120 + beat * (title == "Overdrive" ? 25 : 20))", size: 20)
-                ConsoleMetric(title: "Tokens", value: "\(beat * (title == "Token Surge" ? 2 : 1))", color: SlipframeStyle.amber, size: 20)
-                ConsoleMetric(title: "Bonus", value: "+\(bonus)%", color: SlipframeStyle.ice, size: 20)
-            }
-            Text(beatCaption).foregroundStyle(SlipframeStyle.ice)
-        }
-        .accessibilityElement(children: .combine)
-    }
-
-    private var bonus: Int {
-        if title == "Aegis" { return beat < 2 ? 80 : 40 }
-        if title == "Bonus Bank" { return 80 - beat * 2 }
-        if title == "Build your bonus" {
-            let p = tutorial.progress
-            return p < 0.65 ? min(100, Int(20 + p * 125)) : max(0, 100 - Int((p - 0.65) * 40))
-        }
-        return min(100, 20 + beat * 25)
-    }
-
-    private var beatCaption: String {
-        switch title {
-        case "Aegis", "Your active modifier": return beat < 2 ? "Aegis · Shield ready" : "Aegis · Shield spent · Bonus halved"
-        case "Magnet": return "The token curves into the wider pickup area."
-        case "Bonus Bank": return "Normal bonus drain is twice as fast as Bonus Bank."
-        case "Overdrive": return "Distance rewards ×1.25 · Faster bonus gains"
-        case "Token Surge": return "Each collected token counts twice."
-        case "Close Call": return "Wider close-slip window · Double close-slip rewards"
-        case "Take a breath": return beat == 1 || beat == 2 ? "Return to the start area to resume" : "Inside the play area · Moving"
-        case "Read the diamonds": return ["◆ Stable · ×1", "◆ ◆ Charged · ×1.5", "◆ ◆ ◆ Unstable · ×2"][min(2, tutorial.cueIndex)]
-        case "Crystal Cave": return tutorial.caption
-        case "Lattice Forge": return tutorial.interaction.isEmpty ? "Aim a raised hand at the cube. Hold briefly to lock, then move toward the slot." : tutorial.interaction
-        case "Gyre Gate": return "Watch the gap. Guide your head through the opening as it reaches you."
-        case "Ghost Glass": return "Follow the faint edges. Transparent walls still collide."
-        case "Storm Pass": return "A gust warns you. Watch the obstacle shift, then correct your lane."
-        default: return tutorial.interaction.isEmpty ? "Watch the demonstration, or try the movement when invited." : tutorial.interaction
-        }
-    }
-
-    private var modeExample: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                ForEach(PlayModeKind.allCases) { option in
-                    Button(option.title) { userEditedExample = true; mode = option }
-                        .buttonStyle(ConsoleButtonStyle(selected: mode == option))
+                    finger.orientation = simd_quatf(angle: 1.2 * ease(p, 0.1, 0.3), axis: [1, 0, 0])
                 }
             }
-            if mode == .playlist || mode == .solo {
-                ScrollView(.horizontal) {
-                    HStack {
-                        ForEach(EnvironmentID.allCases) { biome in
-                            Button(biome.displayName) {
-                                userEditedExample = true
-                                if mode == .solo { selected = [biome]; start = biome }
-                                else if selected.contains(biome) {
-                                    selected.remove(biome)
-                                    if start == biome { start = nil }
-                                } else { selected.insert(biome) }
-                            }.buttonStyle(ConsoleButtonStyle(selected: selected.contains(biome)))
-                        }
-                    }
-                }
-                if mode == .playlist {
-                    HStack {
-                        Text("First biome")
-                        Button(start?.displayName ?? "Random") {
-                            userEditedExample = true
-                            let ordered = EnvironmentID.allCases.filter { selected.contains($0) }
-                            if let start, let index = ordered.firstIndex(of: start), index + 1 < ordered.count {
-                                self.start = ordered[index + 1]
-                            } else { start = start == nil ? ordered.first : nil }
-                        }.buttonStyle(ConsoleButtonStyle())
-                        Text(selected.isEmpty ? "Select a biome to enable Start" : "Unranked · \(selected.count) biomes")
-                    }
-                }
-                Button("Start · Example") { message = "Ready. Choose Done to set up your own run." }
-                    .buttonStyle(ConsoleButtonStyle())
-                    .disabled(selected.isEmpty)
-                if !message.isEmpty { Text(message) }
-            } else if mode == .daily {
-                TimelineView(.periodic(from: .now, by: 1)) { context in
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("\(DailyChallenge.displayDate(for: context.date)) · Resets in \(DailyChallenge.formatCountdown(DailyChallenge.secondsUntilRollover(from: context.date))) · Midnight ET")
-                            .monospacedDigit()
-                        let sequence = DailyChallenge.previewSequence(dayKey: DailyChallenge.dayKey(for: context.date), count: 3)
-                        ForEach(["Your route", "Everyone's route"], id: \.self) { player in
-                            HStack {
-                                Text(player).frame(width: 120, alignment: .leading)
-                                ForEach(Array(sequence.enumerated()), id: \.offset) { _, biome in
-                                    Text(biome.displayName).foregroundStyle(biome.interfaceTint)
-                                }
-                            }
-                        }
-                    }
-                }
-            } else {
-                Text("Ember Run → Choose one of three rifts → Choose again at the next junction")
+            token.isEnabled = step > 0 && collected
+            token.position = [0, -0.03, 0.18]
+            if step == 2, let first = halves.first {
+                // A steady halo distinguishes the charged half without flashing.
+                shield.isEnabled = !collected
+                shield.position = first.position
             }
+        case .vectorFoundry:
+            let fitCube = step == 0 ? Float(0) : step == 1 ? ease(p, 0.16, 0.78) : 1
+            let fitSphere = step == 2 ? ease(p, 0.16, 0.78) : Float(0)
+            shape.position = SIMD3<Float>(-0.24, -0.055, 0.18) * (1 - fitCube) + SIMD3<Float>(-0.12, 0.025, -0.12) * fitCube
+            secondShape.position = SIMD3<Float>(0.23, -0.045, 0.16) * (1 - fitSphere) + SIMD3<Float>(0.12, 0.025, -0.12) * fitSphere
+            leftHand.position = [-0.10 + fitCube * 0.045, -0.04 + fitCube * 0.03, 0.23]
+            rightHand.position = [0.10 - fitSphere * 0.045, -0.04 + fitSphere * 0.03, 0.23]
+            reward.isEnabled = step == 0 && collected
+            reward.position = shape.position
+            let open: Float = step == 2 ? ease(p, 0.80, 1) : 0
+            for (i, wall) in walls.enumerated() { wall.position = [Float(i * 2 - 1) * (0.12 + open * 0.19), 0.025, -0.14] }
+            for (i, slot) in slots.enumerated() { slot.position.x = Float(i * 2 - 1) * (0.12 + open * 0.19) }
+            shape.position.x -= open * 0.19
+            secondShape.position.x += open * 0.19
+        case .orbitGate:
+            guard gates.count == 2 else { break }
+            gates[0].isEnabled = step == 0
+            gates[1].isEnabled = step == 1
+            let gate = gates[step == 0 ? 0 : 1]
+            gate.position = [0, -0.005, -0.36 + travel * 0.88]
+            gate.orientation = simd_quatf(angle: step == 0 ? sin(p * .pi) * 0.25 : (1 - ease(p, 0.10, 0.72)) * 1.6, axis: step == 0 ? [0, 1, 0] : [0, 0, 1])
+            if step == 1 {
+                actor.position.x = 0.065 * dodge
+                actor.position.y += 0.045 * dodge
+            }
+        case .modifiers:
+            hazards.isEnabled = modifier == .aegis || modifier == .closeCall
+            if modifier == .aegis {
+                walls.first?.position = [0, -0.01, -0.36 + ease(p, 0.10, 0.72) * 0.64]
+                walls.first?.components.set(OpacityComponent(opacity: 1 - ease(p, 0.72, 0.88)))
+                shield.isEnabled = !collected
+                shield.position = actor.position
+            } else if modifier == .closeCall {
+                actor.position.x = 0.145
+                leftHand.position.x = -0.022
+                rightHand.position.x = 0.022
+                walls.first?.position = [0, -0.01, -0.36 + travel * 0.88]
+                reward.isEnabled = collected
+                reward.position = actor.position
+            } else if modifier != .bonusBank {
+                let pickup = ease(p, 0.05, 0.72)
+                token.isEnabled = !collected
+                token.position = [modifier == .magnet ? 0.30 * (1 - pickup) + 0.08 * pickup : 0.14,
+                                  -0.045, -0.26 + pickup * 0.48]
+                rightHand.position = [modifier == .magnet ? 0.08 : 0.052 + ease(p, 0.20, 0.65) * 0.088, -0.045, 0.22]
+                reward.isEnabled = collected
+                reward.position = token.position
+            }
+        case .ready:
+            token.isEnabled = true
+            token.position = [0, -0.04, -0.10]
         }
-    }
-
-    private var resultsExample: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 20) {
-                ConsoleMetric(title: "Example score", value: "1,240", color: SlipframeStyle.ice, size: 24)
-                ConsoleMetric(title: "Tokens", value: "42", color: SlipframeStyle.amber, size: 24)
-                ConsoleMetric(title: "Grade", value: "S", size: 24)
-            }
-            HStack(spacing: 20) {
-                ConsoleMetric(title: "Peak bonus", value: "100%", size: 18)
-                ConsoleMetric(title: "Close slips", value: "5", size: 18)
-                ConsoleMetric(title: "Rifts crossed", value: "3", size: 18)
-            }
-            Text("100 + 5 × 4 + 3 × 10 = 150 → S")
-            Text("D below 30 · C 30 · B 65 · A 100 · S 150")
-                .foregroundStyle(SlipframeStyle.muted)
-            Text(beat < 2 ? "New personal best · Score" : "New personal best · Tokens")
-                .foregroundStyle(SlipframeStyle.ice)
-            Button("Play again · Example") { message = "Choose Done to set up your own run." }
-                .buttonStyle(ConsoleButtonStyle(prominent: true))
-                .disabled(tutorial.progress < 0.7)
-            if !message.isEmpty { Text(message) }
+        // Hands follow the body for head-movement lessons; collection and shape
+        // lessons explicitly animate hands independently of the head.
+        if ![.tokens, .crystalCave, .vectorFoundry].contains(lesson) {
+            leftHand.position += actor.position - SIMD3<Float>(0, -0.005, 0.28)
+            rightHand.position += actor.position - SIMD3<Float>(0, -0.005, 0.28)
         }
-    }
-
-    private var rankingExample: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                ForEach(LeaderboardMetric.allCases) { value in
-                    Button(value.title) { userEditedExample = true; metric = value }.buttonStyle(ConsoleButtonStyle(selected: metric == value))
-                }
-                ForEach(LeaderboardAudience.allCases) { value in
-                    Button(value.title) { userEditedExample = true; audience = value }.buttonStyle(ConsoleButtonStyle(selected: audience == value))
-                }
-            }
-            ScrollView(.horizontal) {
-                HStack {
-                    ForEach(LeaderboardBoard.browseable()) { option in
-                        Button(option.chipTitle) { userEditedExample = true; board = option }
-                            .buttonStyle(ConsoleButtonStyle(selected: board == option))
-                    }
-                }
-            }
-            Text("Example \(board.title) ranking · Your rank #8 · \(metric == .score ? "1,240 points" : "42 tokens")")
-            if title == "Connect and share" {
-                Button("Preview Daily message") { message = DailyScoreShare.message(score: 1240) }
-                    .buttonStyle(ConsoleButtonStyle())
-                if !message.isEmpty { Text(message).foregroundStyle(SlipframeStyle.ice) }
-            } else {
-                Text(["Loading rankings…", "No ranked friends yet.", "Rankings are currently unavailable.", "Signed out · Your local bests are saved."][beat])
-                    .foregroundStyle(SlipframeStyle.muted)
-            }
-        }
-    }
-
-    private var settingsExample: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Toggle("Floor track", isOn: $floor)
-                Toggle("Room grid", isOn: $grid)
-            }
-            Text(floor ? "Track visible · Play boundary active" : "Track hidden · Play boundary active")
-            HStack {
-                Button("Preview recenter") { tutorial.theater.previewRecenter(); message = "Recenter aligns the track with your current position between runs." }
-                    .buttonStyle(ConsoleButtonStyle())
-                Link("Privacy policy", destination: SlipframeLinks.privacyPolicy)
-                    .buttonStyle(ConsoleButtonStyle())
-            }
-            if !message.isEmpty { Text(message).foregroundStyle(SlipframeStyle.ice) }
-        }
-        .onChange(of: floor) { _, visible in tutorial.theater.showTrack(visible) }
-        .onChange(of: grid) { _, visible in tutorial.theater.showGrid(visible) }
-    }
-}
-
-@MainActor
-private final class TutorialAudio {
-    private var current: AVAudioPlayer?
-    private var outgoing: AVAudioPlayer?
-    private var cue: String?
-    private var fade: Float = 1
-
-    func setBiome(_ biome: EnvironmentID) {
-        guard cue != biome.musicCue else { return }
-        cue = biome.musicCue
-        guard let url = Bundle.main.url(forResource: biome.musicCue, withExtension: "m4a", subdirectory: "Music")
-                ?? Bundle.main.url(forResource: biome.musicCue, withExtension: "m4a"),
-              let player = try? AVAudioPlayer(contentsOf: url) else { return }
-        outgoing?.stop()
-        outgoing = current
-        current = player
-        player.enableRate = true
-        player.numberOfLoops = -1
-        player.volume = 0
-        player.prepareToPlay()
-        player.play()
-        fade = 0
-    }
-
-    func tick(delta: Float, flow: Float, speaking: Bool) {
-        fade = min(1, fade + delta / 0.8)
-        let volume: Float = speaking ? 0.055 : 0.13
-        current?.volume = volume * flow * fade
-        outgoing?.volume = volume * flow * (1 - fade)
-        for player in [current, outgoing].compactMap({ $0 }) {
-            player.rate = max(0.5, flow)
-            if flow < 0.01 { player.pause() }
-            else if !player.isPlaying { player.play() }
-        }
-        if fade >= 1 { outgoing?.stop(); outgoing = nil }
-    }
-
-    func pause() { current?.pause(); outgoing?.pause() }
-    func stop() {
-        current?.stop()
-        outgoing?.stop()
-        current = nil
-        outgoing = nil
-        cue = nil
     }
 }

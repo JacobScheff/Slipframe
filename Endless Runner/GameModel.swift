@@ -42,6 +42,8 @@ final class GameModel: ObservableObject {
 
     @Published var isPlaying: Bool = false
     @Published var showsTutorial = false
+    var tutorialStartLesson = TutorialLesson.space
+    var tutorialReturnsToSetup = false
     @Published var isGameOver: Bool = false
     /// True during Normal mode's wordless three-rift recovery/choice event.
     @Published var isChoosingPortal: Bool = false
@@ -105,6 +107,13 @@ final class GameModel: ObservableObject {
 
     private var activeScoreSubmitter: any GameCenterSubmitting {
         scoreSubmitterOverride ?? gameCenter
+    }
+
+    func showTutorial(_ lesson: TutorialLesson = .space) {
+        guard fieldIsClear, !isPlaying else { return }
+        tutorialStartLesson = lesson
+        tutorialReturnsToSetup = false
+        showsTutorial = true
     }
 
     /// Convenience accessors for gameplay / tests (not `@Published` on this object).

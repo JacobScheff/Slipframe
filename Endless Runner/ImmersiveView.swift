@@ -30,7 +30,7 @@ struct ImmersiveView: View {
             gameWorld.attach(to: content, gameModel: gameModel)
             tutorialSubscription = content.subscribe(to: SceneEvents.Update.self) { event in
                 guard gameModel.showsTutorial else { return }
-                tutorial.tick(event.deltaTime, tracking: gameWorld.tutorialTracking())
+                tutorial.tick(event.deltaTime)
             }
             gameWorld.syncRun(with: gameModel)
             syncPanels(attachments)
@@ -51,8 +51,12 @@ struct ImmersiveView: View {
             Attachment(id: Panel.tutorial) {
                 TutorialControls(tutorial: tutorial, close: {
                     gameModel.showsTutorial = false
+                }, returnToSetup: {
+                    gameModel.tutorialReturnsToSetup = true
+                    gameModel.showsTutorial = false
                 }, startNormal: {
                     tutorial.stop()
+                    gameModel.tutorialReturnsToSetup = true
                     gameModel.showsTutorial = false
                     gameModel.playKind = .normal
                     gameModel.startRun()
@@ -62,16 +66,9 @@ struct ImmersiveView: View {
                 RunHUD(model: gameModel, stats: gameModel.stats)
             }
         }
-        .gesture(SpatialTapGesture().targetedToAnyEntity().onEnded { value in
-            guard gameModel.showsTutorial else { return }
-            tutorial.tap(value.entity)
-        })
-        .onChange(of: tutorial.index) { _, _ in
-            if gameModel.showsTutorial { gameWorld.pulseTutorialRoom() }
-        }
         .onChange(of: gameModel.showsTutorial) { _, showing in
             if showing {
-                tutorial.begin(head: gameWorld.tutorialTracking().head, surface: gameWorld.tutorialSurfacePoint())
+                tutorial.begin(tracking: gameWorld.tutorialTracking(), lesson: gameModel.tutorialStartLesson)
                 gameWorld.pulseTutorialRoom()
             }
             else { tutorial.stop() }

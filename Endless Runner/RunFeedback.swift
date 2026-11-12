@@ -31,7 +31,7 @@ struct RunHUD: View {
                     .padding(12)
                     .background(SlipframeStyle.ink.opacity(0.94), in: RoundedRectangle(cornerRadius: 12))
             }
-            HStack(spacing: 19) {
+            HStack(spacing: 20) {
                 VStack(alignment: .leading, spacing: 4) {
                     ConsoleCaption(title: model.activeEnvironment.displayName, color: SlipframeStyle.ice)
                     if let modifier = stats.modifier {
@@ -39,25 +39,34 @@ struct RunHUD: View {
                                                 : modifier.displayName)
                             .font(.system(size: 15, weight: .semibold))
                         if modifier != .aegis || stats.shieldCharges > 0 {
-                            Text(modifier.effect)
+                            Text(modifier.hudSummary)
                                 .font(.system(size: 13))
                                 .foregroundStyle(SlipframeStyle.muted)
-                                .fixedSize(horizontal: false, vertical: true)
+                                .lineLimit(2)
                         }
                     }
                 }
-                .frame(maxWidth: 210, alignment: .leading)
+                .frame(maxWidth: 185, alignment: .leading)
                 Spacer(minLength: 0)
-                ConsoleMetric(title: "Score", value: stats.score.formatted(), size: 24)
+                ConsoleMetric(title: "Score", value: stats.score.formatted(), size: 28)
                 ConsoleMetric(title: "Tokens", value: stats.coinsCollected.formatted(), color: SlipframeStyle.amber, size: 24)
-                ConsoleMetric(title: "Bonus", value: "+\(stats.flow)%", color: SlipframeStyle.ice, size: 24)
+                VStack(alignment: .leading, spacing: 7) {
+                    ConsoleMetric(title: "Bonus", value: "+\(stats.flow)%", color: SlipframeStyle.ice, size: 24)
+                    GeometryReader { geometry in
+                        Capsule().fill(.white.opacity(0.10))
+                        Capsule().fill(SlipframeStyle.ice)
+                            .frame(width: geometry.size.width * CGFloat(min(100, max(0, stats.flow))) / 100)
+                    }
+                    .frame(width: 60, height: 3)
+                    .accessibilityHidden(true)
+                }
             }
             .padding(.horizontal, 17)
             .padding(.vertical, 12)
-            .background(SlipframeStyle.ink.opacity(0.91), in: RoundedRectangle(cornerRadius: 17))
-            .overlay { RoundedRectangle(cornerRadius: 17).strokeBorder(SlipframeStyle.line) }
+            .background(SlipframeStyle.ink.opacity(0.88), in: RoundedRectangle(cornerRadius: 20))
+            .overlay { RoundedRectangle(cornerRadius: 20).strokeBorder(SlipframeStyle.line) }
         }
-        .frame(width: 490, height: 192, alignment: .bottom)
+        .frame(width: 520, height: 192, alignment: .bottom)
         .foregroundStyle(.white)
         .allowsHitTesting(false)
         .task(id: BiomeVisit(isPlaying: model.isPlaying, runID: model.runID, biome: model.activeEnvironment)) {
