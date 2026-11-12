@@ -197,7 +197,12 @@ final class SpatialTutorial: ObservableObject {
     private var active = false
     private var elapsed: Double = 0
     private var lastProgress = -1
-    private let duration: Double = 5.5
+    private var duration: Double {
+        // Give longer instructions time to be read before advancing. Details
+        // remain available while paused, without slowing every short example.
+        min(12, max(6.5, Double(step.instruction.split(separator: " ").count) / 3 + 1.5))
+    }
+    private let advanceDelay: Double = 0.55
     private var rememberedSteps: [TutorialLesson: Int] = [:]
     private var rememberedLessons: [TutorialSection: TutorialLesson] = [:]
     var step: TutorialStep { lesson.steps[stepIndex] }
@@ -205,6 +210,11 @@ final class SpatialTutorial: ObservableObject {
     var isLastStep: Bool { stepIndex == lesson.steps.count - 1 }
     var lessonNumber: Int { (lesson.section.lessons.firstIndex(of: lesson) ?? 0) + 1 }
     var isFinished: Bool { progress >= 1 }
+    var nextLesson: TutorialLesson? {
+        let lessons = TutorialLesson.allCases
+        return index + 1 < lessons.count ? lessons[index + 1] : nil
+    }
+    var isFinalStep: Bool { isLastStep && nextLesson == nil }
     var modifier: RiftModifier? {
         guard lesson == .modifiers else { return nil }
         let modifiers: [RiftModifier] = [.tokenSurge, .aegis, .overdrive, .magnet, .closeCall, .bonusBank]
@@ -283,8 +293,8 @@ final class SpatialTutorial: ObservableObject {
 
     func previous() {
         if stepIndex > 0 { selectStep(stepIndex - 1) }
-        else if lessonNumber > 1 {
-            let previous = lesson.section.lessons[lessonNumber - 2]
+        else if index > 0 {
+            let previous = TutorialLesson.allCases[index - 1]
             select(previous)
             selectStep(previous.steps.count - 1)
         }
@@ -294,7 +304,9 @@ final class SpatialTutorial: ObservableObject {
         if !isLastStep { selectStep(stepIndex + 1) }
         else {
             completedLessons.insert(lesson)
-            if lessonNumber < lesson.section.lessons.count { select(lesson.section.lessons[lessonNumber]) }
+            if lesson == .ready { completeBasics() }
+            if let nextLesson { select(nextLesson) }
+            else { paused = true }
         }
     }
 
@@ -306,17 +318,19 @@ final class SpatialTutorial: ObservableObject {
     func remove() { stop(); root.removeFromParent(); controls.removeFromParent() }
 
     func tick(_ delta: Double) {
-        guard active, !paused, !isFinished, delta.isFinite, delta > 0 else { return }
-        elapsed = min(duration, elapsed + min(delta, 0.1))
-        let p = elapsed / duration
+        guard active, !paused, delta.isFinite, delta > 0 else { return }
+        elapsed = min(duration + advanceDelay, elapsed + min(delta, 0.1))
+        let p = min(1, elapsed / duration)
         let quantized = Int(p * 60)
         if quantized != lastProgress {
             progress = p
             lastProgress = quantized
         }
-        // A held final pose never jumps to another mechanic or loops under text
-        // the player is still reading. Step changes happen only on user input.
         render(Float(p))
+        // Show the filled bar and final pose briefly, then continue through
+        // instructions, lessons, and sections. The last guide waits for Done;
+        // finishing the tutorial never starts a run on the user's behalf.
+        if elapsed >= duration + advanceDelay { next() }
     }
 
     private func render(_ p: Float) {
@@ -391,7 +405,7 @@ struct TutorialControls: View {
                     HStack {
                         ConsoleCaption(title: "Miniature demonstration")
                         Spacer()
-                        Text(tutorial.reduceMotion ? "Still poses" : tutorial.isFinished ? "Final pose" : tutorial.paused ? "Paused" : "Playing")
+                        Text(tutorial.isFinalStep && tutorial.isFinished ? "Complete" : tutorial.paused ? "Paused" : tutorial.isFinished ? "Continuing…" : "Auto-playing")
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(SlipframeStyle.muted)
                     }
@@ -486,22 +500,24 @@ struct TutorialControls: View {
             HStack(spacing: 12) {
                 Button { tutorial.previous() } label: { Label("Back", systemImage: "chevron.left") }
                     .buttonStyle(ConsoleButtonStyle())
-                    .disabled(tutorial.lessonNumber == 1 && tutorial.stepIndex == 0)
+                    .disabled(tutorial.index == 0 && tutorial.stepIndex == 0)
                 Text("Step \(tutorial.stepIndex + 1) of \(lesson.steps.count)")
                     .font(.system(size: 13)).foregroundStyle(SlipframeStyle.muted)
                 Spacer()
                 if lesson == .ready {
+                    Button(tutorial.isLastStep ? "Explore biomes" : "Next step") { tutorial.next() }
+                        .buttonStyle(ConsoleButtonStyle())
                     Button("Choose a mode") { tutorial.completeBasics(); returnToSetup() }
                         .buttonStyle(ConsoleButtonStyle())
                     Button("Start Normal") { tutorial.completeBasics(); startNormal() }
                         .buttonStyle(ConsoleButtonStyle(prominent: true))
-                } else if tutorial.isLastStep && tutorial.lessonNumber == section.lessons.count {
+                } else if tutorial.isFinalStep {
                     Button("Done") { tutorial.next(); close() }.buttonStyle(ConsoleButtonStyle(prominent: true))
                 } else {
                     Button {
                         tutorial.next()
                     } label: {
-                        Label(tutorial.isLastStep ? "Next: \(section.lessons[tutorial.lessonNumber].title)" : "Next step", systemImage: "chevron.right")
+                        Label(tutorial.isLastStep ? "Next: \(tutorial.nextLesson?.title ?? "Done")" : "Next step", systemImage: "chevron.right")
                             .lineLimit(1)
                     }
                     .buttonStyle(ConsoleButtonStyle(prominent: true))

@@ -2,9 +2,9 @@
 
 ## How to play
 
-- Six self-paced basics: track orientation, dodging, token collection and bonus, stepping away, choosing a rift, and starting a first run.
-- One instruction per step, beside a deterministic miniature demonstration. Replay, pause, step backward, or choose a lesson. The animation holds its final pose until the player continues; there is no synthesized narration or automatic lesson advance.
-- Scrub the demonstration to inspect a moment. Switching sections remembers the current lesson and step; Back at a lesson boundary returns to the previous lesson's final step. Readouts demonstrate token counts, shield state, distance rewards, and bonus drain. Each modifier and run mode has its own step.
+- Six core lessons: track orientation, dodging, token collection and bonus, stepping away, choosing a rift, and starting a first run.
+- One instruction per step, beside a deterministic miniature demonstration. Once the progress bar fills, its final pose holds briefly, then the tutorial automatically advances to the next step, lesson, or section. Longer instructions receive more reading time. The final guide waits for Done and never starts a run automatically. There is no synthesized narration.
+- Pause, replay, or scrub the demonstration to inspect a moment. Scrubbing pauses automatic progression until Play or Replay is selected. Switching sections remembers the current lesson and step; Back at a lesson boundary returns to the previous lesson's final step, including across sections. Readouts demonstrate token counts, shield state, distance rewards, and bonus drain. Each modifier and run mode has its own step.
 - Closing a guide returns to the originating console page and preserves the selected biome. Choose a mode explicitly returns to setup.
 - Optional guides cover all eight biomes, then difficulty, modifiers, and run modes. Biome cards open the corresponding lesson directly. Reduced Motion uses discrete setup, action, and result poses.
 - The examples are demonstrations: no hand-tracking requirement, physical miniature interactions, live settings changes, or score submission.
@@ -39,5 +39,5 @@
 ## Settings and privacy
 
 - Show or hide the floor track between runs. The preference persists across launches and leaves the playable boundaries and collision rules the same.
-- Show or hide wall and ceiling accents. Sparse lines are clipped to the actual triangles of detected, classified wall and ceiling planes; there is no rectangular-extent or synthetic-room fallback. Horizontal wall seams share world heights around corners. Broken contour arcs sit on the ceiling. A faint opacity wave climbs cached wall traces and reaches the ceiling arcs during transitions; its animation generates no meshes. New surfaces fade in, and decorations dim during play. Reduced Motion removes the echo and breathing animation. Passthrough remains clear.
+- Show or hide the wall and ceiling grid. Equal 50 cm spacing makes square cells, clipped to the measured triangles of detected walls and ceilings. Coplanar anchors share a common grid basis; overlapping anchor footprints are drawn once. There are no paired decorative seams, ceiling arcs, or duplicate pulse lines. Transition pulses brighten the existing grid. New surfaces fade in, and the grid dims during play. Reduced Motion removes the pulse. Passthrough remains clear, with no synthetic-room fallback.
 - Open the privacy policy.

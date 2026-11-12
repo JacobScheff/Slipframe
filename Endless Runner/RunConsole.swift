@@ -265,7 +265,7 @@ struct RunConsole: View {
                 settingLabel("Floor track", detail: "Show lane markings and the track surface.")
             }
             Toggle(isOn: $model.showsRoomGrid) {
-                settingLabel("Wall & ceiling accents", detail: "Faint surface lines, wall seams, and ceiling arcs. Visible once room surfaces are detected.")
+                settingLabel("Wall & ceiling grid", detail: "Square grid cells traced onto detected walls and ceiling.")
             }
             Divider()
             HStack(spacing: 10) {
