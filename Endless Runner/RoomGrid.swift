@@ -10,6 +10,15 @@ final class RoomGrid {
     let root = Entity()
     var reduceMotion = false
 
+    private enum Style {
+        static let lineWidth: Float = 0.004
+        static let wallOpacity: Float = 0.30
+        static let ceilingOpacity: Float = 0.22
+        static let accentOpacity: Float = 0.30
+        static let echoOpacity: Float = 0.20
+        static let playingOpacity: Float = 0.80
+    }
+
     private struct Vertex {
         var position: SIMD3<Float>
         var uv: SIMD2<Float>
@@ -41,8 +50,8 @@ final class RoomGrid {
     private var pulseRemaining: Float = 0
     private var elapsed: Float = 0
     private var lastOpacity = -1
-    private var accentColor = UIColor(red: 0.59, green: 0.81, blue: 0.91, alpha: 1)
-    private let ink = UIColor(red: 0.55, green: 0.78, blue: 0.88, alpha: 1)
+    private var accentColor = UIColor(red: 0.67, green: 0.86, blue: 0.96, alpha: 1)
+    private let ink = UIColor(red: 0.64, green: 0.84, blue: 0.96, alpha: 1)
 
     func setTint(_ color: UIColor) {
         accentColor = EnvironmentMaterials.lerpColor(ink, color, 0.30)
@@ -124,9 +133,9 @@ final class RoomGrid {
             guard first <= last else { continue }
             for i in first...last {
                 let height = Float(i) * spacing
-                linePolygons += bands(triangles, axis: axis, center: height, width: 0.0018)
+                linePolygons += bands(triangles, axis: axis, center: height, width: Style.lineWidth)
                 if !ceiling, axis == 1, height > 0, height < 3.5 {
-                    echoPolygons.append((bands(triangles, axis: 1, center: height, width: 0.005),
+                    echoPolygons.append((bands(triangles, axis: 1, center: height, width: 0.006),
                                          min(0.62, height / 3.5 * 0.62)))
                 }
             }
@@ -139,14 +148,14 @@ final class RoomGrid {
                     let a = Float(segment) / 96 * 2 * Float.pi
                     let b = Float(segment + 1) / 96 * 2 * Float.pi
                     ringPolygons += clippedStroke(triangles, from: SIMD2(cos(a), sin(a)) * radius,
-                                                 to: SIMD2(cos(b), sin(b)) * radius, width: 0.003)
+                                                 to: SIMD2(cos(b), sin(b)) * radius, width: 0.0045)
                 }
                 accentPolygons += ringPolygons
                 echoPolygons.append((ringPolygons, 0.62 + radius / 3.8 * 0.16))
             }
         } else {
             for height: Float in [2.12, 2.15] {
-                accentPolygons += bands(triangles, axis: 1, center: height, width: 0.0025)
+                accentPolygons += bands(triangles, axis: 1, center: height, width: Style.lineWidth)
             }
         }
         guard let lineMesh = mesh(linePolygons, name: "Surface traces") else { remove(anchor.id); return }
@@ -163,8 +172,8 @@ final class RoomGrid {
         if let accentMesh = mesh(accentPolygons, name: "Surface contours") {
             surface.accents.model = ModelComponent(mesh: accentMesh, materials: [UnlitMaterial(color: accentColor)])
         } else { surface.accents.model = nil }
-        surface.lines.components.set(OpacityComponent(opacity: ceiling ? 0.055 : 0.10))
-        surface.accents.components.set(OpacityComponent(opacity: 0.14))
+        surface.lines.components.set(OpacityComponent(opacity: ceiling ? Style.ceilingOpacity : Style.wallOpacity))
+        surface.accents.components.set(OpacityComponent(opacity: Style.accentOpacity))
         for echo in surface.echoes { echo.entity.removeFromParent() }
         surface.echoes = echoPolygons.compactMap { entry in
             guard let echoMesh = mesh(entry.polygons, name: "Surface echo") else { return nil }
@@ -206,17 +215,17 @@ final class RoomGrid {
             surface.reveal = min(1, surface.reveal + dt / 1.1)
             surface.entity.components.set(OpacityComponent(opacity: surface.reveal * surface.reveal * (3 - 2 * surface.reveal)))
             let breathing: Float = reduceMotion ? 1 : 0.92 + sin(elapsed * 0.35) * 0.08
-            surface.accents.components.set(OpacityComponent(opacity: 0.14 * breathing))
+            surface.accents.components.set(OpacityComponent(opacity: Style.accentOpacity * breathing))
             // Geometry stays fixed. A smooth opacity wave climbs shared wall
             // heights, then reaches the ceiling arcs, with no frame-time meshing.
             for echo in surface.echoes {
                 let phase = (p - echo.delay) / 0.22
                 let visible = pulseRemaining > 0 && !reduceMotion && phase > 0 && phase < 1
                 echo.entity.isEnabled = visible
-                if visible { echo.entity.components.set(OpacityComponent(opacity: sin(phase * .pi) * 0.10)) }
+                if visible { echo.entity.components.set(OpacityComponent(opacity: sin(phase * .pi) * Style.echoOpacity)) }
             }
         }
-        let opacity = Int((playing ? Float(0.60) : 1) * 100)
+        let opacity = Int((playing ? Style.playingOpacity : 1) * 100)
         if opacity != lastOpacity {
             root.components.set(OpacityComponent(opacity: Float(opacity) / 100))
             lastOpacity = opacity

@@ -230,7 +230,10 @@ final class SpatialTutorial: ObservableObject {
         let position = tracking.head ?? SIMD3<Float>(0, 1.5, 0)
         let horizontal = SIMD3(tracking.forward.x, 0, tracking.forward.z)
         let forward = length(horizontal) > 0.01 ? normalize(horizontal) : SIMD3(0, 0, -1)
-        controls.position = position + forward * 1.65 + [0, -0.12, 0]
+        // Enlarge the shared parent so text, controls, and the miniature retain
+        // their alignment while occupying substantially more of the user's view.
+        controls.scale = SIMD3(repeating: 1.6)
+        controls.position = position + forward * 1.15 + [0, -0.10, 0]
         controls.orientation = simd_quatf(angle: atan2(-forward.x, -forward.z), axis: [0, 1, 0])
         active = true
         select(lesson)
